@@ -1,12 +1,14 @@
-# Köprüköy 3B
+# Köprüköy 3D
 
-Keskin / Kırıkkale'deki Köprüköy'ün ve Çeşnigir Köprüsü çevresinin tarayıcıda gezilebilen 3B modeli.
+A 3D model of Köprüköy (Keskin, Kırıkkale, Türkiye) and the area around the Çeşnigir Bridge that you can explore in the browser.
 
-- **Gezinti, Yürü, Uç, Toros** modları (telefonda dokunmatik kontroller)
-- Arazi: SRTM 30 m yükseklik verisi, göl seviyesi 724 m
-- Yollar, evler ve zemin: uydu görüntüsünden çıkarıldı
-- Çeşnigir Köprüsü: 110 m, 6 m genişlik, 18,60 m orta göz, 12 göz
+**Live site:** https://sguven.github.io/koprukoy-3d/
 
-Blender için model: [`model/koprukoy.glb`](model/koprukoy.glb) (1 birim = 1 m, Y yukarı).
+- **Orbit, Walk, Fly and Toros** modes. Toros mode lets you drive a 1990s Renault 12 Toros station wagon. Touch controls work on phones.
+- **Terrain:** SRTM 30 m elevation data; the lake (Kapulukaya Reservoir) sits at 724 m.
+- **Roads, buildings and ground cover:** extracted from satellite imagery. Road centrelines and widths were measured from the road surface, and the top-down render was checked against the satellite image.
+- **Çeşnigir Bridge (13th century, Seljuk):** 110 m long, 6 m wide, 18.60 m central span, 12 arches (9 lower, 3 upper). The lower arches are partly under the reservoir water.
 
-Taslak çalışmadır; kat sayıları ve cephe detayları tahminidir.
+Blender model: [`model/koprukoy.glb`](model/koprukoy.glb) (1 unit = 1 m, Y up, −Z north).
+
+This is a draft. Storey counts and façade details are estimates.

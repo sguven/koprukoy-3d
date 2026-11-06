@@ -1,15 +1,15 @@
 <!DOCTYPE html>
-<html lang="tr">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>Köprüköy 3B Taslak</title>
+<title>Köprüköy 3D</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Source+Sans+3:wght@400;600&display=swap" rel="stylesheet">
 <style>
 :root {
-  /* Tek görsel dünya: Orta Anadolu bozkırı, Kızılırmak kanyonu. Tam ekran sahne; üstünde kâğıt-harita kontrol katmanı. */
+  /* One visual world: Central Anatolian steppe, Kızılırmak canyon. Full-screen scene with a paper-map control layer on top. */
   --ink: #2b2620;
   --muted: #6f655a;
   --paper: rgba(248, 244, 236, 0.93);
@@ -114,68 +114,68 @@ canvas { display: block; touch-action: none; }
 <div class="toast" id="toast"></div>
 
 <div class="topbar">
-  <div class="brand"><h1>Köprüköy</h1><div class="sub">Keskin · Kırıkkale — 3B v0.6</div></div>
-  <div class="modes" id="modes" role="tablist" aria-label="Gezinme modu">
-    <button data-mode="orbit" class="on">Gezinti</button>
-    <button data-mode="walk">Yürü</button>
-    <button data-mode="fly">Uç</button>
+  <div class="brand"><h1>Köprüköy</h1><div class="sub">Keskin · Kırıkkale, Türkiye — 3D v0.6</div></div>
+  <div class="modes" id="modes" role="tablist" aria-label="Navigation mode">
+    <button data-mode="orbit" class="on">Orbit</button>
+    <button data-mode="walk">Walk</button>
+    <button data-mode="fly">Fly</button>
     <button data-mode="car">Toros</button>
   </div>
   <div class="spacer"></div>
-  <button class="gear" id="gearBtn" aria-expanded="false">Ayarlar</button>
+  <button class="gear" id="gearBtn" aria-expanded="false">Settings</button>
 </div>
 
 <aside class="panel hidden" id="panel">
   <div>
-    <div class="group-title">Bakış noktası</div>
+    <div class="group-title">Viewpoint</div>
     <div class="row" id="views">
-      <button class="pbtn" data-view="genel">Genel</button>
-      <button class="pbtn" data-view="kopru">Köprü</button>
-      <button class="pbtn" data-view="gezi">Gezi alanı</button>
-      <button class="pbtn" data-view="kanyon">Kanyon</button>
-      <button class="pbtn" data-view="detay">Cami–Mescit</button>
-      <button class="pbtn" data-view="tepe">Kuşbakışı</button>
+      <button class="pbtn" data-view="genel">Overview</button>
+      <button class="pbtn" data-view="kopru">Bridge</button>
+      <button class="pbtn" data-view="gezi">Promenade</button>
+      <button class="pbtn" data-view="kanyon">Canyon</button>
+      <button class="pbtn" data-view="detay">Mosque area</button>
+      <button class="pbtn" data-view="tepe">Top-down</button>
     </div>
   </div>
   <div>
     <div class="group-title">Toros</div>
     <div class="row" id="colors"></div>
     <div class="row" style="margin-top:8px">
-      <label class="chip"><input type="checkbox" id="optRack" checked> Üst bagaj</label>
-      <label class="chip"><input type="checkbox" id="optLights"> Farlar</label>
-      <label class="chip"><input type="checkbox" id="optSound" checked> Motor sesi</label>
+      <label class="chip"><input type="checkbox" id="optRack" checked> Roof rack</label>
+      <label class="chip"><input type="checkbox" id="optLights"> Headlights</label>
+      <label class="chip"><input type="checkbox" id="optSound" checked> Engine sound</label>
     </div>
   </div>
   <div>
-    <div class="group-title">Katmanlar</div>
+    <div class="group-title">Layers</div>
     <div class="row">
-      <label class="chip"><input type="checkbox" id="lyBina" checked> Binalar</label>
-      <label class="chip"><input type="checkbox" id="lyAgac" checked> Ağaç ve kaya</label>
-      <label class="chip"><input type="checkbox" id="lyYol" checked> Yollar</label>
-      <label class="chip"><input type="checkbox" id="lyEtiket" checked> Etiketler</label>
+      <label class="chip"><input type="checkbox" id="lyBina" checked> Buildings</label>
+      <label class="chip"><input type="checkbox" id="lyAgac" checked> Trees and rocks</label>
+      <label class="chip"><input type="checkbox" id="lyYol" checked> Roads</label>
+      <label class="chip"><input type="checkbox" id="lyEtiket" checked> Labels</label>
     </div>
   </div>
   <div>
-    <div class="group-title">Güneş</div>
-    <label class="chip" style="width:100%;justify-content:space-between"><span>Saat <b id="sunVal">15:00</b></span>
-      <input type="range" id="sun" min="6" max="20" step="0.25" value="15" style="flex:1;margin-left:10px" aria-label="Güneş saati"></label>
+    <div class="group-title">Sun</div>
+    <label class="chip" style="width:100%;justify-content:space-between"><span>Time <b id="sunVal">15:00</b></span>
+      <input type="range" id="sun" min="6" max="20" step="0.25" value="15" style="flex:1;margin-left:10px" aria-label="Time of day"></label>
   </div>
-  <p class="note"><strong>v0.6.</strong> Köydeki yollar uydu görüntüsündeki yol yüzeyinden çıkarıldı: cami–mescit bölgesi 0,14 m/piksel yakın görüntüden, köyün geri kalanı 0,5 m/piksel genel haritadan (36 yol). Kuşbakışı render uyduyla üst üste kontrol edildi. Arazi SRTM 30 m; kat sayıları ve cephe detayları tahmini.</p>
+  <p class="note"><strong>v0.6.</strong> Village roads were traced from the road surface in satellite imagery: the mosque area from a 0.14 m/pixel close-up, the rest of the village from a 0.5 m/pixel map (36 roads), and the top-down render was checked against the satellite image. Terrain is SRTM 30 m elevation data; the lake level is 724 m. Storey counts and façade details are estimates.</p>
 </aside>
 
-<div class="hud" id="hud"><div class="speedo"><b id="spd">0</b><span id="gearTxt">km/sa · N</span></div></div>
-<div class="hint" id="hint">Sürükle: döndür · Sağ tık: kaydır · Tekerlek: yakınlaş</div>
+<div class="hud" id="hud"><div class="speedo"><b id="spd">0</b><span id="gearTxt">km/h · N</span></div></div>
+<div class="hint" id="hint">Drag: rotate · Right-click: pan · Wheel: zoom</div>
 
 <!-- dokunmatik -->
 <div class="tc joy" id="joy" aria-hidden="true"><i id="joyKnob"></i></div>
 <div class="tc pad" id="tLeft">◀</div>
 <div class="tc pad" id="tRight">▶</div>
-<div class="tc pad" id="tGas">GAZ</div>
-<div class="tc pad" id="tBrake">FREN</div>
+<div class="tc pad" id="tGas">GAS</div>
+<div class="tc pad" id="tBrake">BRAKE</div>
 <div class="tc pad" id="tUp">▲</div>
 <div class="tc pad" id="tDn">▼</div>
-<div class="tc pad" id="tCam">KAMERA</div>
-<div id="loading" style="position:fixed;inset:0;display:grid;place-items:center;font:600 20px var(--display);letter-spacing:.04em">Model yükleniyor…</div>
+<div class="tc pad" id="tCam">CAMERA</div>
+<div id="loading" style="position:fixed;inset:0;display:grid;place-items:center;font:600 20px var(--display);letter-spacing:.04em">Loading model…</div>
 
 <script type="module">
 import * as THREE from 'three';
@@ -185,7 +185,7 @@ import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
-const POIS = [{"id": "kopru", "label": "Çeşnigir Köprüsü", "kind": "tarihi", "pos": [-377, 16, -277]}, {"id": "viyaduk", "label": "D.260 viyadüğü", "kind": "yol", "pos": [-539, 22, -105]}, {"id": "d260a", "label": "D.260", "kind": "yon", "pos": [-951, 35, -319]}, {"id": "d260b", "label": "D.260", "kind": "yon", "pos": [154, 36, 568]}, {"id": "karakecili", "label": "Karakeçili yönü", "kind": "yon", "pos": [-825, 21, -209]}, {"id": "gezi", "label": "Gezi alanı", "kind": "yer", "pos": [-267, 14, -57]}, {"id": "seyir", "label": "Seyir kayası", "kind": "yer", "pos": [-292, 24, -338]}, {"id": "iskele", "label": "Tekne iskelesi", "kind": "yer", "pos": [-305, 9, -367]}, {"id": "kanyon", "label": "Çeşnigir Kanyonu", "kind": "yer", "pos": [-277, 55, -602]}, {"id": "nehir", "label": "Kızılırmak · Kapulukaya Baraj Gölü", "kind": "su", "pos": [-318, 8, 331]}, {"id": "cami", "label": "Köy Camii", "kind": "yapi", "pos": [106, 70, 108]}, {"id": "mescit", "label": "Mescit", "kind": "yapi", "pos": [-143, 24, 203]}, {"id": "merkez", "label": "Köy merkezi", "kind": "yapi", "pos": [59, 43, -16]}];
+const POIS = [{"id": "kopru", "label": "Çeşnigir Bridge", "kind": "tarihi", "pos": [-377, 16, -277]}, {"id": "viyaduk", "label": "D.260 viaduct", "kind": "yol", "pos": [-539, 22, -105]}, {"id": "d260a", "label": "D.260", "kind": "yon", "pos": [-951, 35, -319]}, {"id": "d260b", "label": "D.260", "kind": "yon", "pos": [154, 36, 568]}, {"id": "karakecili", "label": "To Karakeçili", "kind": "yon", "pos": [-825, 21, -209]}, {"id": "gezi", "label": "Promenade", "kind": "yer", "pos": [-267, 14, -57]}, {"id": "seyir", "label": "Viewpoint rock", "kind": "yer", "pos": [-292, 24, -338]}, {"id": "iskele", "label": "Boat pier", "kind": "yer", "pos": [-305, 9, -367]}, {"id": "kanyon", "label": "Çeşnigir Canyon", "kind": "yer", "pos": [-277, 55, -602]}, {"id": "nehir", "label": "Kızılırmak · Kapulukaya Reservoir", "kind": "su", "pos": [-318, 8, 331]}, {"id": "cami", "label": "Village mosque", "kind": "yapi", "pos": [106, 70, 108]}, {"id": "mescit", "label": "Small mosque (mescit)", "kind": "yapi", "pos": [-143, 24, 203]}, {"id": "merkez", "label": "Village centre", "kind": "yapi", "pos": [59, 43, -16]}];
 const isTouch = matchMedia('(pointer: coarse)').matches;
 const LITE = location.hash === '#lite';
 
@@ -246,7 +246,7 @@ function buildHashes() {
   const B = D.buildings;
   for (let k = 0; k < B.length; k += 5) { const r = Math.hypot(B[k + 3], B[k + 4]); for (let i = Math.floor((B[k] - r) / BC); i <= Math.floor((B[k] + r) / BC); i++) for (let j = Math.floor((B[k + 1] - r) / BC); j <= Math.floor((B[k + 1] + r) / BC); j++) { const kk = key(i, j); if (!bldHash.has(kk)) bldHash.set(kk, []); bldHash.get(kk).push(k); } }
 }
-// zemin: arazi veya (adım yüksekliği içinde) yol / köprü tablası
+// ground: terrain, or a road / bridge deck within step height
 function surfaceAt(x, z, refY = 1e9) {
   const t = terrH(x, z); let y = t, road = false;
   const ci = Math.floor(x / RC), cj = Math.floor(z / RC), R = D.roads;
@@ -346,7 +346,7 @@ loadAll().then(gltf => {
   buildMinimapBase();
   placeCarAtSpawn();
   document.getElementById('loading').remove();
-}).catch(err => { document.getElementById('loading').textContent = 'Model yüklenemedi. Sayfayı yenileyin.'; console.error(err); });
+}).catch(err => { document.getElementById('loading').textContent = 'The model could not be loaded. Please reload the page.'; console.error(err); });
 
 const bind = (id, k) => document.getElementById(id).addEventListener('change', e => layers[k].forEach(o => o && (o.visible = e.target.checked)));
 bind('lyBina', 'bina'); bind('lyAgac', 'agac'); bind('lyYol', 'yol');
@@ -364,7 +364,7 @@ function placeLabels() {
 }
 
 // ---------- Toros (station wagon, 1990'lar) ----------
-const COLORS = [['Beyaz', 0xeeede6], ['Kırmızı', 0x9e2420], ['Bej', 0xd6c59c], ['Gri', 0x8f9497], ['Kahverengi', 0x6a4a33], ['Mavi', 0x2f4f7a]];
+const COLORS = [['White', 0xeeede6], ['Red', 0x9e2420], ['Beige', 0xd6c59c], ['Grey', 0x8f9497], ['Brown', 0x6a4a33], ['Blue', 0x2f4f7a]];
 const car = new THREE.Group(); car.name = 'Toros';
 const paint = new THREE.MeshStandardMaterial({ color: COLORS[0][1], roughness: 0.38, metalness: 0.15, envMapIntensity: 0.9 });
 const chrome = new THREE.MeshStandardMaterial({ color: 0xd8dadc, roughness: 0.18, metalness: 0.95, envMapIntensity: 1.2 });
@@ -383,18 +383,18 @@ function extrudeSide(points, depth, mat, bevel = 0.03) {
 }
 function arcPts(cx, cy, r, a0, a1, n = 10) { const out = []; for (let i = 0; i <= n; i++) { const a = a0 + (a1 - a0) * i / n; out.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r]); } return out; }
 {
-  // gövde yan profili (ön +X), tekerlek davlumbazlarıyla
+  // body side profile (front = +X), with wheel arches
   const ax = WB / 2, ar = 0.37, yb = 0.3;
   const lower = [[-2.2, yb], ...arcPts(-ax, 0.3, ar, Math.PI, 0), [ax - ar, yb], ...arcPts(ax, 0.3, ar, Math.PI, 0), [2.2, yb], [2.22, 0.62], [2.1, 0.78], [1.05, 0.86], [-2.12, 0.88], [-2.22, 0.82]];
   car.add(extrudeSide(lower, 1.62, paint));
-  // kabin: ön cam, uzun düz tavan, dik bagaj kapısı (station wagon)
+  // cabin: windscreen, long flat roof, upright tailgate (station wagon)
   const cabin = [[1.02, 0.86], [0.32, 1.36], [-2.02, 1.39], [-2.14, 0.9]];
   car.add(extrudeSide(cabin, 1.42, glassM, 0.02));
   const roof = new THREE.Mesh(new THREE.BoxGeometry(2.42, 0.06, 1.38), paint); roof.position.set(-0.85, 1.41, 0); roof.castShadow = true; car.add(roof);
   // direkler (A, B, C, D)
   const pillar = (x0, y0, x1, y1, z) => { const L = Math.hypot(x1 - x0, y1 - y0), g = new THREE.BoxGeometry(L, 0.07, 0.07); const m = new THREE.Mesh(g, paint); m.position.set((x0 + x1) / 2, (y0 + y1) / 2, z); m.rotation.z = Math.atan2(y1 - y0, x1 - x0); car.add(m); };
   for (const z of [-0.69, 0.69]) { pillar(1.0, 0.88, 0.33, 1.38, z); pillar(-0.32, 0.88, -0.32, 1.39, z); pillar(-1.25, 0.88, -1.25, 1.39, z); pillar(-2.1, 0.9, -2.0, 1.39, z); pillar(1.0, 0.88, -2.1, 0.88, z * 1.01); }
-  // ön: dikdörtgen farlar, siyah ızgara, sinyaller, krom tampon
+  // front: rectangular headlights, black grille, indicators, chrome bumper
   const front = 2.225;
   const grille = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.16, 0.72), blackM); grille.position.set(front, 0.63, 0); car.add(grille);
   for (let i = 0; i < 4; i++) { const bar = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.012, 0.7), chrome); bar.position.set(front + 0.002, 0.57 + i * 0.04, 0); car.add(bar); }
@@ -405,25 +405,25 @@ function arcPts(cx, cy, r, a0, a1, n = 10) { const out = []; for (let i = 0; i <
   }
   const bumpF = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.1, 1.66), chrome); bumpF.position.set(2.27, 0.42, 0); car.add(bumpF);
   const bumpR = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.1, 1.66), chrome); bumpR.position.set(-2.27, 0.42, 0); car.add(bumpR);
-  // arka: dikey stoplar, bagaj kapısı kolu
+  // rear: vertical tail lights, tailgate handle
   for (const z of [-0.68, 0.68]) { const tl = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.3, 0.18), tailM); tl.position.set(-2.235, 0.66, z); car.add(tl); }
-  // aynalar, kapı kolları
+  // mirrors, door handles
   for (const z of [-0.86, 0.86]) { const mi = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.09, 0.08), blackM); mi.position.set(0.95, 0.98, z); car.add(mi);
     for (const x of [0.55, -0.6]) { const h = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.025, 0.02), chrome); h.position.set(x, 0.8, z * 0.95); car.add(h); } }
-  // koltuklar (içeriden görünsün)
+  // seats (visible from inside)
   for (const [x, z] of [[-0.05, -0.33], [-0.05, 0.33], [-0.95, 0]]) { const st = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, z === 0 ? 1.2 : 0.48), seatM); st.position.set(x, 0.75, z); car.add(st); }
   const dashM = new THREE.MeshStandardMaterial({ color: 0x2a2623, roughness: 0.85 });
   const dash = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.2, 1.36), dashM); dash.position.set(0.68, 0.97, 0); car.add(dash);
   const floor = new THREE.Mesh(new THREE.BoxGeometry(2.95, 0.02, 1.36), dashM); floor.position.set(-0.6, 0.895, 0); car.add(floor);
   const wheelM = new THREE.Mesh(new THREE.TorusGeometry(0.19, 0.018, 6, 24), blackM); wheelM.position.set(0.3, 1.02, -0.35); wheelM.rotation.y = Math.PI / 2; wheelM.rotation.x = 0; wheelM.rotation.z = 0; const sw = new THREE.Group(); sw.position.set(0.32, 1.0, -0.35); sw.rotation.z = -0.5; wheelM.position.set(0, 0, 0); sw.add(wheelM); car.add(sw);
   const spoke = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.02, 0.36), blackM); sw.add(spoke);
-  // yan bant (sürtünme çıtası) ve alt marşpiyel
+  // side rubbing strip and sill trim
   for (const z of [-0.815, 0.815]) { const st = new THREE.Mesh(new THREE.BoxGeometry(3.7, 0.05, 0.02), blackM); st.position.set(0.05, 0.6, z); car.add(st); const cr = new THREE.Mesh(new THREE.BoxGeometry(3.3, 0.02, 0.02), chrome); cr.position.set(-0.55, 0.875, z); car.add(cr); }
-  // plakalar: 71 = Kırıkkale
+  // number plates: 71 = Kırıkkale province
   const plateTex = (() => { const c = document.createElement('canvas'); c.width = 256; c.height = 56; const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, 256, 56); x.fillStyle = '#1f3c9a'; x.fillRect(0, 0, 30, 56); x.fillStyle = '#fff'; x.font = 'bold 15px sans-serif'; x.fillText('TR', 4, 48); x.fillStyle = '#111'; x.font = 'bold 36px sans-serif'; x.fillText('71 KK 012', 40, 42); x.strokeStyle = '#111'; x.lineWidth = 3; x.strokeRect(1.5, 1.5, 253, 53); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; })();
   for (const [x, ry] of [[2.335, Math.PI / 2], [-2.335, -Math.PI / 2]]) { const p = new THREE.Mesh(new THREE.PlaneGeometry(0.52, 0.11), new THREE.MeshStandardMaterial({ map: plateTex, roughness: 0.5 })); p.position.set(x, 0.42, 0); p.rotation.y = ry; car.add(p); }
 }
-// tavan bagajı + yük
+// roof rack + load
 const rack = new THREE.Group(); car.add(rack);
 for (const z of [-0.58, 0.58]) { const r = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.04, 0.04), blackM); r.position.set(-0.9, 1.52, z); rack.add(r); }
 for (const x of [-1.85, -1.3, -0.75, -0.2]) { const r = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 1.2), blackM); r.position.set(x, 1.52, 0); rack.add(r); for (const z of [-0.58, 0.58]) { const f = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.1, 0.04), blackM); f.position.set(x, 1.47, z); rack.add(f); } }
@@ -448,13 +448,13 @@ document.getElementById('optLights').addEventListener('change', e => setLights(e
 document.getElementById('optRack').addEventListener('change', e => rack.visible = e.target.checked);
 scene.add(car);
 const colorsEl = document.getElementById('colors');
-COLORS.forEach(([n, c], i) => { const b = document.createElement('button'); b.className = 'swatch' + (i ? '' : ' on'); b.style.background = '#' + c.toString(16).padStart(6, '0'); b.title = n; b.setAttribute('aria-label', 'Renk: ' + n); b.onclick = () => { paint.color.setHex(c); colorsEl.querySelectorAll('.swatch').forEach(s => s.classList.remove('on')); b.classList.add('on'); }; colorsEl.appendChild(b); });
+COLORS.forEach(([n, c], i) => { const b = document.createElement('button'); b.className = 'swatch' + (i ? '' : ' on'); b.style.background = '#' + c.toString(16).padStart(6, '0'); b.title = n; b.setAttribute('aria-label', 'Colour: ' + n); b.onclick = () => { paint.color.setHex(c); colorsEl.querySelectorAll('.swatch').forEach(s => s.classList.remove('on')); b.classList.add('on'); }; colorsEl.appendChild(b); });
 
-// ---------- araç fiziği ----------
+// ---------- vehicle physics ----------
 const CS = { x: 0, z: 0, y: 0, vy: 0, h: 0, v: 0, steer: 0, pitch: 0, roll: 0, spin: 0, safe: null, safeT: 0, dead: 0, cam: 0, gear: 1, rpm: 900 };
 function placeCarAtSpawn() {
   const [x, z] = D.spawn.car; CS.x = x; CS.z = z;
-  // en yakın yol örneğine göre yön
+  // heading from the nearest road sample
   let best = 1e9, bk = 0; const R = D.roads; for (let k = 0; k < R.length; k += 4) { const d = (R[k] - x) ** 2 + (R[k + 1] - z) ** 2; if (d < best) { best = d; bk = k; } }
   CS.x = R[bk]; CS.z = R[bk + 1];
   const nk = bk + 4 < R.length ? bk + 4 : bk - 4; CS.h = Math.atan2(-(R[nk + 1] - R[bk + 1]), R[nk] - R[bk]);
@@ -489,22 +489,22 @@ function carStep(dt) {
   CS.steer += (st * maxSt - CS.steer) * Math.min(1, dt * 5);
   CS.h += CS.v * Math.tan(CS.steer) / WB * dt * (hb ? 1.5 : 1);
   const nx = CS.x + Math.cos(CS.h) * CS.v * dt, nz = CS.z - Math.sin(CS.h) * CS.v * dt;
-  // çarpışma: üç daire (ön, orta, arka)
+  // collision: three circles (front, middle, rear)
   const p = { x: nx, z: nz }; let hit = false;
   for (const off of [1.35, 0, -1.35]) { const q = { x: p.x + Math.cos(CS.h) * off, z: p.z - Math.sin(CS.h) * off }; if (pushOut(q, 0.95)) { hit = true; p.x = q.x - Math.cos(CS.h) * off; p.z = q.z + Math.sin(CS.h) * off; } }
   if (hit && Math.abs(CS.v) > 2) CS.v *= -0.25; else if (hit) CS.v *= 0.5;
   CS.x = Math.max(X0 + 20, Math.min(X0 + TSZ - 20, p.x)); CS.z = Math.max(Z0 + 20, Math.min(Z0 + TSZ - 20, p.z));
-  // tekerlek temasları
+  // wheel contacts
   const c = Math.cos(CS.h), s = Math.sin(CS.h), pts = [[WB / 2, -TRACK / 2], [WB / 2, TRACK / 2], [-WB / 2, -TRACK / 2], [-WB / 2, TRACK / 2]];
   const hs = pts.map(([lx, lz]) => surfaceAt(CS.x + lx * c + lz * s, CS.z - lx * s + lz * c, CS.y + 0.3));
-  if (hs.filter(q => q.water).length >= 2) { CS.dead = 1.6; CS.v = 0; toast('Toros suya girdi!'); }
+  if (hs.filter(q => q.water).length >= 2) { CS.dead = 1.6; CS.v = 0; toast('The Toros drove into the water!'); }
   const gy = (hs[0].y + hs[1].y + hs[2].y + hs[3].y) / 4;
   const tp = Math.atan2((hs[0].y + hs[1].y) / 2 - (hs[2].y + hs[3].y) / 2, WB), tr = Math.atan2((hs[1].y + hs[3].y) / 2 - (hs[0].y + hs[2].y) / 2, TRACK);
   if (gy < CS.y - 0.08) { CS.vy -= 9.81 * dt; CS.y += CS.vy * dt; if (CS.y <= gy) { CS.y = gy; CS.vy = 0; } }
   else { CS.y = gy; CS.vy = 0; CS.pitch += (tp - CS.pitch) * Math.min(1, dt * 10); CS.roll += (-tr - CS.roll) * Math.min(1, dt * 10); }
   CS.spin += CS.v * dt / WR;
   CS.safeT += dt; if (CS.safeT > 1 && !hs.some(q => q.water) && Math.abs(CS.v) > 1) { CS.safeT = 0; CS.safe = { x: CS.x, z: CS.z, h: CS.h }; }
-  // vites ve devir (ses için)
+  // gear and rpm (for the sound)
   const wheelRpm = Math.abs(CS.v) / (2 * Math.PI * WR) * 60;
   let rpm = wheelRpm * GEARS[CS.gear - 1] * FINAL;
   if (rpm > 5200 && CS.gear < 4) CS.gear++; if (rpm < 2000 && CS.gear > 1) CS.gear--;
@@ -518,7 +518,7 @@ function updateCarTransform() {
   carEuler.set(CS.roll, CS.h, CS.pitch, 'YZX'); car.rotation.copy(carEuler);
   for (const w of wheels) { w.spin.rotation.z = -CS.spin; w.pivot.rotation.y = w.front ? CS.steer : 0; }
   document.getElementById('spd').textContent = Math.round(Math.abs(CS.v) * 3.6);
-  document.getElementById('gearTxt').textContent = `km/sa · ${CS.v < -0.3 ? 'G' : Math.abs(CS.v) < 0.3 ? 'N' : CS.gear}`;
+  document.getElementById('gearTxt').textContent = `km/h · ${CS.v < -0.3 ? 'R' : Math.abs(CS.v) < 0.3 ? 'N' : CS.gear}`;
 }
 // motor sesi
 let audio = null;
@@ -539,7 +539,7 @@ function updateEngine(thr) {
   audio.gn.gain.setTargetAtTime(on ? 0.045 + thr * 0.035 : 0, t, 0.08);
 }
 
-// ---------- yürü / uç ----------
+// ---------- walk / fly ----------
 const P = { x: 0, z: 0, y: 0, vy: 0, yaw: 0, pitch: 0 };
 const EYE = 1.7;
 function walkStep(dt, fly) {
@@ -566,11 +566,11 @@ function walkStep(dt, fly) {
   camera.position.set(P.x, P.y + (fly ? 0 : EYE), P.z);
   camera.rotation.set(P.pitch, P.yaw, 0, 'YXZ');
 }
-// fare ile bakış (masaüstü: işaretçi kilidi)
+// mouse look (desktop: pointer lock)
 const dom = renderer.domElement;
 dom.addEventListener('click', () => { if ((mode === 'walk' || mode === 'fly') && !isTouch && document.pointerLockElement !== dom) { try { const r = dom.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (e) {} } });
 document.addEventListener('mousemove', e => { if (document.pointerLockElement === dom) { P.yaw -= e.movementX * 0.0022; P.pitch = Math.max(-1.45, Math.min(1.45, P.pitch - e.movementY * 0.0022)); } });
-// dokunmatik bakış: sağ yarıda sürükle; masaüstünde kilitsiz sürükleme de çalışır
+// touch look: drag on the screen; unlocked dragging also works on desktop
 let lookId = null, lx0 = 0, ly0 = 0;
 dom.addEventListener('pointerdown', e => { if (mode === 'walk' || mode === 'fly' || mode === 'car') { if (document.pointerLockElement === dom) return; lookId = e.pointerId; lx0 = e.clientX; ly0 = e.clientY; } });
 addEventListener('pointermove', e => { if (e.pointerId !== lookId) return; const dx = e.clientX - lx0, dy = e.clientY - ly0; lx0 = e.clientX; ly0 = e.clientY;
@@ -592,10 +592,10 @@ document.getElementById('tCam').addEventListener('pointerdown', e => { CS.cam = 
 // ---------- modlar ----------
 let mode = 'orbit', carYawOff = 0, carPitchOff = 0;
 const HINTS = {
-  orbit: 'Sürükle: döndür · Sağ tık: kaydır · Tekerlek: yakınlaş',
-  walk: 'Tıkla ve fareyle bak · WASD: yürü · Shift: koş · Boşluk: zıpla · Esc: imleç',
-  fly: 'Tıkla ve fareyle bak · WASD: uç · E/Q: yüksel/alçal · Shift: hızlı',
-  car: '↑/W gaz · ↓/S fren-geri · ←/→ direksiyon · Boşluk el freni · C kamera · L farlar',
+  orbit: 'Drag: rotate · Right-click: pan · Wheel: zoom',
+  walk: 'Click, then look with the mouse · WASD: walk · Shift: run · Space: jump · Esc: release cursor',
+  fly: 'Click, then look with the mouse · WASD: fly · E/Q: up/down · Shift: fast',
+  car: '↑/W gas · ↓/S brake/reverse · ←/→ steer · Space handbrake · C camera · L headlights',
 };
 function setMode(m) {
   if (!D) return;
@@ -610,7 +610,7 @@ function setMode(m) {
   show(['joy'], m === 'walk' || m === 'fly'); show(['tUp', 'tDn'], m === 'fly'); show(['tLeft', 'tRight', 'tGas', 'tBrake', 'tCam'], m === 'car');
   if (document.pointerLockElement && m !== 'walk' && m !== 'fly') document.exitPointerLock();
   if (m === 'walk' || m === 'fly') {
-    // mevcut bakıştan başla
+    // start from the current view
     if (prev === 'car') { P.x = CS.x - Math.sin(CS.h) * 3.2; P.z = CS.z - Math.cos(CS.h) * 3.2; P.yaw = CS.h - Math.PI / 2; const q = { x: P.x, z: P.z }; pushOut(q, 0.4); P.x = q.x; P.z = q.z; }
     else if (prev === 'orbit') { const t = controls.target; if (m === 'walk') { const [wx, wz] = camera.position.distanceTo(t) < 400 ? [t.x, t.z] : D.spawn.walk; P.x = wx; P.z = wz; } else { P.x = camera.position.x; P.z = camera.position.z; } const d = new THREE.Vector3().subVectors(t, camera.position); P.yaw = Math.atan2(-d.x, -d.z); }
     P.pitch = m === 'fly' ? -0.25 : 0; P.y = m === 'fly' ? Math.max(camera.position.y, terrH(P.x, P.z) + 60) : surfaceAt(P.x, P.z).y; P.vy = 0;
@@ -622,7 +622,7 @@ function setMode(m) {
 document.querySelectorAll('#modes button').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
 let toastT = 0; function toast(t) { const el = document.getElementById('toast'); el.textContent = t; el.style.display = t ? 'block' : 'none'; toastT = t ? 2 : 0; }
 
-// ---------- bakış noktaları ----------
+// ---------- viewpoints ----------
 const V = {
   genel:  { p: [640, 420, 640], t: [-150, 20, -90] },
   kopru:  { p: [-397, 55, -107], t: [-377, 0, -307] },
@@ -666,7 +666,7 @@ function drawMinimap(x, z, heading) {
   mctx.fillStyle = '#2b2620'; mctx.font = 'bold 22px sans-serif'; mctx.textAlign = 'center'; const nx = W / 2 + Math.sin(-heading) * (W / 2 - 18), ny = W / 2 - Math.cos(-heading) * (W / 2 - 18); mctx.fillText('K', nx, ny + 8);
 }
 
-// ---------- döngü ----------
+// ---------- loop ----------
 addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
 setSun(15);
 const camTarget = new THREE.Vector3(), camPos = new THREE.Vector3();
@@ -683,7 +683,7 @@ renderer.setAnimationLoop(now => {
     controls.update(); focus = controls.target;
   } else if (mode === 'walk' || mode === 'fly') { walkStep(dt, mode === 'fly'); focus = camera.position; drawMinimap(P.x, P.z, -P.yaw); }
   else if (mode === 'car') {
-    // fizik alt adımlar
+    // physics sub-steps
     const n = Math.ceil(dt / 0.008); for (let i = 0; i < n; i++) carStep(dt / n);
     const c = Math.cos(CS.h + carYawOff), s = Math.sin(CS.h + carYawOff);
     if (CS.cam === 0) { camPos.set(CS.x - c * 7.2, CS.y + 2.6 + carPitchOff * 6, CS.z + s * 7.2); const minY = terrH(camPos.x, camPos.z) + 1; camPos.y = Math.max(camPos.y, minY); if (camera.position.distanceTo(camPos) > 40) camera.position.copy(camPos); else camera.position.lerp(camPos, 1 - Math.exp(-dt * 6)); camTarget.set(CS.x + Math.cos(CS.h) * 3, CS.y + 1.1, CS.z - Math.sin(CS.h) * 3); camera.lookAt(camTarget); }
@@ -691,7 +691,7 @@ renderer.setAnimationLoop(now => {
     focus = car.position; drawMinimap(CS.x, CS.z, Math.PI / 2 - CS.h);
     carYawOff *= Math.exp(-dt * (lookId === null ? 2 : 0)); carPitchOff *= Math.exp(-dt * (lookId === null ? 2 : 0));
   }
-  // gölge kamerası odağı izler
+  // shadow camera follows the focus
   const ext = mode === 'orbit' ? Math.min(900, Math.max(150, camera.position.distanceTo(focus) * 1.2)) : 140;
   const sc = sun.shadow.camera; if (sc.right !== ext) { sc.left = -ext; sc.right = ext; sc.top = ext; sc.bottom = -ext; sc.near = 1; sc.far = 4000; sc.updateProjectionMatrix(); }
   sun.target.position.copy(focus); sun.position.copy(focus).addScaledVector(sunDir, 1500);
