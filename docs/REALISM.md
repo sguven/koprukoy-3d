@@ -5,6 +5,42 @@ Two passes so far: **v0.7 "materials"** (surfaces only, nothing moved) and **v0.
 `model/koprukoy.glb` are still the v0.6 files. Terrain (SRTM 30 m), the reservoir at 724 m, the
 Çeşnigir Bridge body, D.260 and the roads outside the village are unchanged.
 
+## v0.9.2 — the çarşı (Nov 2026)
+
+The owner reported that the Atatürk statue in front of the old municipality / Güvendioğlu Market had disappeared,
+and asked for the çarşı to match the real place exactly. Cause: v0.9 moved the municipality to its true position
+(photo-01 anchor at the market junction) but the statue, the square and the çardak kept their hard-coded v0.8
+coordinates (~(40, 50)), about 200 m west; in addition the traced road network ran a 4 m lane straight across the
+square and nudged the municipality and the market (6.7 m) off their footprints.
+
+Sources: `docs/reference/01` (satellite, 0.25 m/px), `02` and `05` (Street View, Apr 2026), SV01–03 notes.
+
+- **Measured footprints, no nudging** (`CARSI_FIX` in `src/village_layout.js`): municipality 17.6 × 7.6 m walls
+  (19 × 9 m tile roof in photo 01, rotated ~5°); Güvendioğlu Market 10.4 × 7.8 m, shop floor at street level on
+  the west, dug into the slope behind; the kahve single-storey, tile hip roof, long axis N–S, opening onto the square.
+- **Everything on the square is placed in the municipality's façade frame** (`carsiSites`: s = metres from the
+  south end along the east façade, out = metres in front), so it can never drift away from the building again:
+  statue at s 9.0 / out 3.3 (in front of the second bay), grass bed with a concrete kerb, two flag poles behind it
+  (Turkish flag on the southern one), red shrub and a young tree on the left, a small juniper and the tall spruce
+  on the right, a big juniper at the south-east corner by the lane, the kahve's green-roofed kiosk with tables and
+  red chairs at the north end, big trees in front of the kahve, the old tree on the market pavement.
+- **Statue**: bronze (dark olive patina) standing figure in a long greatcoat, arms down, ~3 m, on a light grey
+  granite pedestal (2.16 m incl. two concrete steps) with a dark plaque on the front.
+- **Municipality façade** after 02/05: five wide bays per long side with ribbon windows of three panes, red-brown
+  pilasters, tall whitewashed spandrel bands between the floors, white iron grilles on the ground floor, the door
+  and a small window in the southern bay under the "T.C. KÖPRÜ BELEDİYESİ" board (canvas texture), three chimneys.
+- **Square and roads**: the open area is one pale, dusty gravel surface (`square` material lightened); the traced
+  lane `local_260` is re-drawn along the east side of the square (6.5 m, kerb + pavement only on the market side,
+  no asphalt drawn on the square itself), `main_284` removed, the lane west (`local_283`) runs along the
+  municipality's south wall (SV03). The square is added to the collision / road samples (walkable, no grass on it).
+- **Raised park south of the lane** (photo 02 left): rubble wall topped with blue and white painted kerb stones,
+  lawn ~0.7 m above the square, big square wooden çardak (eight posts, railing, benches, two-tier green roof with
+  a lantern), notice board, two big trees.
+- Collision boxes for the statue, the kiosk and the çardak; `#centre-only` uses the same çarşı. The
+  "Village centre" viewpoint now looks at the square.
+
+Not modelled (transient in the photos): parked cars and vans, the greengrocer's crates.
+
 ## v0.9 — the whole village from Google Maps (Nov 2026)
 
 Measure of realism, as the owner asked: Google Maps. Three sources, all captured from the browser and

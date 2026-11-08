@@ -6,6 +6,10 @@ import { triplanarMaterial } from './pbr.js';
 import { buildingMaterialFactory } from './buildings.js';
 import { roadMaterialFactory, rockMaterial } from './surfaces.js';
 
+function canvasTex(w, h, draw) {
+  const cv = document.createElement('canvas'); cv.width = w; cv.height = h; draw(cv.getContext('2d'), w, h);
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;
+}
 export function villageMaterials(lib, { quality = 2 } = {}) {
   const pick = buildingMaterialFactory(lib, { quality }), pickRoad = roadMaterialFactory(lib, { quality });
   const plaster = lib.set('plaster'), asphalt = lib.set('asphalt'), dirt = lib.set('dirt_road'), gravel = lib.set('gravel'), soil = lib.set('soil'), concrete = lib.set('concrete'), grass = lib.set('grass_dry'), stone = lib.set('stone_wall');
@@ -31,8 +35,28 @@ export function villageMaterials(lib, { quality = 2 } = {}) {
   M.metalDark = std({ color: 0x3b3f44, roughness: 0.6, metalness: 0.6 });                            // brackets, gutters, bins frame
   M.greenPaint = std({ color: 0x2f6b3a, roughness: 0.55, metalness: 0.2 });                          // gazebo roof, gates, benches
   M.orange = std({ color: 0xd85a1e, roughness: 0.6, metalness: 0.1 });                               // municipal litter bins
-  M.bronze = std({ color: 0x4b3b2a, roughness: 0.45, metalness: 0.7, envMapIntensity: 0.7 });
-  M.granite = triplanarMaterial({ set: stone, scale: 1.2, normalScale: 0.5, antiTile: 0.3, sharp: 8, tint: new THREE.Color(0x5e5c5a), roughBase: 0.6, cacheKey: 'granite', extraFrag: 'albedo = vec3(dot(albedo, vec3(0.33))) * 0.55;' });
+  M.bronze = std({ color: 0x3a3c2e, roughness: 0.5, metalness: 0.65, envMapIntensity: 0.7 });           // dark olive patina (docs/reference/02)
+  // ---- çarşı (v0.9.2): sign board, Turkish flag, plaque, kiosk / çardak roofs, plastic café furniture, kerb blocks ----
+  M.greenRoof = std({ color: 0x3f6b4a, roughness: 0.6, metalness: 0.25, side: THREE.DoubleSide });
+  M.redPlastic = std({ color: 0xb52a22, roughness: 0.5 }); M.whitePlastic = std({ color: 0xe8e6e0, roughness: 0.5 });
+  M.kerbBlue = std({ color: 0x2c4f9a, roughness: 0.8 }); M.kerbWhite = std({ color: 0xdedbd2, roughness: 0.85 });
+  M.plaque = std({ color: 0x1d1d1d, roughness: 0.35, metalness: 0.3 });
+  M.flagTR = std({ map: canvasTex(600, 400, (c, W, H) => {   // Turkish flag: crescent and star, proportions after the flag law
+    c.fillStyle = '#e30a17'; c.fillRect(0, 0, W, H); const G = H;
+    c.fillStyle = '#fff'; c.beginPath(); c.arc(0.5 * G, H / 2, 0.25 * G, 0, Math.PI * 2); c.fill();
+    c.fillStyle = '#e30a17'; c.beginPath(); c.arc(0.5 * G + 0.0625 * G, H / 2, 0.2 * G, 0, Math.PI * 2); c.fill();
+    c.fillStyle = '#fff'; c.beginPath(); const sx = 0.5 * G + 0.333 * G, r = 0.125 * G;
+    for (let i = 0; i < 10; i++) { const a = Math.PI + i * Math.PI / 5, rr = i % 2 ? r * 0.382 : r; c.lineTo(sx + Math.cos(a) * rr, H / 2 + Math.sin(a) * rr); } c.closePath(); c.fill();
+  }), roughness: 0.8, side: THREE.DoubleSide });
+  M.signMuni = std({ map: canvasTex(1024, 242, (c, W, H) => {   // "T.C. KÖPRÜ BELEDİYESİ" board over the entrance (photo 02)
+    c.fillStyle = '#f2f2ee'; c.fillRect(0, 0, W, H); c.strokeStyle = '#1d3f8f'; c.lineWidth = 10; c.strokeRect(5, 5, W - 10, H - 10);
+    c.fillStyle = '#2f8f4a'; c.beginPath(); c.arc(120, H / 2, 78, 0, Math.PI * 2); c.fill(); c.fillStyle = '#f2f2ee'; c.font = 'bold 60px sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('KB', 120, H / 2 + 4);
+    c.fillStyle = '#1d3f8f'; c.font = 'bold 40px sans-serif'; c.fillText('T.C.', 520, 48);
+    c.font = 'bold 92px sans-serif'; c.fillText('KÖPRÜ', 520, 118); c.font = 'bold 54px sans-serif'; c.fillText('BELEDİYESİ', 520, 196);
+    c.fillStyle = '#e30a17'; c.fillRect(820, 42, 170, 158); c.fillStyle = '#fff'; c.beginPath(); c.arc(880, 121, 46, 0, Math.PI * 2); c.fill(); c.fillStyle = '#e30a17'; c.beginPath(); c.arc(892, 121, 37, 0, Math.PI * 2); c.fill();
+    c.fillStyle = '#fff'; c.beginPath(); for (let i = 0; i < 10; i++) { const a = Math.PI + i * Math.PI / 5, rr = i % 2 ? 9 : 23; c.lineTo(945 + Math.cos(a) * rr, 121 + Math.sin(a) * rr); } c.closePath(); c.fill();
+  }), roughness: 0.6 });
+  M.granite = triplanarMaterial({ set: stone, scale: 1.2, normalScale: 0.5, antiTile: 0.3, sharp: 8, tint: new THREE.Color(0x8e8c88), roughBase: 0.6, cacheKey: 'granite', extraFrag: 'albedo = vec3(dot(albedo, vec3(0.33))) * 1.05;' });   // light grey pedestal granite (photo 02)
   M.wood = pick('Ahsap'); M.rock = rockMaterial(lib);
   // dry-stone / rubble garden walls of granite boulders (Street View 07, 08, 12)
   M.rubble = triplanarMaterial({ set: lib.set('rubble_wall'), scale: lib.set('rubble_wall').size, normalScale: 1.0, antiTile: 0.3, sharp: 8, tint: new THREE.Color(0xb9a98f), roughBase: 0.95, cacheKey: 'rubblewall',
@@ -118,10 +142,12 @@ export function villageMaterials(lib, { quality = 2 } = {}) {
       albedo *= 0.88 + 0.24 * wear;
       rough = mix(rough, 0.7, track * 0.4);`);
   // stabilised earth square: no ruts, lots of tyre scuffing
-  M.square = roadMat('rd_square', { set: gravel, ns: 0.7, tint: 0xd6c6a8, rough: 1.0 }, /* glsl */`
+  M.square = roadMat('rd_square', { set: gravel, ns: 0.7, tint: 0xe0d8c8, rough: 1.0 }, /* glsl */`
       vec3 pd = vWPos * 0.25;
       vec3 earth = kk_tri2(tDirtC, pd, kkW, kkK).rgb;
       albedo = mix(earth * 1.08, albedo, 0.45);
+      // the çarşı is pale, dusty compacted gravel, almost white in the sun (photos 02, 05)
+      albedo = mix(albedo, vec3(0.80, 0.77, 0.70) * (0.88 + 0.24 * kk_tri(tSoilR, vWPos * 0.13, kkW).r), 0.62);
       albedo *= 0.9 + 0.2 * kk_tri(tSoilR, vWPos * 0.07 + 2.0, kkW).r;
       shoulder = 0.0;`);
   for (const k of ['road_asphalt', 'road_concrete', 'road_dirt', 'square']) M[k].userData.isRoad = true;

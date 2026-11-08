@@ -58,6 +58,21 @@ export function buildProps(ctx, M, { props, trees, wires }, bat) {
         canopies.push(cone(1.7 * s, 4.5 * s, t.x, y + 6.8 * s + 2.25 * s, t.z, 0x2f5f2c, seed + 1));
         break;
       }
+      case 'juniper': {   // dense ornamental juniper / thuja: a broad, rounded cone down to the ground (photo 02)
+        trunks.push(cyl(0.12 * s, 0.2 * s, 1.2 * s, t.x, y + 0.6 * s, t.z, 6));
+        canopies.push(canopy(1.25 * s, 2.9 * s, 1.25 * s, t.x, y + 2.75 * s, t.z, 0x355f2c, seed));
+        canopies.push(canopy(0.8 * s, 1.6 * s, 0.8 * s, t.x, y + 5.0 * s, t.z, 0x3a6630, seed + 3));
+        break;
+      }
+      case 'fir': {       // tall spruce in front of the municipality: narrow, tiered, dark and a bit sparse
+        trunks.push(cyl(0.12 * s, 0.28 * s, 11.5 * s, t.x, y + 5.75 * s, t.z, 7));
+        for (let k = 0; k < 5; k++) canopies.push(cone((2.3 - k * 0.42) * s, 2.9 * s, t.x, y + (2.4 + k * 2.0) * s + 1.45 * s, t.z, k % 2 ? 0x2e4a2a : 0x34532d, seed + k));
+        break;
+      }
+      case 'redshrub': {  // red-leaved shrub (barberry / photinia) in the statue bed
+        canopies.push(canopy(0.75 * s, 0.6 * s, 0.7 * s, t.x, y + 0.65 * s, t.z, 0x8e2c24, seed));
+        break;
+      }
       default: { // small fruit tree (apricot, plum)
         trunks.push(cyl(0.1 * s, 0.17 * s, 1.9 * s, t.x, y + 0.95 * s, t.z, 6));
         canopies.push(canopy(2.2 * s, 1.9 * s, 2.1 * s, t.x, y + 1.8 * s + 1.6 * s, t.z, 0x6a8f3a, seed));

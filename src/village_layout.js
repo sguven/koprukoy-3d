@@ -30,7 +30,15 @@ export const inRegion = (x, z) => x > REGION.x0 && x < REGION.x1 && z > REGION.z
 
 // ---------------------------------------------------------------- roads
 // kind: asphalt | concrete | dirt ; w = width in metres ; kerb = blue/white kerb + pavement strips
-export const ROADS = DATA_ROADS.map(r => ({ ...r, poles: /^main_/.test(r.id) }));
+// v0.9.2 çarşı: the traced centre roads ran through the middle of the square. Re-drawn on photo 01: the main
+// road from the north runs along the east side of the open square, past the market's kerb, into the junction;
+// the lane west leaves the square along the south wall of the municipality (SV03).
+const ROAD_FIX = {
+  local_260: { pts: [[249, 93], [251.5, 100], [252.5, 110], [252.6, 122], [254, 131], [257, 138]], kind: 'asphalt', w: 6.5, kerb: true, kerbSide: -1 },
+  main_284: null,
+  local_283: { pts: [[253, 134.5], [246, 137.2], [236, 137.6], [226, 137.0], [217, 138], [214, 141]] },
+};
+export const ROADS = DATA_ROADS.filter(r => ROAD_FIX[r.id] !== null).map(r => ({ ...r, ...(ROAD_FIX[r.id] || {}), poles: /^main_/.test(r.id) }));
 
 // ---------------------------------------------------------------- buildings traced from the photo
 // [cx_px, cy_px, w_px, d_px, angle_rad (long axis, image frame), storeys, roof, kind]
@@ -70,20 +78,72 @@ const T = [
   // flat / light roofs not picked up by the tile-roof detector
   [574, 33, 40, 27, 0, 1, 'f'], [666, 37, 56, 33, 0, 1, 'f'], [150, 328, 46, 37, 0, 1, 'm'],
 ];
+// ---------------------------------------------------------------- the çarşı (market square), v0.9.2
+// Re-measured on photo 01 (0.25 m/px) and the Street View photos 02 / 05 / SV01-03: the three çarşı
+// buildings keep these footprints exactly (no road nudging, no yaw snapping), and everything on the square
+// is placed in the municipality's façade frame: s = metres along the east façade from its south end,
+// out = metres in front of it (east).
+//  - municipality: tile roof 19 x 9 m incl. eaves (photo 01) -> walls 17.6 x 7.6 m, five bays on the long side
+//  - Güvendioğlu Market: roof 11 x 7.5 m, square to the north (photo 01); shop front on the west, to the square
+//  - kahve: single-storey, tile roof, long axis north-south, just north of the municipality (photo 02 right)
+const CARSI_FIX = {
+  municipality: { x: 233.75, z: 125.4, w: 17.6, d: 7.6, fixed: true },
+  market: { x: 266.6, z: 115.8, yaw: 0, w: 10.4, d: 7.8, floorAtFront: true, fixed: true },   // shop floor at street level, dug into the slope behind
+  kahve: { x: 233.4, z: 108.2, yaw: 0, w: 6.0, d: 10.6, roof: 'h', wallKey: 'Duvar_Krem', faceFix: 0, fixed: true },
+};
 export const TRACED = T.filter(t => t[7] === 'municipality' || t[7] === 'market' || t[7] === 'kahve').map(([cx, cy, w, d, ang, st, roof, kind]) => {
   const [x, z] = img(cx, cy);
   // image frame: long axis (cos a, sin a) with y down == model (X, Z); model yaw maps local x to (cos yaw, -sin yaw)
-  return { x, z, yaw: -ang, w: w * PX, d: d * PX, storeys: st, roof, kind, traced: true };
+  return { x, z, yaw: -ang, w: w * PX, d: d * PX, storeys: st, roof, kind, traced: true, ...(CARSI_FIX[kind] || {}) };
 });
+/** Façade frame of the municipality: (s, out) -> model [x, z]. */
+export function facadeFrame(muni) {
+  const c = Math.cos(muni.yaw), sn = Math.sin(muni.yaw);
+  const at = (s, out) => { const lx = muni.w / 2 - s, lz = -(muni.d / 2 + out); return [muni.x + lx * c + lz * sn, muni.z - lx * sn + lz * c]; };
+  return { at, yaw: muni.yaw, L: muni.w };
+}
+export function carsiSites(muni) {
+  const F = facadeFrame(muni), P = (s, out, extra = {}) => { const [x, z] = F.at(s, out); return { x, z, yaw: F.yaw, s, out, ...extra }; };
+  const sq = { s0: -7, s1: 31, o0: -2.5, o1: 24 };        // reaches the market's pavement and the junction (photo 01)
+  const sqc = F.at((sq.s0 + sq.s1) / 2, (sq.o0 + sq.o1) / 2);
+  return {
+    // stabilised earth / gravel square between the façade and the market (photos 02, 05)
+    square: { x: sqc[0], z: sqc[1], w: sq.s1 - sq.s0, d: sq.o1 - sq.o0, yaw: F.yaw },
+    // Atatürk statue: bronze standing figure on a grey granite pedestal, in front of the second bay (photo 02)
+    statue: P(9.0, 3.3),
+    bed: { ...P(8.4, 2.7), w: 8.0, d: 4.6 },                 // grass bed with a low kerb around the statue
+    flags: [P(7.4, 1.4, { flag: true }), P(10.6, 1.4)],      // two thin poles behind the statue, the flag on the southern one
+    kiosk: { ...P(17.4, 2.6), w: 5.0, d: 3.6 },              // the kahve's green-roofed kiosk at the north end of the façade
+    trees: [
+      P(-1.2, 2.2, { species: 'juniper', size: 1.25 }),       // big juniper at the south-east corner, by the lane (photo 02, SV03)
+      P(5.0, 1.4, { species: 'redshrub', size: 1.0 }),       // red-leaved shrub in the bed
+      P(6.7, 2.4, { species: 'fruit', size: 0.75 }),         // small young tree left of the statue
+      P(11.4, 2.2, { species: 'juniper', size: 0.75 }),      // small conifer right of the statue
+      P(13.5, 3.2, { species: 'fir', size: 1.0 }),           // tall spruce reaching the eaves
+      P(23.5, 5.0, { species: 'mulberry', size: 1.35 }),     // big trees in front of the kahve (photo 02 right, photo 05)
+      P(27.5, 3.5, { species: 'mulberry', size: 1.2 }),
+    ],
+    marketTree: { x: 258.2, z: 123.6 },                      // the old tree on the pavement in front of the market (SV01, satellite crown)
+    // raised park plot south of the lane: rubble wall with blue-white kerb stones, big wooden çardak, notice board, two big trees (photo 02 left)
+    plot: { x0: 235.5, x1: 250.0, z0: 139.8, z1: 153.0, h: 0.7 },
+    cardak: { x: 245.0, z: 145.4, size: 5.6 },
+    board: { x: 248.6, z: 148.6 },
+    plotTrees: [{ x: 240.3, z: 141.8, species: 'mulberry', size: 1.55 }, { x: 237.8, z: 147.8, species: 'mulberry', size: 1.4 }],
+  };
+}
+/** Is (x, z) on the çarşı square (or in the raised plot)? */
+export function inCarsi(sites, x, z, margin = 0) {
+  const q = sites.square; if (!q) return false;
+  const c = Math.cos(q.yaw), s = Math.sin(q.yaw), dx = x - q.x, dz = z - q.z, lx = dx * c - dz * s, lz = dx * s + dz * c;
+  if (Math.abs(lx) < q.w / 2 + margin && Math.abs(lz) < q.d / 2 + margin) return true;
+  const p = sites.plot; return !!p && x > p.x0 - margin && x < p.x1 + margin && z > p.z0 - margin && z < p.z1 + margin;
+}
 
 // ---------------------------------------------------------------- special sites (model metres)
 const muni = TRACED.find(b => b.kind === 'municipality');
 export const SITES = {
   municipality: muni,
-  // stabilised-earth square: the wide junction area between the municipality and the market (docs/reference/02, 05)
-  square: { x: 45, z: 47, w: 20, d: 34 },
-  statue: { x: 38.6, z: 42.5 },                           // Atatürk statue on a pedestal in front of the façade
-  gazebo: { x: 40, z: 67 },                               // green-roofed çardak
+  ...carsiSites(muni),
   market: TRACED.find(b => b.kind === 'market'),
   mosque: { x: MOSQUE_SITE.x, z: MOSQUE_SITE.z, yaw: 0 },     // prayer hall centre (dome in the satellite image); qibla side to the south
   green1: { x: img(403, 541)[0], z: img(403, 541)[1] },  // small green with a bench and a bin (docs/reference/04)
@@ -174,15 +234,17 @@ export function buildVillageLayout(terrH, existingRoads = []) {
   // traced houses that landed on a re-drawn road are nudged away from it, perpendicular to the road
   for (const b of buildings) {
     if (!b.traced) continue;
-    for (let it = 0; it < 8 && !roadClear(b, 0.6); it++) {
+    for (let it = 0; it < 8 && !b.fixed && !roadClear(b, 0.6); it++) {
       const h = nearestRoad(b.x, b.z), p = h.r.line[h.i], q = h.r.line[Math.min(h.r.line.length - 1, h.i + 1)], dx = q[0] - p[0], dz = q[1] - p[1], L = Math.hypot(dx, dz) || 1;
       const nx = -dz / L, nz = dx / L, side = Math.sign((b.x - p[0]) * nx + (b.z - p[1]) * nz) || 1;
       b.x += nx * side; b.z += nz * side;
     }
     const h = nearestRoad(b.x, b.z), p = h.r.line[h.i], q = h.r.line[Math.min(h.r.line.length - 1, h.i + 1)];
     b.face = Math.atan2(p[1] - b.z, p[0] - b.x); b.front = h.d;
+    if (b.faceFix !== undefined) b.face = b.faceFix;   // çarşı: the kahve opens onto the square
     // the detector's axis is unreliable for near-square roofs: snap those to the road or to north
-    if (Math.max(b.w, b.d) / Math.min(b.w, b.d) < (b.sat ? 1.12 : 1.55) && !b.kind) {
+    if (b.fixed) { /* çarşı footprints are measured: keep them */ }
+    else if (Math.max(b.w, b.d) / Math.min(b.w, b.d) < (b.sat ? 1.12 : 1.55) && !b.kind) {
       const roadYaw = Math.atan2(-(q[1] - p[1]), q[0] - p[0]);
       const m90 = (a) => ((a % (Math.PI / 2)) + Math.PI / 2) % (Math.PI / 2);
       const dRoad = Math.min(Math.abs(m90(b.yaw) - m90(roadYaw)), Math.PI / 2 - Math.abs(m90(b.yaw) - m90(roadYaw)));
@@ -199,6 +261,7 @@ export function buildVillageLayout(terrH, existingRoads = []) {
     const hMax = Math.max(...hs), hMin = Math.min(...hs), range = hMax - hMin;
     // cut-and-fill on slopes (Street View 99): floor sits part-way down the drop so the plinth never grows past ~3 m
     b.yTop = (range > 1.5 ? hMax - 0.5 * (range - 1.5) : hMax) + 0.05; b.yLow = hMin - 0.4;
+    if (b.floorAtFront && b.face !== undefined) { const fx = b.x + Math.cos(b.face) * (b.w / 2 + 1), fz = b.z + Math.sin(b.face) * (b.w / 2 + 1); b.yTop = terrH(fx, fz) + 0.15; }
   }
   return { roads, buildings, sites: SITES, rnd };
 }
@@ -208,7 +271,7 @@ export function buildVillageLayout(terrH, existingRoads = []) {
 // and trees stay. Old houses / trees inside these zones are removed.
 export const CENTRE_MOSQUE = { x: 107.2, z: 102.6 };   // inside the old courtyard footprint (89.7..128.7, 83.2..125.1)
 export const CENTRE_ZONES = [
-  { x0: 20, x1: 56, z0: 28, z1: 74 },                   // municipality, square, çardak
+  { x0: 222, x1: 262, z0: 100, z1: 156 },               // municipality, square, kiosk, çardak plot
   { x0: 93, x1: 121, z0: 88, z1: 124 },                 // mosque courtyard
 ];
 export const inCentreZone = (x, z) => CENTRE_ZONES.some(r => x > r.x0 && x < r.x1 && z > r.z0 && z < r.z1);
@@ -231,6 +294,23 @@ export function buildCentreLayout(terrH) {
 export function roadSamples(roads, terrH, lift) {
   const out = [];
   for (const r of roads) for (const [x, z] of smoothPolyline(r.pts, 1.5)) out.push(x, z, terrH(x, z) + lift(r.kind), r.w / 2);
+  return out;
+}
+/** Collision boxes ([x, z, yaw, hw, hd, ...]) for the statue, the kiosk and the çardak. */
+export function carsiBoxes(sites) {
+  const out = [];
+  if (sites.statue) out.push(sites.statue.x, sites.statue.z, sites.statue.yaw, 1.3, 1.3);
+  if (sites.kiosk) out.push(sites.kiosk.x, sites.kiosk.z, sites.kiosk.yaw, sites.kiosk.w / 2, sites.kiosk.d / 2);
+  if (sites.cardak) out.push(sites.cardak.x, sites.cardak.z, 0, sites.cardak.size / 2, sites.cardak.size / 2);
+  return out;
+}
+/** The çarşı square as road samples (so walking / driving use it and no grass grows on it). */
+export function squareSamples(sites, terrH, lift = 0.06) {
+  const q = sites.square, out = []; if (!q) return out;
+  const c = Math.cos(q.yaw), s = Math.sin(q.yaw);
+  for (let lz = -q.d / 2 + 1; lz <= q.d / 2 - 1; lz += 2) for (let lx = -q.w / 2 + 1; lx <= q.w / 2 - 1; lx += 2) {
+    const x = q.x + lx * c + lz * s, z = q.z - lx * s + lz * c; out.push(x, z, terrH(x, z) + lift, 1.5);
+  }
   return out;
 }
 /** Building boxes in the data4 format ([x, z, yaw, hw, hd, ...]) for collision and the minimap. */

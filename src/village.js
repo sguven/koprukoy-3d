@@ -4,7 +4,7 @@
 // Layout comes from village_layout.js; materials from village_materials.js; props from props.js.
 import * as THREE from 'three';
 import { GeoBatch, box, boxY, cyl, facadeWithHoles, roofGeometry, gableEnds, ribbon, patch } from './geo.js';
-import { inRegion, inCentreZone, rectCorners, distToPolyline } from './village_layout.js';
+import { inRegion, inCentreZone, rectCorners, distToPolyline, inCarsi } from './village_layout.js';
 import { buildProps } from './props.js';
 
 const WALLS = ['Duvar_Beyaz', 'Duvar_Beyaz', 'Duvar_Beyaz', 'Duvar_Krem', 'Duvar_Krem', 'Duvar_Okr', 'Duvar_Pembe', 'Duvar_Sari', 'Duvar_Gri'];
@@ -63,17 +63,23 @@ export function buildVillage(ctx, layout, M) {
     if (centreOnly) break;
     const hw = r.w / 2, L = lift(r);
     const prof = [{ u: -hw - 1.0, dy: L * 0.25 }, { u: -hw, dy: L }, { u: -hw * 0.5, dy: L }, { u: 0, dy: L + 0.04 }, { u: hw * 0.5, dy: L }, { u: hw, dy: L }, { u: hw + 1.0, dy: L * 0.25 }];
-    bat.add('road_' + r.kind, ribbon(r.line, prof, yAt, 1 / hw));
+    // on the çarşı the open square is the carriageway: no asphalt ribbon there, the square's gravel shows (photos 02, 05)
+    let seg = [];
+    const flushRoad = () => { if (seg.length > 1) bat.add('road_' + r.kind, ribbon(seg, prof, yAt, 1 / hw)); seg = []; };
+    for (const p of r.line) { if (inCarsi(layout.sites, p[0], p[1], -1.0)) flushRoad(); else seg.push(p); }
+    flushRoad();
     if (!r.kerb) continue;
     // kerb + 1.5 m pavement on both sides, interrupted around junctions with other roads
-    for (const side of [-1, 1]) {
+    for (const side of (r.kerbSide ? [r.kerbSide] : [-1, 1])) {
       let run = [];
       const flush = () => { if (run.length > 2) addKerb(run, side); run = []; };
-      for (const p of r.line) {
+      for (let pi = 0; pi < r.line.length; pi++) {
+        const p = r.line[pi], q = r.line[Math.min(r.line.length - 1, pi + 1)], o = r.line[Math.max(0, pi - 1)];
+        const tl = Math.hypot(q[0] - o[0], q[1] - o[1]) || 1, kx = p[0] - (q[1] - o[1]) / tl * (hw + 0.9) * side, kz = p[1] + (q[0] - o[0]) / tl * (hw + 0.9) * side;   // where this kerb runs
         let near = false;
         for (const o of roads) { if (o === r) continue; if (distToPolyline(p[0], p[1], o.line).d < o.w / 2 + hw + 1.5) { near = true; break; } }
         // and keep clear of the mosque courtyard wall and the square
-        if (near) flush(); else run.push(p);
+        if (near || (!r.kerbSide && inCarsi(layout.sites, kx, kz))) flush(); else run.push(p);
       }
       flush();
     }
@@ -95,22 +101,20 @@ export function buildVillage(ctx, layout, M) {
       while (i + 1 < r.line.length && acc + Math.hypot(r.line[i + 1][0] - r.line[i][0], r.line[i + 1][1] - r.line[i][1]) < s) { acc += Math.hypot(r.line[i + 1][0] - r.line[i][0], r.line[i + 1][1] - r.line[i][1]); i++; }
       const p = r.line[i], q = r.line[Math.min(r.line.length - 1, i + 1)], dx = q[0] - p[0], dz = q[1] - p[1], len = Math.hypot(dx, dz) || 1, t = (s - acc) / len;
       const x = p[0] + dx * t + (-dz / len) * off * side, z = p[1] + dz * t + (dx / len) * off * side;
-      if (!onRoad(x, z, 0.6)) { props.push({ kind: 'pole', x, z, prev }); prev = { x, z }; } else prev = null;
+      if (!onRoad(x, z, 0.6) && !inCarsi(layout.sites, x, z, 2)) { props.push({ kind: 'pole', x, z, prev }); prev = { x, z }; } else prev = null;
       s += 32 + rnd() * 10;
     }
   }
 
   // ================================================================= the square and the lawns
   const S = layout.sites;
-  bat.add('square', patch(S.square.x, S.square.z, S.square.w, S.square.d, 0, yAt, LIFT.square, 2.5));
+  bat.add('square', patch(S.square.x, S.square.z, S.square.w, S.square.d, S.square.yaw || 0, yAt, LIFT.square, 2.0));
   if (!centreOnly) {
     const green = S.green1; bat.add('lawn', patch(green.x, green.z, 7, 6, 0, yAt, 0.07, 1.5));
     props.push({ kind: 'bench', x: green.x - 1.5, z: green.z + 1.0, yaw: 0.2 }, { kind: 'bin', x: green.x + 2.2, z: green.z + 1.5 }, { kind: 'tree', species: 'mulberry', x: green.x + 1.0, z: green.z - 1.5, size: 1.1 });
   }
-  props.push({ kind: 'bench', x: S.square.x + 7, z: S.square.z + 13, yaw: 0 }, { kind: 'bench', x: S.square.x + 7, z: S.square.z - 12, yaw: 0 }, { kind: 'bin', x: S.square.x + 9, z: S.square.z + 15 });
-  for (const [dx, dz] of [[-2, 14], [8, -16], [9, 10]]) props.push({ kind: 'tree', species: 'mulberry', x: S.square.x + dx, z: S.square.z + dz, size: 1.3 });
-  // the big old tree on the pavement in front of Güvendioğlu Market (Street View 01)
-  if (S.market) props.push({ kind: 'tree', species: 'mulberry', x: S.market.x - S.market.w / 2 - 3.5, z: S.market.z + 2, size: 1.6 });
+  // the big old tree on the pavement in front of Güvendioğlu Market (Street View 01, satellite crown)
+  if (S.marketTree) props.push({ kind: 'tree', species: 'mulberry', x: S.marketTree.x, z: S.marketTree.z, size: 1.6 });
 
   // ================================================================= buildings
   for (const b of layout.buildings) {
@@ -119,7 +123,7 @@ export function buildVillage(ctx, layout, M) {
     if (b.kind === 'municipality') { buildMunicipality(b); continue; }
     buildHouse(b);
   }
-  buildStatue(S.statue); buildGazebo(S.gazebo);
+  buildCarsi(S);
   if (!centreOnly) {
     for (const c of S.cemeteries || []) buildCemetery(c);
     for (const mn of S.minarets || []) buildMinaretAt(mn.x, mn.z);
@@ -356,32 +360,42 @@ export function buildVillage(ctx, layout, M) {
   }
 
   // ---------------------------------------------------------------- old municipality ---------
+  // "T.C. Köprü Belediyesi" (docs/reference/02, 05): three storeys, five wide bays on the long sides with ribbon
+  // windows of three panes, red-brown pilasters between the bays, tall whitewashed spandrel bands between the
+  // floors, iron grilles on the ground floor, the entrance and the white sign board in the southern bay,
+  // low-pitch tile hip roof with wide eaves and three small chimneys.
   function buildMunicipality(b) {
     const id = bid++, frame = { x: b.x, y: b.yTop, z: b.z, yaw: b.yaw }, w = b.w, d = b.d;
-    const FH = 3.2, n = 3, y0 = 0.5, y1 = y0 + n * FH + 0.3;
+    const FH = 3.1, n = 3, y0 = 0.5, y1 = y0 + n * FH + 0.15;
     const bld = { id, base: b.yTop, top: b.yTop + y1, yaw: b.yaw, cx: b.x, cz: b.z };
     const add = (key, geo, m) => { if (m) geo.applyMatrix4(m); bat.add(key, geo, frame, bld); };
     add(b.yTop - b.yLow > 1.9 ? 'rubble' : 'plinth', boxY(w + 0.2, d + 0.2, b.yLow - b.yTop - 0.3, y0 + 0.02));
-    // the square lies east of the building; local -z faces east (yaw ~ -95°)
-    const front = frontSide({ ...b, face: 0 });
+    // local -z faces east, onto the square; in that face's frame x = s - L/2 (s from the south end)
+    const front = '-z';
     for (const side of ['+z', '-z', '+x', '-x']) {
       const L = side === '+z' || side === '-z' ? w : d, fm = faceMatrix(side, w, d), isFront = side === front;
-      const bays = Math.max(1, Math.round(L / 2.6)), bw = L / bays, holes = [], panes = [];
+      const bays = side === '+z' || side === '-z' ? 5 : 2, bw = L / bays, holes = [], panes = [];
       for (let k = 0; k < n; k++) {
         const fy = y0 + k * FH;
         for (let i = 0; i < bays; i++) {
           const x = -L / 2 + bw * (i + 0.5);
-          if (k === 0 && isFront && i === Math.floor(bays / 2)) {
-            holes.push({ x, y: fy + 1.3, w: 1.8, h: 2.6 }); panes.push({ x, y: fy + 1.3, w: 1.8, h: 2.6, door: true });
-            add('beton', box(3.2, 0.18, 1.6, x, fy + 2.75, 0.8), fm);                        // entrance canopy
-            for (const sx of [-1.3, 1.3]) add('pilaster', box(0.3, 2.65, 0.3, x + sx, fy + 1.32, 1.4), fm);
-            for (let s = 0; s < 3; s++) add('step', box(3.6 - s * 0.3, 0.17, 1.4 - s * 0.4, x, fy - 0.1 - s * 0.17 + 0.17, 0.7 - s * 0.2), fm);
-            add('trim', box(3.0, 0.7, 0.08, x, fy + 3.4, 0.16), fm);                        // sign board above the door
+          if (k === 0 && isFront && i === 0) {
+            // entrance bay: a small barred window, the door, and the sign board over both
+            const dx = x + 0.55;
+            holes.push({ x: dx, y: fy + 1.2, w: 1.35, h: 2.4 }); panes.push({ x: dx, y: fy + 1.2, w: 1.35, h: 2.4, door: true });
+            holes.push({ x: x - 1.0, y: fy + 1.55, w: 0.7, h: 1.2 }); panes.push({ x: x - 1.0, y: fy + 1.55, w: 0.7, h: 1.2 });
+            grille(x - 1.0, fy + 1.55, 0.7, 1.2, fm);
+            for (let st = 0; st < 3; st++) add('step', box(2.2 - st * 0.2, 0.17, 1.2 - st * 0.35, dx, 0.085 + st * 0.17, 0.6 - st * 0.175), fm);
+            const sg = new THREE.PlaneGeometry(3.3, 0.78); sg.translate(x + 0.15, fy + 2.95, 0.2); sg.applyMatrix4(fm); bat.add('signMuni', sg, frame, bld);
+            add('metalDark', box(3.4, 0.86, 0.06, x + 0.15, fy + 2.95, 0.16), fm);
             continue;
           }
-          const ww = bw - 0.75, wh = 1.6, wy = fy + 1.75;
-          holes.push({ x, y: wy, w: ww, h: wh }); panes.push({ x, y: wy, w: ww, h: wh });
-          add('trim', box(ww + 0.2, 0.08, 0.3, x, wy - wh / 2 - 0.04, 0.12), fm);
+          const ww = bw - 0.7, wh = k === 0 ? 1.55 : 1.7, wy = fy + (k === 0 ? 1.55 : 1.6);
+          holes.push({ x, y: wy, w: ww, h: wh });
+          const np = Math.max(2, Math.round(ww / 1.0));
+          for (let j = 0; j < np; j++) panes.push({ x: x - ww / 2 + ww * (j + 0.5) / np, y: wy, w: ww / np, h: wh });
+          add('trim', box(ww + 0.12, 0.07, 0.24, x, wy - wh / 2 - 0.035, 0.1), fm);
+          if (k === 0) grille(x, wy, ww, wh, fm);
         }
       }
       add('whitewash', facadeWithHoles(L, y0, y1, 0, 1, holes), fm);
@@ -389,52 +403,133 @@ export function buildVillage(ctx, layout, M) {
         add('whitewash', box(h.w, 0.02, dep, h.x, h.y + h.h / 2 - 0.01, -dep / 2), fm); add('whitewash', box(h.w, 0.02, dep, h.x, h.y - h.h / 2 + 0.01, -dep / 2), fm);
         add('whitewash', box(0.02, h.h, dep, h.x - h.w / 2 + 0.01, h.y, -dep / 2), fm); add('whitewash', box(0.02, h.h, dep, h.x + h.w / 2 - 0.01, h.y, -dep / 2), fm); }
       for (const p of panes) { const g = new THREE.PlaneGeometry(p.w, p.h); g.translate(p.x, p.y, -0.2); g.applyMatrix4(fm); bat.add(p.door ? 'door' : 'glass', g, frame, bld, p.door ? null : [p.w, p.h]); }
-      // red-brown pilasters between the bays and a band under the eaves (docs/reference/02)
-      for (let i = 0; i <= bays; i++) { const x = Math.max(-L / 2 + 0.2, Math.min(L / 2 - 0.2, -L / 2 + bw * i)); add('pilaster', box(0.42, y1 - y0, 0.14, x, (y0 + y1) / 2, 0.07), fm); }
-      for (let k = 1; k < n; k++) add('pilaster', box(L, 0.25, 0.1, 0, y0 + k * FH - 0.1, 0.05), fm);
+      // red-brown pilasters between the bays (wider at the corners), tall white spandrel bands over them
+      for (let i = 0; i <= bays; i++) { const corner = i === 0 || i === bays, pw = corner ? 0.5 : 0.42, x = Math.max(-L / 2 + pw / 2, Math.min(L / 2 - pw / 2, -L / 2 + bw * i)); add('pilaster', box(pw, y1 - y0, 0.12, x, (y0 + y1) / 2, 0.06), fm); }
+      for (let k = 1; k < n; k++) { const yb0 = y0 + k * FH - 0.62, yb1 = y0 + k * FH + 0.66; add('whitewash', box(L + 0.06, yb1 - yb0, 0.2, 0, (yb0 + yb1) / 2, 0.1), fm); add('trim', box(L + 0.1, 0.06, 0.26, 0, yb1 + 0.03, 0.12), fm); }
     }
-    const e = 0.9, pitch = 0.3, ry = y1 - 0.05, roof = roofGeometry(w, d, e, pitch, ry, 'h'), rise = roof.userData.rise;
+    function grille(x, y, gw, gh, fm) {   // white-painted iron bars on the ground-floor windows
+      const nb = Math.max(3, Math.round(gw / 0.13));
+      for (let j = 1; j < nb; j++) add('railing', box(0.025, gh - 0.04, 0.025, x - gw / 2 + gw * j / nb, y, 0.06), fm);
+      for (const yy of [y - gh / 2 + 0.1, y, y + gh / 2 - 0.1]) add('railing', box(gw - 0.02, 0.03, 0.03, x, yy, 0.06), fm);
+    }
+    const e = 0.75, pitch = 0.32, ry = y1 - 0.05, roof = roofGeometry(w, d, e, pitch, ry, 'h'), rise = roof.userData.rise;
     add('Cati_Kiremit_Koyu', roof);
     const W = w / 2 + e, Dd = d / 2 + e;
-    for (const [bw2, bd2, cx, cz] of [[2 * W + 0.06, 0.06, 0, Dd], [2 * W + 0.06, 0.06, 0, -Dd], [0.06, 2 * Dd, W, 0], [0.06, 2 * Dd, -W, 0]]) add('trim', box(bw2, 0.25, bd2, cx, ry - 0.1, cz));
+    for (const [bw2, bd2, cx, cz] of [[2 * W + 0.06, 0.06, 0, Dd], [2 * W + 0.06, 0.06, 0, -Dd], [0.06, 2 * Dd, W, 0], [0.06, 2 * Dd, -W, 0]]) add('trim', box(bw2, 0.28, bd2, cx, ry - 0.1, cz));
     const sof = new THREE.PlaneGeometry(2 * W, 2 * Dd); sof.rotateX(Math.PI / 2); sof.translate(0, ry - 0.02, 0); add('trim', sof);
     add('Cati_Kiremit_Koyu', box(2 * W - 2 * Math.min(Dd, W - 0.5) + 0.1, 0.1, 0.3, 0, ry + rise + 0.02, 0));
     add('metal', box(2 * W, 0.1, 0.12, 0, ry - 0.22, Dd + 0.05)); add('metal', box(2 * W, 0.1, 0.12, 0, ry - 0.22, -Dd - 0.05));
     for (const sx of [W - 0.15, -W + 0.15]) add('metal', cyl(0.05, 0.05, ry - 0.3, sx, (ry - 0.3) / 2 + 0.05, Dd - 0.15));
-    // flag pole in front of the entrance
-    const fm = faceMatrix(front, w, d);
-    add('metal', cyl(0.04, 0.05, 7.5, 2.5, 3.75, 3.0), fm);
-    const flag = new THREE.PlaneGeometry(1.5, 1.0); flag.translate(2.5 + 0.75, 6.9, 3.0); add('flag', flag, fm);
-    add('beton', box(0.6, 0.5, 0.6, 2.5, 0.25, 3.0), fm);
+    for (const cx of [-5.6, 0.4, 5.2]) { const cz = -0.6, roofY = ry + (Dd - Math.abs(cz)) * Math.tan(pitch); add('chimney', boxY(0.45, 0.45, roofY - 0.4, roofY + 0.55, cx, cz)); add('beton', box(0.6, 0.06, 0.6, cx, roofY + 0.58, cz)); }
   }
 
-  // ---------------------------------------------------------------- statue, gazebo -----------
+  // ---------------------------------------------------------------- the çarşı square -----------
+  // Everything in front of the old municipality, from the Street View photographs 02 / 05 and SV01-03.
+  function buildCarsi(S) {
+    if (S.statue) buildStatue(S.statue);
+    const at = (p, y = 0) => ({ x: p.x, y: yAt(p.x, p.z) + y, z: p.z, yaw: p.yaw || 0 });
+    // grass bed with a low concrete kerb around the statue
+    if (S.bed) {
+      const B = S.bed, fr = at(B);
+      bat.add('lawn', patch(B.x, B.z, B.w, B.d, B.yaw, yAt, 0.13, 1.0));
+      for (const [bw, bd, cx, cz] of [[B.w, 0.14, 0, B.d / 2], [B.w, 0.14, 0, -B.d / 2], [0.14, B.d, B.w / 2, 0], [0.14, B.d, -B.w / 2, 0]]) bat.add('beton', boxY(bw, bd, -0.5, 0.2, cx, cz), fr);
+    }
+    // two thin flag poles behind the statue; the Turkish flag on the southern one (photo 02)
+    for (const f of S.flags || []) {
+      const fr = at(f); bat.add('metal', cyl(0.035, 0.05, 7.6, 0, 3.8 - 0.2, 0, 8), fr); bat.add('metal', new THREE.SphereGeometry(0.07, 8, 6).translate(0, 7.45, 0), fr);
+      if (f.flag) { const g = new THREE.PlaneGeometry(1.35, 0.9, 6, 1); const p = g.attributes.position; for (let i = 0; i < p.count; i++) p.setZ(i, 0.08 * Math.sin((p.getX(i) + 0.675) * 3.2)); g.computeVertexNormals(); g.translate(0.72, 6.85, 0); g.rotateY(Math.PI); bat.add('flagTR', g, fr); }
+    }
+    if (S.kiosk) buildKiosk(S.kiosk);
+    for (const t of S.trees || []) treeSpots.push({ ...t, force: true });
+    if (S.plot) buildPlot(S);
+  }
+  /** Atatürk statue: standing bronze figure in a long coat, arms down, on a grey granite pedestal with a plaque. */
   function buildStatue(s) {
-    const y = terrH(s.x, s.z), frame = { x: s.x, y, z: s.z, yaw: Math.PI / 2 }; // facing east, onto the square
-    const add = (key, geo) => bat.add(key, geo, frame);
-    add('beton', box(3.0, 0.18, 3.0, 0, 0.09, 0)); add('beton', box(2.4, 0.18, 2.4, 0, 0.27, 0));
-    add('granite', boxY(1.4, 1.4, 0.36, 2.9)); add('granite', box(1.65, 0.14, 1.65, 0, 2.97, 0)); add('granite', box(1.5, 0.1, 1.5, 0, 0.41, 0));
-    // the figure: a standing bronze in a long coat
-    const base = 3.04;
-    add('bronze', box(0.75, 0.12, 0.75, 0, base + 0.06, 0));
-    for (const sx of [-0.14, 0.14]) add('bronze', cyl(0.11, 0.12, 0.95, sx, base + 0.6, 0, 10));
-    add('bronze', cyl(0.3, 0.36, 1.05, 0, base + 1.55, 0, 12));           // coat
-    add('bronze', box(0.56, 0.4, 0.34, 0, base + 2.05, 0));                 // chest
-    add('bronze', cyl(0.09, 0.1, 0.15, 0, base + 2.32, 0, 10));             // neck
-    const head = new THREE.SphereGeometry(0.15, 14, 10); head.scale(1, 1.18, 1); head.translate(0, base + 2.55, 0); add('bronze', head);
-    const armL = cyl(0.07, 0.08, 0.75, 0, 0, 0, 8); armL.rotateZ(0.25); armL.translate(-0.38, base + 1.85, 0.05); add('bronze', armL);
-    const armR = cyl(0.07, 0.08, 0.75, 0, 0, 0, 8); armR.rotateX(-0.9); armR.translate(0.36, base + 2.05, 0.3); add('bronze', armR); // right arm raised forward
-    add('bronze', box(0.8, 0.06, 0.4, 0, base + 2.3, -0.05));              // cape line at the shoulders
+    const y = yAt(s.x, s.z), frame = { x: s.x, y, z: s.z, yaw: s.yaw }, add = (key, geo) => bat.add(key, geo, frame);   // local -z faces the square
+    add('beton', boxY(2.6, 2.6, -0.8, 0.16)); add('beton', boxY(2.1, 2.1, 0.16, 0.32));
+    add('granite', boxY(1.55, 1.55, 0.32, 0.5)); add('granite', boxY(1.3, 1.3, 0.5, 2.0)); add('granite', boxY(1.5, 1.5, 2.0, 2.16));
+    const pl = new THREE.PlaneGeometry(0.75, 0.48); pl.rotateY(Math.PI); pl.translate(0, 1.35, -0.656); add('plaque', pl);
+    const B = 2.16;                                                           // top of the pedestal
+    const F = 1.2;                                                            // the figure is ~1.2x life size (about 3 m, photo 02)
+    const addF = (key, geo) => { geo.translate(0, -B, 0); geo.scale(F, F, F); geo.translate(0, B, 0); add(key, geo); };
+    addF('bronze', boxY(0.72, 0.62, B, B + 0.1));                            // bronze plinth
+    for (const sx of [-0.12, 0.12]) { addF('bronze', cyl(0.085, 0.1, 0.62, sx, B + 0.41, 0, 10)); addF('bronze', box(0.16, 0.1, 0.3, sx, B + 0.15, -0.06)); }
+    // long greatcoat: a flared lathe from the shins to the chest, slightly flattened front-to-back
+    const coat = new THREE.LatheGeometry([[0.0, 0], [0.36, 0], [0.33, 0.35], [0.29, 0.75], [0.27, 1.05], [0.3, 1.32], [0.27, 1.5], [0.0, 1.52]].map(([r, h]) => new THREE.Vector2(r, h)), 16);
+    coat.scale(1, 1, 0.72); coat.translate(0, B + 0.55, 0); addF('bronze', coat);
+    { const sh = new THREE.CapsuleGeometry(0.13, 0.3, 4, 10); sh.rotateZ(Math.PI / 2); sh.scale(1, 1, 1.25); sh.translate(0, B + 1.93, 0); addF('bronze', sh); }   // rounded shoulders
+    addF('bronze', box(0.5, 0.07, 0.3, 0, B + 1.25, -0.02));               // belt
+    for (const sx of [-1, 1]) {                                             // coat lapels: thin raised strips converging to the belt
+      const lp = box(0.07, 0.55, 0.025, 0, 0, 0); lp.rotateZ(sx * 0.22); lp.translate(sx * 0.07, B + 1.62, -0.2); addF('bronze', lp);
+    }
+    for (const sx of [-1, 1]) {                                             // arms hanging close to the body, hands slightly forward
+      const ua = cyl(0.068, 0.078, 0.6, 0, 0, 0, 10); ua.rotateZ(sx * 0.07); ua.translate(sx * 0.31, B + 1.62, 0.0); addF('bronze', ua);
+      const fa = cyl(0.056, 0.066, 0.52, 0, 0, 0, 10); fa.rotateX(0.22); fa.translate(sx * 0.33, B + 1.09, -0.05); addF('bronze', fa);
+      addF('bronze', new THREE.SphereGeometry(0.06, 8, 6).scale(0.85, 1.3, 0.8).translate(sx * 0.335, B + 0.78, -0.11));
+    }
+    addF('bronze', cyl(0.075, 0.09, 0.16, 0, B + 2.1, 0, 10));             // neck and collar
+    addF('bronze', cyl(0.16, 0.2, 0.12, 0, B + 2.02, 0, 12));
+    addF('bronze', new THREE.SphereGeometry(0.145, 16, 12).scale(1, 1.2, 1.08).translate(0, B + 2.34, -0.01));
+    addF('bronze', new THREE.SphereGeometry(0.15, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 0.55, 1.08).translate(0, B + 2.41, 0.015));   // swept-back hair
   }
-  function buildGazebo(g) {
-    const y = terrH(g.x, g.z), frame = { x: g.x, y, z: g.z, yaw: 0 }, add = (key, geo) => bat.add(key, geo, frame);
-    add('beton', cyl(2.9, 3.0, 0.25, 0, 0.12, 0, 6));
-    for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2, x = Math.cos(a) * 2.3, z = Math.sin(a) * 2.3; add('woodRaw', box(0.14, 2.5, 0.14, x, 1.5, z)); add('woodRaw', box(0.3, 0.06, 0.3, x, 0.25 + 0.03, z)); }
-    for (let i = 0; i < 6; i++) { const a0 = i / 6 * Math.PI * 2, a1 = (i + 1) / 6 * Math.PI * 2, mx = (Math.cos(a0) + Math.cos(a1)) / 2 * 2.3, mz = (Math.sin(a0) + Math.sin(a1)) / 2 * 2.3; if (i === 0) continue; const b = box(2.3, 0.05, 0.4, 0, 0.7, 0); b.rotateY(-((a0 + a1) / 2) + Math.PI / 2); b.translate(mx * 0.93, 0, mz * 0.93); add('woodRaw', b); }
-    const roof = new THREE.ConeGeometry(3.2, 1.1, 6, 1, true); roof.translate(0, 2.75 + 0.55, 0); add('greenPaint', roof);
-    const ring = new THREE.CylinderGeometry(3.2, 3.2, 0.12, 6, 1, true); ring.translate(0, 2.7, 0); add('woodRaw', ring);
+  /** The kahve's kiosk at the north end of the façade: wooden posts, low railing, green sheet hip roof with a lantern, tables and red chairs. */
+  function buildKiosk(k) {
+    const id = bid++, yG = yAt(k.x, k.z), frame = { x: k.x, y: yG, z: k.z, yaw: k.yaw }, bld = { id, base: yG, top: yG + 4, yaw: k.yaw, cx: k.x, cz: k.z };
+    const add = (key, geo) => bat.add(key, geo, frame, bld), W = k.w, D = k.d;   // local x along the façade (south +), z outward is -z
+    add('beton', boxY(W + 0.3, D + 0.3, -0.6, 0.12));
+    const posts = [[-W / 2, -D / 2], [0, -D / 2], [W / 2, -D / 2], [-W / 2, D / 2], [0, D / 2], [W / 2, D / 2]];
+    for (const [px, pz] of posts) add('woodRaw', box(0.14, 2.55, 0.14, px, 0.12 + 1.27, pz));
+    for (const [x0, z0, x1, z1] of [[-W / 2, -D / 2, -W / 2, D / 2], [W / 2, -D / 2, W / 2, D / 2], [-W / 2, -D / 2, -0.6, -D / 2]]) {   // railing on three sides, open to the square
+      const L = Math.hypot(x1 - x0, z1 - z0), g = box(L, 0.07, 0.06, 0, 0, 0); g.rotateY(Math.atan2(-(z1 - z0), x1 - x0)); g.translate((x0 + x1) / 2, 0.95, (z0 + z1) / 2); add('woodRaw', g);
+      const g2 = box(L, 0.05, 0.05, 0, 0, 0); g2.rotateY(Math.atan2(-(z1 - z0), x1 - x0)); g2.translate((x0 + x1) / 2, 0.5, (z0 + z1) / 2); add('woodRaw', g2);
+    }
+    add('woodRaw', box(W + 0.2, 0.18, 0.12, 0, 2.62, -D / 2)); add('woodRaw', box(W + 0.2, 0.18, 0.12, 0, 2.62, D / 2));
+    add('woodRaw', box(0.12, 0.18, D + 0.2, -W / 2, 2.62, 0)); add('woodRaw', box(0.12, 0.18, D + 0.2, W / 2, 2.62, 0));
+    const roof = roofGeometry(W, D, 0.45, 0.42, 2.7, 'h'); add('greenRoof', roof);
+    const rt = 2.7 + roof.userData.rise;
+    add('woodRaw', boxY(0.9, 0.9, rt - 0.3, rt + 0.3)); const lr = roofGeometry(0.9, 0.9, 0.15, 0.6, rt + 0.3, 'h'); add('greenRoof', lr);
+    for (const tx of [-1.2, 1.2]) {
+      add('whitePlastic', cyl(0.42, 0.42, 0.04, tx, 0.86, 0, 14)); add('whitePlastic', cyl(0.03, 0.03, 0.74, tx, 0.49, 0, 6));
+      for (let c = 0; c < 3; c++) { const a = c / 3 * Math.PI * 2 + 0.4, cx = tx + Math.cos(a) * 0.72, cz = Math.sin(a) * 0.72; add('redPlastic', box(0.42, 0.04, 0.42, cx, 0.56, cz)); const bk = box(0.42, 0.42, 0.04, 0, 0, 0); bk.rotateY(-a + Math.PI / 2); bk.translate(cx + Math.cos(a) * 0.2, 0.78, cz + Math.sin(a) * 0.2); add('redPlastic', bk); for (const [lx, lz] of [[-0.17, -0.17], [0.17, -0.17], [-0.17, 0.17], [0.17, 0.17]]) add('redPlastic', box(0.03, 0.44, 0.03, cx + lx, 0.34, cz + lz)); }
+    }
   }
-
+  /** Raised park plot south of the lane: rubble wall topped with blue-white kerb stones, lawn, the big wooden çardak, a notice board and two big trees. */
+  function buildPlot(S) {
+    const P = S.plot, cx = (P.x0 + P.x1) / 2, cz = (P.z0 + P.z1) / 2, W = P.x1 - P.x0, Dp = P.z1 - P.z0;
+    const yTopAt = (x, z) => yAt(x, z) + P.h;
+    bat.add('lawn', patch(cx, cz, W - 0.5, Dp - 0.5, 0, yAt, P.h, 1.5));
+    const seg = (x0, z0, x1, z1) => {
+      const L = Math.hypot(x1 - x0, z1 - z0), n = Math.max(1, Math.round(L / 2));
+      for (let i = 0; i < n; i++) {   // stepped with the ground, 2 m at a time
+        const t0 = i / n, t1 = (i + 1) / n, ax = x0 + (x1 - x0) * t0, az = z0 + (z1 - z0) * t0, bx = x0 + (x1 - x0) * t1, bz = z0 + (z1 - z0) * t1, mx = (ax + bx) / 2, mz = (az + bz) / 2;
+        const yG = yAt(mx, mz), fr = { x: mx, y: yG, z: mz, yaw: Math.atan2(-(bz - az), bx - ax) }, l = L / n + 0.02;
+        bat.add('rubble', boxY(l, 0.5, -0.6, P.h + 0.02), fr);
+        const nb = Math.max(1, Math.round(l / 0.7));
+        for (let j = 0; j < nb; j++) bat.add(((Math.round(ax * 1.43 + az * 1.43) + i * 3 + j) & 1) ? 'kerbBlue' : 'kerbWhite', box(l / nb - 0.03, 0.18, 0.56, -l / 2 + l * (j + 0.5) / nb, P.h + 0.11, 0), { ...fr });
+      }
+    };
+    seg(P.x1, P.z0, P.x1, P.z1); seg(P.x0, P.z0, P.x1, P.z0); seg(P.x0, P.z1, P.x1, P.z1); seg(P.x0, P.z0, P.x0, P.z1);
+    // the big wooden çardak: square, eight posts, railing with benches, two-tier green roof with a lantern
+    const C = S.cardak, s = C.size, yC = yTopAt(C.x, C.z), id = bid++, frame = { x: C.x, y: yC, z: C.z, yaw: 0 }, bld = { id, base: yC, top: yC + 5, yaw: 0, cx: C.x, cz: C.z };
+    const add = (key, geo) => bat.add(key, geo, frame, bld), h = s / 2;
+    add('woodRaw', boxY(s + 0.3, s + 0.3, -0.9, 0.2));
+    for (const [px, pz] of [[-h, -h], [0, -h], [h, -h], [-h, 0], [h, 0], [-h, h], [0, h], [h, h]]) add('woodRaw', box(0.18, 2.6, 0.18, px, 0.2 + 1.3, pz));
+    for (const [x0, z0, x1, z1] of [[-h, -h, h, -h], [-h, h, h, h], [-h, -h, -h, h], [h, -h, h, -0.7], [h, 0.7, h, h]]) {   // opening on the east side
+      const L = Math.hypot(x1 - x0, z1 - z0), ang = Math.atan2(-(z1 - z0), x1 - x0), mx = (x0 + x1) / 2, mz = (z0 + z1) / 2;
+      for (const [yy, hh] of [[0.95, 0.08], [0.45, 0.06]]) { const g = box(L, hh, 0.07, 0, 0, 0); g.rotateY(ang); g.translate(mx, 0.2 + yy, mz); add('woodRaw', g); }
+      for (let t = 0.12; t < 1; t += 0.12) { const g = box(0.05, 0.5, 0.05, x0 + (x1 - x0) * t, 0.2 + 0.7, z0 + (z1 - z0) * t); add('woodRaw', g); }
+      const bench = box(L - 0.4, 0.06, 0.4, 0, 0, 0); bench.rotateY(ang); const nx = -Math.sign(mx) * (Math.abs(mx) > 0.1 ? 0.3 : 0), nz = -Math.sign(mz) * (Math.abs(mz) > 0.1 ? 0.3 : 0); bench.translate(mx + nx, 0.2 + 0.45, mz + nz); add('woodRaw', bench);
+    }
+    add('woodRaw', box(s + 0.3, 0.22, 0.14, 0, 2.8, -h)); add('woodRaw', box(s + 0.3, 0.22, 0.14, 0, 2.8, h)); add('woodRaw', box(0.14, 0.22, s + 0.3, -h, 2.8, 0)); add('woodRaw', box(0.14, 0.22, s + 0.3, h, 2.8, 0));
+    const r1 = roofGeometry(s, s, 0.6, 0.4, 2.9, 'h'); add('greenRoof', r1);
+    const t1 = 2.9 + r1.userData.rise * 0.72, lw = 1.7;
+    add('woodRaw', boxY(lw, lw, t1 - 0.4, t1 + 0.45)); const r2 = roofGeometry(lw, lw, 0.35, 0.5, t1 + 0.45, 'h'); add('greenRoof', r2);
+    // notice board on two posts, facing the square
+    const Bd = S.board, yB = yTopAt(Bd.x, Bd.z), fb = { x: Bd.x, y: yB, z: Bd.z, yaw: Math.PI / 2 };
+    for (const sx of [-0.85, 0.85]) bat.add('metalDark', box(0.08, 1.9, 0.08, sx, 0.95, 0), fb);
+    bat.add('trim', box(1.8, 1.2, 0.08, 0, 1.25, 0), fb);
+    for (const t of S.plotTrees || []) treeSpots.push({ ...t, force: true });
+  }
   // ---------------------------------------------------------------- the mosque ---------------
   function buildMosque(b) {
     const id = bid++, yG = b.yTop, frame = { x: b.x, y: yG, z: b.z, yaw: 0 };
@@ -538,7 +633,7 @@ export function buildVillage(ctx, layout, M) {
   }
   const blds = layout.buildings;
   const inAnyBuilding = (x, z, m) => { for (const b of blds) { const c = Math.cos(b.yaw), s = Math.sin(b.yaw), dx = x - b.x, dz = z - b.z, lx = dx * c - dz * s, lz = dx * s + dz * c; if (Math.abs(lx) < b.w / 2 + m && Math.abs(lz) < b.d / 2 + m) return true; } return false; };
-  const okSpot = (t) => t.force || (!onRoad(t.x, t.z, 1.2) && !inAnyBuilding(t.x, t.z, 1.0) && terrH(t.x, t.z) > 2);
+  const okSpot = (t) => t.force || (!onRoad(t.x, t.z, 1.2) && !inAnyBuilding(t.x, t.z, 1.0) && !inCarsi(S, t.x, t.z, 1.5) && terrH(t.x, t.z) > 2);
   const trees = treeSpots.filter(okSpot);
   // stone piles and a few fences out in the plots
   if (!centreOnly) {
