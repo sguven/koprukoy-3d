@@ -34,6 +34,9 @@ export function villageMaterials(lib, { quality = 2 } = {}) {
   M.bronze = std({ color: 0x4b3b2a, roughness: 0.45, metalness: 0.7, envMapIntensity: 0.7 });
   M.granite = triplanarMaterial({ set: stone, scale: 1.2, normalScale: 0.5, antiTile: 0.3, sharp: 8, tint: new THREE.Color(0x5e5c5a), roughBase: 0.6, cacheKey: 'granite', extraFrag: 'albedo = vec3(dot(albedo, vec3(0.33))) * 0.55;' });
   M.wood = pick('Ahsap'); M.rock = rockMaterial(lib);
+  // dry-stone / rubble garden walls of granite boulders (Street View 07, 08, 12)
+  M.rubble = triplanarMaterial({ set: lib.set('rubble_wall'), scale: lib.set('rubble_wall').size, normalScale: 1.0, antiTile: 0.3, sharp: 8, tint: new THREE.Color(0xb9a98f), roughBase: 0.95, cacheKey: 'rubblewall',
+    extraFrag: 'albedo *= 0.9 + 0.25 * kk_tri(tRgh, vWPos * 0.3 + 1.0, kkW).r;' });
   M.woodRaw = triplanarMaterial({ set: lib.set('wood'), scale: 1.0, normalScale: 0.8, antiTile: 0.0, sharp: 8, tint: new THREE.Color(0xa08866), roughBase: 0.85, cacheKey: 'woodraw' });
   M.flag = std({ color: 0xc8102e, roughness: 0.8, side: THREE.DoubleSide });
   M.pole = triplanarMaterial({ set: concrete, scale: 1.0, normalScale: 0.6, antiTile: 0.2, sharp: 8, tint: new THREE.Color(0xa9a59c), roughBase: 0.9, cacheKey: 'pole', extraFrag: 'albedo *= 1.0 - 0.3 * (1.0 - smoothstep(0.0, 0.8, vWPos.y - 20.0)) * 0.0;' });

@@ -12,7 +12,7 @@
 // This module has no three.js dependency: it only produces plain data (used for geometry, collision,
 // the minimap and the headless plan check in tools/plan_check.mjs).
 
-import { ROADS as DATA_ROADS, BUILDINGS as DATA_BUILDINGS, ANCHOR, MOSQUE_SITE } from './village_data.js';
+import { ROADS as DATA_ROADS, BUILDINGS as DATA_BUILDINGS, ANCHOR, MOSQUE_SITE, SITES as DATA_SITES } from './village_data.js';
 
 // ---------------------------------------------------------------- image -> model mapping
 // v0.9: the photo-01 frame is anchored on the true position of the market junction (Google Maps pin
@@ -47,7 +47,7 @@ const T = [
   [707.2, 117.3, 92.9, 52.3, -3.09, 2, 'h'],
   [443.0, 121.0, 52.8, 29.4, -2.838, 1, 'h'],
   [236.4, 129.2, 32.9, 16.7, 1.366, 1, 'f', 'kahve'],
-  [372.0, 162.5, 45.1, 37.5, -2.472, 1, 'f', 'market'],
+  [372.0, 162.5, 45.1, 37.5, -2.472, 2, 'h', 'market'],
   [591.7, 192.4, 74.8, 38.8, 1.579, 2, 'h'],
   [240.5, 195.5, 75.8, 33.0, 1.658, 3, 'h', 'municipality'],
   [733.2, 206.7, 38.3, 31.7, 2.996, 1, 'h'],
@@ -87,6 +87,7 @@ export const SITES = {
   market: TRACED.find(b => b.kind === 'market'),
   mosque: { x: MOSQUE_SITE.x, z: MOSQUE_SITE.z, yaw: 0 },     // prayer hall centre (dome in the satellite image); qibla side to the south
   green1: { x: img(403, 541)[0], z: img(403, 541)[1] },  // small green with a bench and a bin (docs/reference/04)
+  ...DATA_SITES,                                          // cemeteries, football pitch, school (satellite / Street View, v0.9)
 };
 
 // ---------------------------------------------------------------- geometry helpers
@@ -165,10 +166,11 @@ export function buildVillageLayout(terrH, existingRoads = []) {
   };
 
   const buildings = TRACED.map(b => ({ ...b }));
-  for (const [x, z, yaw, w, d, storeys, roof] of DATA_BUILDINGS) buildings.push({ x, z, yaw, w, d, storeys, roof, traced: true, sat: true });
+  for (const [x, z, yaw, w, d, storeys, roof, kind] of DATA_BUILDINGS) buildings.push({ x, z, yaw, w, d, storeys, roof, kind, traced: true, sat: true });
   const S = SITES;
   buildings.push({ x: S.mosque.x, z: S.mosque.z, yaw: 0, w: 13, d: 19, kind: 'mosque' });
   buildings.push({ x: S.mosque.x + 8.7, z: S.mosque.z - 6.7, yaw: 0, w: 2.6, d: 2.6, kind: 'minaret' });
+  buildings.push({ x: S.mosque.x - 8.7, z: S.mosque.z - 6.7, yaw: 0, w: 2.6, d: 2.6, kind: 'minaret' });
   // traced houses that landed on a re-drawn road are nudged away from it, perpendicular to the road
   for (const b of buildings) {
     if (!b.traced) continue;
@@ -189,7 +191,7 @@ export function buildVillageLayout(terrH, existingRoads = []) {
     } else if (b.kind === 'market' || b.kind === 'kahve') b.yaw = 0;
   }
 
-  for (const b of buildings) if (b.traced && !b.kind) { b.wall = rnd() < 0.55 ? 'wall' : 'fence'; b.tree = rnd() < 0.75; }
+  for (const b of buildings) if (b.traced && !b.kind) { const u = rnd(); b.wall = u < 0.32 ? 'wall' : u < 0.62 ? 'stone' : u < 0.88 ? 'fence' : 'none'; b.tree = rnd() < 0.75; }
 
   // per-building ground: floor level at the highest corner, plinth reaching the lowest
   for (const b of buildings) {

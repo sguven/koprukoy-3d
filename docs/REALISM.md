@@ -5,6 +5,50 @@ Two passes so far: **v0.7 "materials"** (surfaces only, nothing moved) and **v0.
 `model/koprukoy.glb` are still the v0.6 files. Terrain (SRTM 30 m), the reservoir at 724 m, the
 Çeşnigir Bridge body, D.260 and the roads outside the village are unchanged.
 
+## v0.9 — the whole village from Google Maps (Nov 2026)
+
+Measure of realism, as the owner asked: Google Maps. Three sources, all captured from the browser and
+georeferenced on the Çeşnigir Bridge place pin (39.5809021 N, 33.4292022 E == model `(-376.89, -277.44)`,
+1 unit = 1 m, +x east, +z south):
+
+| Source | Capture | Used for |
+|---|---|---|
+| Map layer (roads) | 12 tiles at z17 (0.60 m/px), stitched to `docs/survey/map_layer_mosaic_small.jpg` | the road network: colour mask → skeleton → graph → junction clustering → 521 centrelines |
+| Satellite | 24 tiles at z18 (0.30 m/px), `docs/survey/satellite_mosaic_0.3m_small.jpg` | 722 roof rectangles (tile / dark-red / blue sheet / white / grey), the mosque compound, cemeteries, the football pitch |
+| Street View (Apr 2026) | 13 panoramas, `docs/reference/streetview/` with `NOTES.md` | storeys, roofs, wall types, kerbs, trees, the two minarets, the market, the school |
+
+Scripts: `tools/trace_roads.py` → `tools/clean_roads.py` (map mosaic → `roads_clean.json`), `tools/trace_buildings.py`
+(satellite mosaic → `buildings_traced.json`), `tools/build_village_data.py` (both → `src/village_data.js`).
+
+**Georeference and the warp.** The v0.6 GLB has the Çeşnigir Bridge at its true position, but its D.260 viaduct
+lies ~70 m north-east of the real alignment. Rather than move the viaduct, every traced coordinate is shifted by a
+smooth vector (0 within 150 m of the bridge, the full `(+43.9, -54.6)` m beyond 500 m), so the shore road meets the
+old bridge and the village roads meet the viaduct. The D.260 carriageways themselves stay as the GLB; the traced
+road continues south-east of the viaduct's end as a 9 m asphalt ribbon.
+
+**What changed**
+
+- The hand-drawn v0.8 street network and the generated houses are gone. All roads are Google's: 26 "main" (the
+  thick village road, 6.5 m asphalt with blue-white kerbs and utility poles), 119 secondary (5 m asphalt, kerbs),
+  344 local concrete lanes (4 m), 11 dirt tracks outside the built area. Free ends within 32 m of the viaduct are
+  snapped onto it.
+- 722 buildings on their satellite footprints and orientations; storeys 2 when the roof is tile and >125 m² and
+  compact; roof from the roof colour (tile/dark red → hip, blue → sheet metal, white/grey → flat). Garden walls:
+  32 % rendered, 30 % dry-stone granite rubble (new material), 26 % wire fence.
+- The photo-01 anchor (market junction) moved from `(55, 50)` to its true position `(258.1, 132.3)`, so the old
+  municipality, the square with the Atatürk statue and the çardak are now where they really are; the Güvendioğlu
+  Market is 2 storeys with a hip roof and the old tree in front (Street View 01).
+- Mosque: **two** minarets at the north corners (satellite + Street View 05/12 — photo 06 cropped the second),
+  compound enlarged to ~50 × 56 m with the grove in its western half and the lawn / picnic table / brick pavement
+  between the west wall and the main road (Street View 04).
+- Keskin Köprü İlkokulu as a 2-storey red-brown building; two walled cemeteries with headstones and pines; the
+  football pitch; the real village extends ~150 m east of the terrain edge (x > 870) and is cut there.
+- `#centre-only` restores the v0.8 behaviour (old roads and houses, only the square and the mosque rebuilt).
+
+**Still open**: storey counts away from Street View coverage are guesses; the lake shoreline (SRTM) still differs
+from the satellite by tens of metres south of D.260; the second mosque pair (Köprü Köyü Yeni Cami N-W, Fatih Camii
+N-E) are plain houses in the data; no sun / lighting work (owner's request).
+
 ## v0.8 — square and mosque (Nov 2026)
 
 Scope, as decided by the owner: only the **old municipality square** and the **mosque** are rebuilt from the

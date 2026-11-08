@@ -109,6 +109,8 @@ export function buildVillage(ctx, layout, M) {
   }
   props.push({ kind: 'bench', x: S.square.x + 7, z: S.square.z + 13, yaw: 0 }, { kind: 'bench', x: S.square.x + 7, z: S.square.z - 12, yaw: 0 }, { kind: 'bin', x: S.square.x + 9, z: S.square.z + 15 });
   for (const [dx, dz] of [[-2, 14], [8, -16], [9, 10]]) props.push({ kind: 'tree', species: 'mulberry', x: S.square.x + dx, z: S.square.z + dz, size: 1.3 });
+  // the big old tree on the pavement in front of Güvendioğlu Market (Street View 01)
+  if (S.market) props.push({ kind: 'tree', species: 'mulberry', x: S.market.x - S.market.w / 2 - 3.5, z: S.market.z + 2, size: 1.6 });
 
   // ================================================================= buildings
   for (const b of layout.buildings) {
@@ -118,6 +120,25 @@ export function buildVillage(ctx, layout, M) {
     buildHouse(b);
   }
   buildStatue(S.statue); buildGazebo(S.gazebo);
+  if (!centreOnly) {
+    for (const c of S.cemeteries || []) buildCemetery(c);
+    if (S.pitch) { bat.add('lawn', patch(S.pitch.x, S.pitch.z, S.pitch.w, S.pitch.d, 0, yAt, 0.07, 1.0)); for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) props.push({ kind: 'pole', x: S.pitch.x + sx * S.pitch.w / 2, z: S.pitch.z + sz * S.pitch.d / 2, prev: null }); }
+  }
+  /** Village cemetery (satellite + Street View): low rubble wall, scattered upright headstones, a few pines. */
+  function buildCemetery(c) {
+    const id = bid++, yG = yAt(c.x, c.z), frame = { x: c.x, y: yG, z: c.z, yaw: 0 }, bld = { id, base: yG - 2, top: yG + 2, yaw: 0, cx: c.x, cz: c.z };
+    const add = (key, geo) => bat.add(key, geo, frame, bld);
+    const W2 = c.w / 2, D2 = c.d / 2, wh = 1.0;
+    const seg = (x0, z0, x1, z1) => { const L = Math.hypot(x1 - x0, z1 - z0), g = box(L, wh + 3, 0.5, 0, (wh - 3) / 2, 0); g.rotateY(Math.atan2(-(z1 - z0), x1 - x0)); g.translate((x0 + x1) / 2, 0, (z0 + z1) / 2); add('rubble', g); };
+    seg(-W2, -D2, W2, -D2); seg(-W2, D2, W2, D2); seg(-W2, -D2, -W2, D2); seg(W2, -D2, W2, D2);
+    const n = Math.floor(c.w * c.d / 22);
+    for (let i = 0; i < n; i++) {
+      const x = (rnd() - 0.5) * (c.w - 4), z = (rnd() - 0.5) * (c.d - 4), dy = yAt(c.x + x, c.z + z) - yG, h = 0.5 + rnd() * 0.5;
+      const g = box(0.38, h + 0.3, 0.1, x, dy + h / 2 - 0.15, z); g.rotateY((rnd() - 0.5) * 0.3); add('limestone', g);
+      if (rnd() < 0.7) add('limestone', box(0.45, 0.25, 1.4, x, dy + 0.1, z + 0.8));      // low grave slab / kerb
+    }
+    for (let i = 0; i < Math.max(3, n / 12); i++) treeSpots.push({ x: c.x + (rnd() - 0.5) * (c.w - 6), z: c.z + (rnd() - 0.5) * (c.d - 6), species: rnd() < 0.7 ? 'pine' : 'mulberry', size: 0.9 + rnd() * 0.5, force: true });
+  }
 
   // ---------------------------------------------------------------- generic house -------------
   function faceMatrix(side, w, d) {
@@ -140,7 +161,7 @@ export function buildVillage(ctx, layout, M) {
     const n = b.storeys || 1, w = b.w, d = b.d;
     const y0 = PLINTH, y1 = PLINTH + n * FLOOR + 0.2;
     const bld = { id, base: b.yTop, top: b.yTop + y1, yaw: b.yaw, cx: b.x, cz: b.z };
-    const wallKey = b.kind === 'market' || b.kind === 'kahve' || b.kind === 'school' ? 'Duvar_Beyaz' : WALLS[Math.floor(rnd() * WALLS.length)];
+    const wallKey = b.kind === 'school' ? 'redWall' : b.kind === 'market' || b.kind === 'kahve' ? 'Duvar_Beyaz' : WALLS[Math.floor(rnd() * WALLS.length)];
     const roofKey = b.roof === 'm' ? (rnd() < 0.7 ? 'Cati_Sac_Gri' : 'Cati_Sac_Mavi') : TILES[Math.floor(rnd() * TILES.length)];
     const add = (key, geo, m) => { if (m) geo.applyMatrix4(m); bat.add(key, geo, frame, bld); };
     const front = frontSide(b), isBarn = !!b.barn;
@@ -261,18 +282,18 @@ export function buildVillage(ctx, layout, M) {
       if (off > depth / 2 + 1.8) {
         const fm = faceMatrix(front, w, d), zf = off - depth / 2;   // distance from the façade plane
         const len = L + 6, gate = (rnd() - 0.5) * (len - 4), gw = 1.4;
-        const wallH = b.wall === 'wall' ? 1.25 + rnd() * 0.5 : 0, wb = b.yLow - b.yTop - 0.3;   // walls reach below the lowest plot corner
+        const stone = b.wall === 'stone', wallH = b.wall === 'wall' ? 1.25 + rnd() * 0.5 : stone ? 0.9 + rnd() * 0.4 : 0, wb = b.yLow - b.yTop - 0.3, wk = stone ? 'rubble' : 'garden', wt = stone ? 0.55 : 0.3;   // walls reach below the lowest plot corner
         const segs = [[-len / 2, gate - gw / 2], [gate + gw / 2, len / 2]];
         for (const [a0, a1] of segs) {
-          if (b.wall === 'wall') add('garden', box(a1 - a0, wallH - wb, 0.3, (a0 + a1) / 2, (wallH + wb) / 2, zf), fm);
+          if (b.wall === 'wall' || stone) add(wk, box(a1 - a0, wallH - wb, wt, (a0 + a1) / 2, (wallH + wb) / 2, zf), fm);
           else { for (let x = a0; x <= a1; x += 2.2) add('beton', box(0.1, 1.45 - wb, 0.1, x, (1.45 + wb) / 2, zf), fm); fenceWires(a0, a1, zf, fm); }
         }
         // returns on both sides, back to the house line
         for (const sx of [-len / 2, len / 2]) {
-          if (b.wall === 'wall') add('garden', box(0.3, wallH - wb, zf + 0.3, sx, (wallH + wb) / 2, zf / 2), fm);
+          if (b.wall === 'wall' || stone) add(wk, box(wt, wallH - wb, zf + wt, sx, (wallH + wb) / 2, zf / 2), fm);
           else { for (let z = 0; z <= zf; z += 2.2) add('beton', box(0.1, 1.45 - wb, 0.1, sx, (1.45 + wb) / 2, z), fm); fenceWiresZ(sx, 0, zf, fm); }
         }
-        for (const gx of [gate - gw / 2 - 0.2, gate + gw / 2 + 0.2]) add('garden', box(0.4, 1.9 - wb, 0.4, gx, (1.9 + wb) / 2, zf), fm);
+        for (const gx of [gate - gw / 2 - 0.2, gate + gw / 2 + 0.2]) add(stone ? 'rubble' : 'garden', box(0.45, (stone ? wallH + 0.3 : 1.9) - wb, 0.45, gx, ((stone ? wallH + 0.3 : 1.9) + wb) / 2, zf), fm);
         if (rnd() < 0.7) add('greenPaint', box(gw, 1.6, 0.04, gate, 0.85, zf), fm);
       }
     }
@@ -413,8 +434,9 @@ export function buildVillage(ctx, layout, M) {
     for (let i = 0; i < 4; i++) add('limestone', cyl(0.28, 0.32, 4.0, -hw / 2 + 0.5 + i * (hw - 1.0) / 3, y0 + 2.35, pz - 1.7, 12));
     add('turquoise', box(hw + 0.4, 0.5, 4.6, 0, y0 + 4.6, pz));
     for (let i = 0; i < 3; i++) { const cx = -hw / 3 + i * hw / 3; const sd = new THREE.SphereGeometry(1.9, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2); sd.scale(1, 0.7, 1); sd.translate(cx, y0 + 4.85, pz); add('lead', sd); add('turquoise', cyl(1.95, 1.95, 0.3, cx, y0 + 4.95, pz, 14)); }
-    // minaret at the north-east corner: stone base, polygonal shaft, one şerefe, lead cap
-    const mx = hw / 2 + 2.2, mz = pz - 0.5, mb = y0;
+    // two minarets at the north corners (satellite + Street View, Nov 2026): stone base, polygonal shaft, one şerefe, lead cap
+    for (const mx of [hw / 2 + 2.2, -(hw / 2 + 2.2)]) {
+    const mz = pz - 0.5, mb = y0;
     add('limestone', boxY(2.6, 2.6, b.yLow - yG - 0.3, mb + 3.6, mx, mz));
     add('limestone', cyl(0.9, 1.75, 1.3, mx, mb + 3.6 + 0.65, mz, 8));
     add('limestone', cyl(0.78, 0.9, 13.5, mx, mb + 4.9 + 6.75, mz, 12));
@@ -425,32 +447,35 @@ export function buildVillage(ctx, layout, M) {
     add('limestone', cyl(0.62, 0.68, 4.8, mx, mb + 19.75 + 2.4, mz, 12));
     const cap = new THREE.ConeGeometry(0.85, 4.0, 12); cap.translate(mx, mb + 24.55 + 2.0, mz); add('lead', cap);
     add('metal', cyl(0.05, 0.05, 1.4, mx, mb + 26.55 + 0.7, mz, 8)); const al2 = new THREE.SphereGeometry(0.16, 8, 6); al2.translate(mx, mb + 27.9, mz); add('metal', al2);
+    }
     // courtyard: red plastered wall with a concrete coping, gates on the north and east sides
-    const cw = 25, cd = 33, cz0 = hz + 1.0, wallH = 1.75;
+    const cw = 50, cd = 56, cz0 = hz - 4.0, cx0 = -6.0, wallH = 1.75;
     const wb = b.yLow - yG - 1.0;
     const wallSeg = (x0, z0, x1, z1) => { const L = Math.hypot(x1 - x0, z1 - z0), ang = Math.atan2(-(z1 - z0), x1 - x0); const g = box(L, wallH - wb, 0.35, 0, (wallH + wb) / 2, 0); g.rotateY(ang); g.translate((x0 + x1) / 2, 0, (z0 + z1) / 2); add('redWall', g); const c = box(L + 0.05, 0.08, 0.5, 0, wallH + 0.04, 0); c.rotateY(ang); c.translate((x0 + x1) / 2, 0, (z0 + z1) / 2); add('coping', c); };
     const W2 = cw / 2, D2 = cd / 2;
-    wallSeg(-W2, cz0 - D2, -W2 + W2 - 1.6, cz0 - D2); wallSeg(1.6, cz0 - D2, W2, cz0 - D2);        // north with a central gate
-    wallSeg(-W2, cz0 + D2, W2, cz0 + D2);                                                       // south
-    wallSeg(-W2, cz0 - D2, -W2, cz0 + D2);                                                       // west
-    wallSeg(W2, cz0 - D2, W2, cz0 - 2.0); wallSeg(W2, cz0 + 1.0, W2, cz0 + D2);                  // east with a gate
-    for (const [gx, gz] of [[-1.6, cz0 - D2], [1.6, cz0 - D2], [W2, cz0 - 2.0], [W2, cz0 + 1.0]]) add('limestone', box(0.5, 2.3, 0.5, gx, 1.0, gz));
+    const xL = cx0 - W2, xR = cx0 + W2;
+    wallSeg(xL, cz0 - D2, -1.6, cz0 - D2); wallSeg(1.6, cz0 - D2, xR, cz0 - D2);                 // north with a gate in front of the porch
+    wallSeg(xL, cz0 + D2, xR, cz0 + D2);                                                        // south
+    wallSeg(xL, cz0 - D2, xL, cz0 + D2);                                                        // west
+    wallSeg(xR, cz0 - D2, xR, cz0 - 2.0); wallSeg(xR, cz0 + 1.0, xR, cz0 + D2);                  // east with a gate
+    for (const [gx, gz] of [[-1.6, cz0 - D2], [1.6, cz0 - D2], [xR, cz0 - 2.0], [xR, cz0 + 1.0]]) add('limestone', box(0.5, 2.3, 0.5, gx, 1.0, gz));
     // iron gates: frame and bars
     for (let i = -9; i <= 9; i++) add('railing', box(0.03, 1.9, 0.03, i * 0.15, 0.95, cz0 - D2));
     for (const yy of [0.15, 1.0, 1.85]) add('railing', box(2.9, 0.04, 0.04, 0, yy, cz0 - D2));
-    for (let i = -9; i <= 9; i++) add('railing', box(0.03, 1.9, 0.03, W2, 0.95, cz0 - 0.5 + i * 0.15));
-    for (const yy of [0.15, 1.0, 1.85]) add('railing', box(0.04, 0.04, 2.9, W2, yy, cz0 - 0.5));
+    for (let i = -9; i <= 9; i++) add('railing', box(0.03, 1.9, 0.03, xR, 0.95, cz0 - 0.5 + i * 0.15));
+    for (const yy of [0.15, 1.0, 1.85]) add('railing', box(0.04, 0.04, 2.9, xR, yy, cz0 - 0.5));
     // inside: paving to the door, a lawn, the ablution fountain
     add('paving', box(3.0, 0.12, D2 - hd / 2 - 2.2 + 2.0, 0, y0 - 0.2, (cz0 - D2 + pz - 2.2) / 2 + 0.5));
-    add('limestone', cyl(1.2, 1.3, 1.0, -W2 + 4, 0.5, cz0 - D2 + 5, 8)); add('lead', new THREE.ConeGeometry(1.7, 0.9, 8).translate(-W2 + 4, 2.6, cz0 - D2 + 5)); for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; add('limestone', cyl(0.08, 0.08, 1.5, -W2 + 4 + Math.cos(a) * 1.5, 1.75, cz0 - D2 + 5 + Math.sin(a) * 1.5, 6)); }
-    // trees inside the yard (pines behind the mosque, as in docs/reference/06) and the lawn / picnic table outside the east wall
-    for (const [tx, tz] of [[-W2 + 3, cz0 + D2 - 4], [W2 - 3, cz0 + D2 - 3], [-W2 + 3, cz0 + 2], [W2 - 3, cz0 + 9]]) treeSpots.push({ x: b.x + tx, z: b.z + tz, species: 'pine', size: 1.0 + rnd() * 0.3, force: true });
-    for (const [tx, tz] of [[-W2 + 5, cz0 - D2 + 11], [W2 - 5, cz0 - D2 + 6]]) treeSpots.push({ x: b.x + tx, z: b.z + tz, species: 'mulberry', size: 1.1, force: true });
+    add('limestone', cyl(1.2, 1.3, 1.0, -hw / 2 - 5, 0.5, cz0 - D2 + 8, 8)); add('lead', new THREE.ConeGeometry(1.7, 0.9, 8).translate(-hw / 2 - 5, 2.6, cz0 - D2 + 8)); for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; add('limestone', cyl(0.08, 0.08, 1.5, -hw / 2 - 5 + Math.cos(a) * 1.5, 1.75, cz0 - D2 + 8 + Math.sin(a) * 1.5, 6)); }
+    // trees inside the yard: a dense grove of pines and mulberries in the western half (satellite), a few pines by the hall
+    for (let i = 0; i < 14; i++) { const tx = xL + 3 + rnd() * (Math.max(4, -hw / 2 - 4 - xL) - 3), tz = cz0 - D2 + 4 + rnd() * (cd - 8); treeSpots.push({ x: b.x + tx, z: b.z + tz, species: rnd() < 0.55 ? 'pine' : 'mulberry', size: 0.9 + rnd() * 0.5, force: true }); }
+    for (const [tx, tz] of [[hw / 2 + 3, cz0 + D2 - 4], [-hw / 2 - 3, cz0 + D2 - 3], [hw / 2 + 4, hz + 2]]) treeSpots.push({ x: b.x + tx, z: b.z + tz, species: 'pine', size: 1.0 + rnd() * 0.3, force: true });
     if (centreOnly) return;   // no new street outside the wall in centre-only mode: the v0.6 roads stay
-    const rdE = roadDist(b.x + W2, b.z + cz0), lawnW = Math.max(2, Math.min(9, rdE.d - rdE.w / 2 - 2.2)), lawnX = b.x + W2 + 0.4 + lawnW / 2, lawnZ = b.z + cz0;
+    // outside the WEST wall, towards the main road (Street View 04): lawn, brick pavement, picnic table, bare mulberry
+    const rdW = roadDist(b.x + xL, b.z + cz0), lawnW = Math.max(2, Math.min(9, rdW.d - rdW.w / 2 - 2.2)), lawnX = b.x + xL - 0.4 - lawnW / 2, lawnZ = b.z + cz0;
     bat.add('lawn', patch(lawnX, lawnZ, lawnW, cd, 0, yAt, 0.07, 1.5));
-    props.push({ kind: 'picnic', x: lawnX - 0.3, z: lawnZ - 6, yaw: 0 }, { kind: 'bin', x: lawnX + 0.8, z: lawnZ + 4 });
-    for (const [tx, tz] of [[-W2 - 3, cz0 - D2 - 4], [W2 - 8, cz0 - D2 - 5]]) treeSpots.push({ x: b.x + tx, z: b.z + tz, species: 'mulberry', size: 1.2 });
+    props.push({ kind: 'picnic', x: lawnX + 0.3, z: lawnZ - 6, yaw: 0 }, { kind: 'bin', x: lawnX - 0.8, z: lawnZ + 4 });
+    for (const [tx, tz] of [[xL - 2.5, cz0 - 10], [xL - 2.5, cz0 + 12]]) treeSpots.push({ x: b.x + tx, z: b.z + tz, species: 'mulberry', size: 1.2 });
   }
 
   // ================================================================= props, wires, trees
