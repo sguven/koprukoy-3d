@@ -116,3 +116,35 @@
 ## SV76/77 — (404,400) pin frame, S main road, heading 95 / 266
 - E: 1.5 m granite rubble wall along the road; blue 1F with white trim (453,392) and cream 1F + rubble barn (451,409) behind, poplars, rocky ridge.
 - W: village PARK: mown lawn, big bare ash on the verge, children's playground (orange/yellow slide, swings), timber gazebo; red-roof 1F houses and a blue pickup beyond → added as garden with `play` at (375,383).
+
+## SV78/79 — (351,469) pin frame, S main road, heading 356 / 167
+- N: 2 m granite rubble retaining wall, earth bank; white 1F houses + a timber pergola on the terrace above (361,434); fruit trees.
+- S: grassy slope with a stepped rubble terrace, litter; a pine/spruce grove with a picnic shelter (340,501); lamp posts; road curves away SE.
+
+## SV80/81 — (517,625) pin frame, lane by the school, heading 330 / 141
+- NW: white 1F (507,613) with cracked plaster, adobe/brick yard walls, narrow passage between houses, wheelbarrow; tile roofs.
+- SE: yellow 1F with barred windows (527,627) on a rubble plinth; green fenced plot with satellite dish; the school's red-roof block and granite ridge beyond.
+
+## SV82/83 — (600,512) pin frame, SE road, heading 337 / 148
+- NNW: yellow 2F (584,502) with vine pergola behind a rendered block wall; small white hut with blue door and red tile roof (589,483) — pump/fountain house; unfinished red-brick 2F (626,462) on the rise; poplars; wide earth road.
+- SSE: white arched tent hangar (651,518) with farm machinery, long beige 1F hall (662,560) among pines; concrete block wall; houses R; road continues S.
+
+## SV84/85 — (537,622) pin frame, school lane E end, heading 90 / 261
+- E: gravel lane; R = long green shade-mesh fence around an orchard, white 2F w/ balcony (563,656) behind; L = green mesh + cream 1F; granite ridge both sides.
+- W: yellow 1F w/ red tile roof + yellow 2F behind (510,602) on L behind a rubble wall; big bare tree; cream 1F (527,627) w/ rubble wall on R; lake glimpse at the end of the lane.
+
+## SV86/87 — (471,469) pin frame, lane E of the park, heading 328 / 139
+- NW: 2 m granite rubble retaining wall topped by concrete blocks; above: brick/plaster 1F w/ solar heater (461,447), white 2F w/ blue balcony (463,434), cream 1F (435,445) L.
+- SE: lilac-grey 2F with glazed veranda, solar heater, brick chimney stack (492,487) behind chain-link on a low rubble wall; open grass; 1F houses W.
+
+## SV88/89 — (561,389) pin frame, SE lane, heading 64 / 235
+- NE: 1.2 m granite rubble wall; orchard with young fruit trees; white 1F red roof (597,368); R = tall unrendered concrete-block 2F shell + block wall (594,413); rocky ridge.
+- SW: old red-painted adobe 1F (553,394) right on the lane, sagging red tile roof, green timber window, "EiGO" graffiti; white-washed neighbour L; grass verge.
+
+## SV90/91 — (344,348) pin frame, road S of the mosque, heading 351 / 162
+- N: both minarets of the main mosque on the horizon L; white concrete-block wall with green hedge (near L); lamp post; road bends NE past a glazed gazebo/tea house and 1F houses with blue-white kerbs.
+- S: grass verge, rubble heap; green steel-mesh fence; block-walled unrendered compound R (east); 1F red-roof houses W; power lines along the road.
+
+## SV92/93 — (449,323) pin frame, SE lane, heading 49 / 220
+- NE: dry granite wall L with bare walnut + cream 1F (431,306); R = long clipped thuja hedge + white wall around (489,342); red tricycle cart on the lane; red/brick houses ahead; rocky ridge.
+- SW: old grey plaster 1F w/ blue steel gate and timber shed (427,327) L; white rendered wall + spruce and white 1F R; wide earth road dropping toward the lake.
