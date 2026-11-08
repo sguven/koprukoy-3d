@@ -1,0 +1,51 @@
+{
+ "soil": {
+  "size_m": 3.0
+ },
+ "rock": {
+  "size_m": 4.0
+ },
+ "grass_dry": {
+  "size_m": 2.0
+ },
+ "gravel": {
+  "size_m": 2.0
+ },
+ "asphalt": {
+  "size_m": 4.0
+ },
+ "dirt_road": {
+  "size_m": 4.0
+ },
+ "plaster": {
+  "size_m": 3.0
+ },
+ "stone_wall": {
+  "size_m": 2.4,
+  "block": [
+   0.6,
+   0.35
+  ]
+ },
+ "rubble_wall": {
+  "size_m": 2.0
+ },
+ "roof_tile": {
+  "size_m": 1.6
+ },
+ "metal_corr": {
+  "size_m": 2.0
+ },
+ "concrete": {
+  "size_m": 3.0
+ },
+ "paving": {
+  "size_m": 1.6
+ },
+ "wood": {
+  "size_m": 1.0
+ },
+ "shore": {
+  "size_m": 3.0
+ }
+}

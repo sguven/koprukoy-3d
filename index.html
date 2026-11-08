@@ -114,7 +114,7 @@ canvas { display: block; touch-action: none; }
 <div class="toast" id="toast"></div>
 
 <div class="topbar">
-  <div class="brand"><h1>Köprüköy</h1><div class="sub">Keskin · Kırıkkale, Türkiye — 3D v0.6</div></div>
+  <div class="brand"><h1>Köprüköy</h1><div class="sub">Keskin · Kırıkkale, Türkiye — 3D v0.7</div></div>
   <div class="modes" id="modes" role="tablist" aria-label="Navigation mode">
     <button data-mode="orbit" class="on">Orbit</button>
     <button data-mode="walk">Walk</button>
@@ -160,7 +160,7 @@ canvas { display: block; touch-action: none; }
     <label class="chip" style="width:100%;justify-content:space-between"><span>Time <b id="sunVal">15:00</b></span>
       <input type="range" id="sun" min="6" max="20" step="0.25" value="15" style="flex:1;margin-left:10px" aria-label="Time of day"></label>
   </div>
-  <p class="note"><strong>v0.6.</strong> Village roads were traced from the road surface in satellite imagery: the mosque area from a 0.14 m/pixel close-up, the rest of the village from a 0.5 m/pixel map (36 roads), and the top-down render was checked against the satellite image. Terrain is SRTM 30 m elevation data; the lake level is 724 m. Storey counts and façade details are estimates.</p>
+  <p class="note"><strong>v0.7 — materials.</strong> Physically based, world-space textured surfaces: layered steppe terrain (soil, dry grass, gravel, rock on slopes, shoreline), weathered plaster / stone / concrete façades with per-house variation, clay-tile roofs, worn asphalt and dirt roads, Seljuk ashlar on the bridge, a depth-aware reservoir and instanced dry-grass ground cover. Geometry, roads, footprints and the 724 m lake level are unchanged from v0.6 (SRTM 30 m terrain, satellite-traced roads). Storey counts and façade details are still estimates.</p>
 </aside>
 
 <div class="hud" id="hud"><div class="speedo"><b id="spd">0</b><span id="gearTxt">km/h · N</span></div></div>
@@ -184,10 +184,14 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { setupRealism } from './src/realism.js';
+import { tagBuildings } from './src/buildings.js';
 
 const POIS = [{"id": "kopru", "label": "Çeşnigir Bridge", "kind": "tarihi", "pos": [-377, 16, -277]}, {"id": "viyaduk", "label": "D.260 viaduct", "kind": "yol", "pos": [-539, 22, -105]}, {"id": "d260a", "label": "D.260", "kind": "yon", "pos": [-951, 35, -319]}, {"id": "d260b", "label": "D.260", "kind": "yon", "pos": [154, 36, 568]}, {"id": "karakecili", "label": "To Karakeçili", "kind": "yon", "pos": [-825, 21, -209]}, {"id": "gezi", "label": "Promenade", "kind": "yer", "pos": [-267, 14, -57]}, {"id": "seyir", "label": "Viewpoint rock", "kind": "yer", "pos": [-292, 24, -338]}, {"id": "iskele", "label": "Boat pier", "kind": "yer", "pos": [-305, 9, -367]}, {"id": "kanyon", "label": "Çeşnigir Canyon", "kind": "yer", "pos": [-277, 55, -602]}, {"id": "nehir", "label": "Kızılırmak · Kapulukaya Reservoir", "kind": "su", "pos": [-318, 8, 331]}, {"id": "cami", "label": "Village mosque", "kind": "yapi", "pos": [106, 70, 108]}, {"id": "mescit", "label": "Small mosque (mescit)", "kind": "yapi", "pos": [-143, 24, 203]}, {"id": "merkez", "label": "Village centre", "kind": "yapi", "pos": [59, 43, -16]}];
 const isTouch = matchMedia('(pointer: coarse)').matches;
 const LITE = location.hash === '#lite';
+// render quality tier: 0 = lite, 1 = mobile, 2 = desktop
+const QUALITY = LITE ? 0 : isTouch ? 1 : 2;
 
 // ---------- sahne ----------
 const host = document.getElementById('scene');
@@ -195,9 +199,9 @@ const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'hi
 renderer.setPixelRatio(LITE ? 1 : Math.min(devicePixelRatio, isTouch ? 1.6 : 2));
 renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 0.5;
+renderer.toneMapping = THREE.AgXToneMapping; renderer.toneMappingExposure = 0.85;
 host.appendChild(renderer.domElement);
-const scene = new THREE.Scene();
+const scene = new THREE.Scene(); scene.environmentIntensity = 0.1;
 const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.15, 9000);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true; controls.maxPolarAngle = Math.PI * 0.495; controls.minDistance = 8; controls.maxDistance = 2800;
@@ -209,7 +213,7 @@ const hemi = new THREE.HemisphereLight(0xe6e2d6, 0x7a6248, 0.9); scene.add(hemi)
 const sun = new THREE.DirectionalLight(0xfff1dc, 3.0); sun.castShadow = true;
 sun.shadow.mapSize.set(LITE ? 1024 : isTouch ? 2048 : 4096, LITE ? 1024 : isTouch ? 2048 : 4096); sun.shadow.bias = -0.0003; sun.shadow.normalBias = 0.5;
 scene.add(sun, sun.target);
-scene.fog = new THREE.FogExp2(0xcfd9df, 0.00018);
+scene.fog = new THREE.FogExp2(0xcfd9df, 0.00007);
 const pmrem = new THREE.PMREMGenerator(renderer);
 const envScene = new THREE.Scene(); const envSky = new Sky(); envSky.scale.setScalar(1000); envScene.add(envSky);
 let envRT = null, sunHour = 15;
@@ -217,12 +221,14 @@ function setSun(h) {
   sunHour = h;
   const t = (h - 13) / 6.6, az = THREE.MathUtils.degToRad(180 + t * 78), el = THREE.MathUtils.degToRad(Math.max(-2, 44 * Math.cos(t * Math.PI / 2)));
   sunDir.set(Math.cos(el) * Math.sin(az), Math.sin(el), -Math.cos(el) * Math.cos(az));
-  su.sunPosition.value.copy(sunDir); for (const k of ['turbidity', 'rayleigh', 'mieCoefficient', 'mieDirectionalG']) envSky.material.uniforms[k].value = su[k].value; envSky.material.uniforms.sunPosition.value.copy(sunDir);
+  su.sunPosition.value.copy(sunDir); for (const k of ['turbidity', 'rayleigh']) envSky.material.uniforms[k].value = su[k].value; envSky.material.uniforms.sunPosition.value.copy(sunDir);
+  // the environment map must not contain the sun disc (the directional light is the sun), otherwise shadows wash out
+  envSky.material.uniforms.mieCoefficient.value = 0.0008; envSky.material.uniforms.mieDirectionalG.value = 0.5;
   const warm = 1 - Math.sin(Math.max(0.02, el));
   sun.color.setHSL(0.08, 0.55 * warm + 0.15, 0.93 - 0.18 * warm);
-  sun.intensity = 0.4 + 3.0 * Math.max(0, Math.sin(el + 0.05));
-  hemi.intensity = 0.2 + 0.55 * Math.max(0, Math.sin(el + 0.15));
-  scene.fog.color.setHSL(0.08 + 0.48 * (1 - warm), 0.25 + 0.2 * warm, 0.55 + 0.27 * Math.max(0, Math.sin(el + 0.1)));
+  sun.intensity = 0.25 + 4.6 * Math.max(0, Math.sin(el + 0.05));
+  hemi.intensity = 0.04 + 0.16 * Math.max(0, Math.sin(el + 0.15));
+  scene.fog.color.setHSL(0.08 + 0.48 * (1 - warm), 0.22 + 0.25 * warm, 0.5 + 0.22 * Math.max(0, Math.sin(el + 0.1)));
   if (envRT) envRT.dispose(); envRT = pmrem.fromScene(envScene); scene.environment = envRT.texture;
   document.getElementById('sunVal').textContent = `${String(Math.floor(h)).padStart(2, '0')}:${String(Math.round((h % 1) * 60)).padStart(2, '0')}`;
   if (h < 7.6 || h > 18.6) setLights(true);
@@ -279,15 +285,15 @@ function pushOut(p, r) {
 
 // ---------- model ----------
 const layers = { bina: [], agac: [], yol: [] };
-let waterMat = null, terrainMesh = null;
+let waterMat = null, terrainMesh = null, realism = null;
 function mergeByMaterial(group) {
   group.updateMatrixWorld(true);
   const buckets = new Map();
   group.traverse(o => {
     if (!o.isMesh) return;
     const src = o.geometry, g = new THREE.BufferGeometry();
-    for (const k of ['position', 'normal', 'color']) {
-      const a = src.attributes[k]; if (!a) continue;
+    for (const k of Object.keys(src.attributes)) {
+      const a = src.attributes[k];
       const f = new Float32Array(a.count * a.itemSize);
       for (let i = 0; i < a.count; i++) for (let c = 0; c < a.itemSize; c++) f[i * a.itemSize + c] = a.getComponent(i, c);
       g.setAttribute(k, new THREE.BufferAttribute(f, a.itemSize));
@@ -298,8 +304,10 @@ function mergeByMaterial(group) {
   });
   const out = new THREE.Group(); out.name = group.name;
   for (const { m, gs } of buckets.values()) {
-    if (!gs.every(g => g.attributes.color)) gs.forEach(g => g.deleteAttribute('color'));
-    const mesh = new THREE.Mesh(mergeGeometries(gs), m); mesh.castShadow = mesh.receiveShadow = true; out.add(mesh);
+    // only attributes present on every piece survive the merge
+    const names = Object.keys(gs[0].attributes).filter(n => gs.every(g => g.attributes[n]));
+    gs.forEach(g => Object.keys(g.attributes).forEach(n => { if (!names.includes(n)) g.deleteAttribute(n); }));
+    const mesh = new THREE.Mesh(mergeGeometries(gs), m); mesh.castShadow = mesh.receiveShadow = true; mesh.name = m.name; out.add(mesh);
   }
   group.parent.add(out); group.removeFromParent(); return out;
 }
@@ -335,6 +343,8 @@ loadAll().then(gltf => {
       waterMat.normalScale.set(0.35, 0.35); o.material = waterMat; o.castShadow = false;
     }
   });
+  // tag every building with an id / ground line / roof line / orientation before merging (used by the façade shaders)
+  let bid = 1; for (const n of ['Konutlar', 'Kiyi_ve_Kamu', 'Cesnigir_Koprusu', 'Yollar']) { const g = m.getObjectByName(n); if (g) bid = tagBuildings(g, bid); }
   const merged = {};
   for (const n of ['Konutlar', 'Kiyi_ve_Kamu', 'Yollar', 'Cesnigir_Koprusu']) { const g = m.getObjectByName(n); if (g) merged[n] = mergeByMaterial(g); }
   merged.Yollar.traverse(o => { if (o.isMesh) o.castShadow = false; });
@@ -345,6 +355,10 @@ loadAll().then(gltf => {
   scene.add(m);
   buildMinimapBase();
   placeCarAtSpawn();
+  return setupRealism({ renderer, scene, model: m, merged, D, terrH, surfaceAt, quality: QUALITY, isTouch, layers, sun, hemi, sky: su, camera, controls })
+    .then(r => { realism = r; waterMat = null; })
+    .catch(err => console.error('realism layer failed, falling back to base materials', err));
+}).then(() => {
   document.getElementById('loading').remove();
 }).catch(err => { document.getElementById('loading').textContent = 'The model could not be loaded. Please reload the page.'; console.error(err); });
 
@@ -675,6 +689,7 @@ if (LITE) window.__dbg = { CS, carStep, keys, touchIn, P, walkStep, surfaceAt, g
 renderer.setAnimationLoop(now => {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
   if (waterMat) { waterMat.normalMap.offset.x = now * 0.000006; waterMat.normalMap.offset.y = now * 0.000004; }
+  if (realism) realism.update(now);
   if (toastT > 0) { toastT -= dt; if (toastT <= 0 && CS.dead <= 0) toast(''); }
   let focus;
   if (!D) { renderer.render(scene, camera); return; }
