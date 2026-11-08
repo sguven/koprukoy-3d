@@ -108,3 +108,8 @@ Goal of this pass: make the existing, surveyed model *look* like the place witho
 | Tone mapping | ACES | AgX. |
 
 Quality tiers: `QUALITY` in `index.html` — 2 desktop, 1 touch devices, 0 for `#lite`.
+
+### v0.9.1 — SW mahalle Street View eşlemesi
+- 6 yeni panorama (SV34–39, `docs/reference/streetview/`): (4.8,217), (139,221), (52,204) pin-çerçeve noktaları, yola dik iki yön.
+- Bina bazlı düzeltmeler (`tools/sv_overrides.json`): pergolalı beyaz ev + moloz istinat duvarı, kırmızı tuğla 2 kat + sac çit, çatısız betonarme karkas (uydudan tespit edilemediği için `add` ile eklendi, yeni `Duvar_Beton` malzemesi), krem/okr sıva 1 kat evler, açık yeşil sıva ev + kaldırım ağaçları.
+- (149.6,264.2) ve (15.2,268.4) noktalarında Street View yok; bu iki sokak uydu + harita katmanından kalıyor.

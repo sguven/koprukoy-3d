@@ -24,3 +24,19 @@
 26 (214,99) W: fenced green plot, spreading bare mulberry, cream 2-storey house behind, blue tarp.
 27 (207,132) W (thumb): kahve terrace behind a wooden fence under a big cedar (the photo-02 kahve), blue-white kerb.
 28 (219,217): E = the mosque's red west wall behind poplars, white van; W = tea garden / small park with tall pine, wooden fence, benches (çay bahçesi).
+29 SW lane (55,335) looking N: earth lane between dry-stone walls (granite boulders ~1 m); L = old rubble barn with tile roof; ahead 1-storey rubble/tile house, bare tree, 2-storey cream house with brown roof at R; very rural character.
+30 (49,310) looking W: collapsed red-brick barn with sagging tile roof; dry-stone wall; big bare walnut; pines; cream/yellow 1-storey house with red roof behind. (thumb E: rubble wall, white 1-storey house, big tree)
+31 (98,275) W (thumb): bare grey concrete-block 2-storey house, unrendered, small square windows, red tile roof; rubble wall. E: white rendered wall with tile coping, fruit tree in blossom, rubble base.
+32/33 (63,241): NW = white 1-storey house with a steel pergola, green mesh fence on wire, chain-link; NE = MINT GREEN 1-storey house, rubble-stone lower wall, barred window, solar water heater, rubble walls along the lane; village on the hill behind.
+
+## SV34/35 — (4.8,217) pin frame, heading 357 / 168
+- N: dirt road, rubble retaining wall ~1.5 m, white 1F house with timber pergola/veranda (15.5,197); green shade mesh on wall; large bare walnut tree; tile roofs beyond.
+- S: left (E) bare concrete 2F frame, flat slab, rebar — undetected (roofless) → added at ~(28.5,248.5); behind it red brick 2F tile roof (5.7,267) with galvanized sheet fence; tall cedar; power pole at right.
+
+## SV36/37 — (139,221) pin frame, heading 315 / 126
+- NW: cream plaster 1F, tile roof, satellite dish + solar heater on roof, white PVC window; attached rubble-plaster shed to left; grass verge, dirt road. (134.8,207.3)
+- SE: long ochre/beige plaster 1F wall right on the road edge, timber eaves, small barred window; detected as 21x18 2F → set 1F. (150,232.6)
+
+## SV38/39 — (52,204) pin frame, heading 354 / 165
+- N: empty fenced lot (chain-link + green mesh) in foreground; wide view N over the village: dense tile roofs, 2F cream/white houses, minaret (Yeni Cami) on the right horizon, rocky ridge behind. Nothing to override; plot stays empty.
+- S: light-green plaster 1F house (54.9,214.3) on rubble stone plinth ~1.2 m, barred windows, timber eaves; concrete kerb with grass strip and two young street trees.

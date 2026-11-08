@@ -51,6 +51,8 @@ export function villageMaterials(lib, { quality = 2 } = {}) {
       albedo *= 0.9 + 0.2 * grime;
       ${extra}` });
   // mosque: pale green / turquoise lime wash (docs/reference/06)
+  // village render colours seen in Street View (mint green, pale blue, salmon)
+  M.Duvar_Mint = plasterTint('mint', 0xb6c9a3); M.Duvar_Mavi = plasterTint('mavi', 0xa9c4d6); M.Duvar_Somon = plasterTint('somon', 0xd99a7a); M.Duvar_Beton = plasterTint('cbeton', 0x9a9890);
   M.turquoise = plasterTint('turq', 0x8fc9b8, 'albedo *= 1.0 - 0.25 * (1.0 - smoothstep(0.0, 1.2, vWPos.y - 27.0));');
   // courtyard wall: red ochre plaster, faded and dusty at the base
   M.redWall = plasterTint('redwall', 0xb0624a, `
