@@ -40,3 +40,23 @@
 ## SV38/39 — (52,204) pin frame, heading 354 / 165
 - N: empty fenced lot (chain-link + green mesh) in foreground; wide view N over the village: dense tile roofs, 2F cream/white houses, minaret (Yeni Cami) on the right horizon, rocky ridge behind. Nothing to override; plot stays empty.
 - S: light-green plaster 1F house (54.9,214.3) on rubble stone plinth ~1.2 m, barred windows, timber eaves; concrete kerb with grass strip and two young street trees.
+
+## SV40/41 — (139,55) pin frame, west main road, heading 327 / 138
+- NW: cream 1F house on rubble plinth (125,45), big windows, low rendered block wall with blue steel double gate; dirt driveway; brown-tile 1F behind (123,26); right: pines + dry rubble wall.
+- SE: open lot with white-tarp hay stack and blue tarps, bare tree, low corrugated-sheet shed (153,69); village roofs and 2F houses on the ridge behind; grass verge, gravel road.
+
+## SV42/43 — (70,67) pin frame, west main road, heading 333 / 144
+- NW: empty lot with rubble heap and brick pile in front, concrete lamp post; white 2F house w/ balcony + solar heater (87,8) behind a rendered block wall; beige 1F hip-roof house (102,6) right; grey rendered wall on far left; blue-white kerb.
+- SE: large old grey-plaster 2F house (89,90) with rubble ground floor and a huge walnut tree on the verge; to its right an attached rubble-stone 1F with brick chimney/gable and tile roof; blue-white kerb + brick-paved verge; parked car.
+
+## SV44/45 — (107,118) pin frame, lane W of centre, heading 49 / 220
+- NE: narrow earth lane (3.5 m) between the grey-plaster 2F gable end of (89,90) on the L with a dry rubble wall, a small brick/plaster shed w/ tile roof (105,105), bare fruit trees; white 1F (130,99) at the end; green mesh/wire fences on R.
+- SW: green dump truck parked on the lane; behind R a cream 1F hip-roof house behind a white rendered wall (71,110); open plots, village roofs on the ridge.
+
+## SV46/47 — (189,155) pin frame, lane W of the market, heading 331 / 142
+- NW: ochre/mustard 2F house (180,142) gable end right on the lane, white vertical band, concrete plinth, downpipe, kerb; village roofs beyond. (The SV15 'derelict shop row' override had snapped onto this building → converted to an `add` at (203,135).)
+- SE: looking down to the main road/market junction: 2F red-brick building with ground-floor shops under two big mulberries, parked vans; R = old rubble/plaster 1F corner house with tile roof; rubble wall + grass verge.
+
+## SV48/49 — (109,-14) pin frame, west main road N end, heading 321 / 132
+- NW: white 2F house (87,-30) with concrete balcony and external stair, solar heater, satellite dish; attached older 1F tile-roof wing on the left; terraced garden behind a dry rubble wall (~1.2 m) topped by wire fence; bare vine/trees.
+- SE: dark red (oxblood) painted 1F house (120,-4), tile roof + corrugated lean-to, barred window, rubble plinth; dense hedge and tall poplar/ash in front; brick-paved footpath + concrete kerb.
