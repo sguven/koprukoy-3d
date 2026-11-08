@@ -1,14 +1,19 @@
 [
 {
 "xz": [
-192,
--95
+190,
+-96
 ],
+"add": {
+"w": 11,
+"d": 9,
+"yaw": 0
+},
 "storeys": 2,
 "wall": "Duvar_Gri",
 "roof": "h",
 "fence": "wall",
-"note": "SV14 unfinished block house"
+"note": "SV14 unfinished block house (no roof -> not detected)"
 },
 {
 "xz": [
@@ -51,5 +56,49 @@
 "roof": "h",
 "fence": "none",
 "note": "SV16 salmon house E"
+},
+{
+"xz": [
+150,
+-31
+],
+"wall": "limestone",
+"storeys": 1,
+"roof": "h",
+"fence": "none",
+"kind": "stone_mosque",
+"note": "SV20 Yeni Cami, cut stone"
+},
+{
+"xz": [
+222,
+-6
+],
+"storeys": 1,
+"wall": "Duvar_Pembe",
+"roof": "h",
+"fence": "fence",
+"note": "SV22 pink house E"
+},
+{
+"xz": [
+198,
+-12
+],
+"storeys": 2,
+"wall": "Duvar_Krem",
+"roof": "h",
+"note": "SV22 2-storey cream W"
+},
+{
+"xz": [
+236,
+-80
+],
+"storeys": 1,
+"wall": "Duvar_Okr",
+"roof": "f",
+"fence": "none",
+"note": "SV23 adobe ruin E"
 }
 ]

@@ -104,8 +104,12 @@ import os
 if os.path.exists('tools/sv_overrides.json'):
     for o in json.load(open('tools/sv_overrides.json')):
         ox, oz = warp(*o['xz'])
-        k = min(range(len(out_b)), key=lambda i: math.hypot(out_b[i]['x'] - ox, out_b[i]['z'] - oz))
-        if math.hypot(out_b[k]['x'] - ox, out_b[k]['z'] - oz) > 22: continue
+        if 'add' in o:   # a building the roof detector missed (unfinished, roofless, under trees)
+            a = o['add']; out_b.append({'x': ox, 'z': oz, 'yaw': a.get('yaw', 0), 'w': a['w'], 'd': a['d'], 'storeys': o.get('storeys', 1), 'roof': o.get('roof', 'h'), 'src': 'sv'})
+            k = len(out_b) - 1
+        else:
+            k = min(range(len(out_b)), key=lambda i: math.hypot(out_b[i]['x'] - ox, out_b[i]['z'] - oz))
+            if math.hypot(out_b[k]['x'] - ox, out_b[k]['z'] - oz) > o.get('tol', 22): continue
         for key in ('storeys', 'wall', 'roof', 'fence', 'kind'):
             if key in o: out_b[k][key] = o[key]
 # school: the building nearest the Keskin Köprü İlkokulu pin (2 storeys, red-brown render, Street View 08)

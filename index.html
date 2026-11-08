@@ -335,7 +335,7 @@ async function loadAll() {
     for (let k = 0; k < oldR.length; k += 4) if (!inRegion(oldR[k], oldR[k + 1]) || oldR[k + 3] > 5) keepR.push(oldR[k], oldR[k + 1], oldR[k + 2], oldR[k + 3]);
     VILLAGE = buildVillageLayout(terrH, keepR);
     D.roads = keepR.concat(roadSamples(VILLAGE.roads, terrH, kind => LIFT[kind]));
-    D.spawn = { car: [20, 56], walk: [46, 47] };
+    D.spawn = { car: [262, 175], walk: [250, 138] };
   } else VILLAGE = buildCentreLayout(terrH);
   const inZone = FULL_VILLAGE ? inRegion : inCentreZone;
   const oldB = D.buildings, keepB = [];
@@ -579,7 +579,7 @@ function walkStep(dt, fly) {
   let f = (kd('KeyW', 'ArrowUp') ? 1 : 0) - (kd('KeyS', 'ArrowDown') ? 1 : 0) - touchIn.jy;
   let r = (kd('KeyD', 'ArrowRight') ? 1 : 0) - (kd('KeyA', 'ArrowLeft') ? 1 : 0) + touchIn.jx;
   const l = Math.hypot(f, r); if (l > 1) { f /= l; r /= l; }
-  const sp = fly ? (run ? 90 : 28) : (run ? 5.5 : 1.8);
+  const sp = fly ? (run ? 120 : 40) : (run ? 8 : 3.2);
   const fx = -Math.sin(P.yaw), fz = -Math.cos(P.yaw), rx = Math.cos(P.yaw), rz = -Math.sin(P.yaw);
   if (fly) {
     const cp = Math.cos(P.pitch), spn = Math.sin(P.pitch);
@@ -706,7 +706,8 @@ const camTarget = new THREE.Vector3(), camPos = new THREE.Vector3();
 let last = performance.now();
 if (LITE) window.__dbg = { CS, carStep, keys, touchIn, P, walkStep, surfaceAt, get mode() { return mode; } };
 renderer.setAnimationLoop(now => {
-  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  // real elapsed time (capped at 0.25 s): on slow devices a 0.05 s cap made walking crawl at low frame rates
+  const dt = Math.min(0.25, (now - last) / 1000); last = now;
   if (waterMat) { waterMat.normalMap.offset.x = now * 0.000006; waterMat.normalMap.offset.y = now * 0.000004; }
   if (realism) realism.update(now);
   if (toastT > 0) { toastT -= dt; if (toastT <= 0 && CS.dead <= 0) toast(''); }
@@ -715,7 +716,7 @@ renderer.setAnimationLoop(now => {
   if (mode === 'orbit') {
     if (anim) { const k = Math.min(1, (now - anim.t0) / anim.dur), e = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2; camera.position.lerpVectors(anim.from.p, anim.to.p, e); controls.target.lerpVectors(anim.from.t, anim.to.t, e); if (k >= 1) anim = null; }
     controls.update(); focus = controls.target;
-  } else if (mode === 'walk' || mode === 'fly') { walkStep(dt, mode === 'fly'); focus = camera.position; drawMinimap(P.x, P.z, -P.yaw); }
+  } else if (mode === 'walk' || mode === 'fly') { const n = Math.ceil(dt / 0.05); for (let i = 0; i < n; i++) walkStep(dt / n, mode === 'fly'); focus = camera.position; drawMinimap(P.x, P.z, -P.yaw); }
   else if (mode === 'car') {
     // physics sub-steps
     const n = Math.ceil(dt / 0.008); for (let i = 0; i < n; i++) carStep(dt / n);
