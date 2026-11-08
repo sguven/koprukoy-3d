@@ -164,7 +164,7 @@ canvas { display: block; touch-action: none; }
 </aside>
 
 <div class="hud" id="hud"><div class="speedo"><b id="spd">0</b><span id="gearTxt">km/h · N</span></div></div>
-<div class="hint" id="hint">Drag: rotate · Right-click: pan · Wheel: zoom</div>
+<div class="hint" id="hint"></div>
 
 <!-- dokunmatik -->
 <div class="tc joy" id="joy" aria-hidden="true"><i id="joyKnob"></i></div>
@@ -179,7 +179,7 @@ canvas { display: block; touch-action: none; }
 
 <script type="module">
 import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { MapNav } from './src/mapnav.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { Sky } from 'three/addons/objects/Sky.js';
@@ -206,8 +206,9 @@ renderer.toneMapping = THREE.AgXToneMapping; renderer.toneMappingExposure = 0.85
 host.appendChild(renderer.domElement);
 const scene = new THREE.Scene(); scene.environmentIntensity = 0.1;
 const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.15, 9000);
-const controls = new OrbitControls(camera, renderer.domElement);
-controls.enableDamping = true; controls.maxPolarAngle = Math.PI * 0.495; controls.minDistance = 8; controls.maxDistance = 2800;
+// Google Maps–style navigation: 1 finger pans (anchored), 2 fingers pinch-zoom / twist / tilt (see src/mapnav.js)
+const controls = new MapNav(camera, renderer.domElement);
+controls.addEventListener('start', () => { anim = null; });
 
 const sky = new Sky(); sky.scale.setScalar(20000); scene.add(sky);
 const su = sky.material.uniforms; su.turbidity.value = 3.2; su.rayleigh.value = 1.9; su.mieCoefficient.value = 0.004; su.mieDirectionalG.value = 0.82;
@@ -342,6 +343,7 @@ async function loadAll() {
   for (let k = 0; k < oldB.length; k += 5) if (!inZone(oldB[k], oldB[k + 1])) keepB.push(...oldB.slice(k, k + 5));
   D.buildings = keepB.concat(buildingBoxes(VILLAGE.buildings));
   buildHashes();
+  controls.heightAt = (x, z, y) => surfaceAt(x, z, y).y; controls.bounds = { x0: X0 + 20, z0: Z0 + 20, x1: X0 + TSZ - 20, z1: Z0 + TSZ - 20 };
   const bin = atob(b64), buf = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
   const ld = new GLTFLoader(); ld.setMeshoptDecoder(MeshoptDecoder);
   return new Promise((res, rej) => ld.parse(buf.buffer, '', res, rej));
@@ -624,11 +626,12 @@ document.getElementById('tCam').addEventListener('pointerdown', e => { CS.cam = 
 // ---------- modlar ----------
 let mode = 'orbit', carYawOff = 0, carPitchOff = 0;
 const HINTS = {
-  orbit: 'Drag: rotate · Right-click: pan · Wheel: zoom',
+  orbit: isTouch ? '1 finger: move · 2 fingers: pinch to zoom, twist to rotate, slide up/down to tilt · Double-tap: zoom in' : 'Drag: move · Wheel: zoom · Right-drag or Ctrl+drag: rotate / tilt · Double-click: zoom in',
   walk: 'Click, then look with the mouse · WASD: walk · Shift: run · Space: jump · Esc: release cursor',
   fly: 'Click, then look with the mouse · WASD: fly · E/Q: up/down · Shift: fast',
   car: '↑/W gas · ↓/S brake/reverse · ←/→ steer · Space handbrake · C camera · L headlights',
 };
+document.getElementById('hint').textContent = HINTS.orbit;
 function setMode(m) {
   if (!D) return;
   const prev = mode; mode = m;
@@ -649,7 +652,7 @@ function setMode(m) {
     if (surfaceAt(P.x, P.z).water && m === 'walk') { const [wx, wz] = D.spawn.walk; P.x = wx; P.z = wz; P.y = surfaceAt(wx, wz).y; }
   }
   if (m === 'car') { initAudio(); if (audio && audio.ac.state === 'suspended') audio.ac.resume(); carYawOff = 0; carPitchOff = 0; }
-  if (m === 'orbit' && prev !== 'orbit') { controls.target.set(camera.position.x + (prev === 'car' ? 0 : 0), camera.position.y, camera.position.z); const fwd = new THREE.Vector3(); camera.getWorldDirection(fwd); controls.target.copy(camera.position).addScaledVector(fwd, 60); }
+  if (m === 'orbit' && prev !== 'orbit') { controls.target.set(camera.position.x + (prev === 'car' ? 0 : 0), camera.position.y, camera.position.z); const fwd = new THREE.Vector3(); camera.getWorldDirection(fwd); controls.target.copy(camera.position).addScaledVector(fwd, 60); controls.repin(); }
 }
 document.querySelectorAll('#modes button').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
 let toastT = 0; function toast(t) { const el = document.getElementById('toast'); el.textContent = t; el.style.display = t ? 'block' : 'none'; toastT = t ? 2 : 0; }

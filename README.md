@@ -5,6 +5,7 @@ A 3D model of Köprüköy (Keskin, Kırıkkale, Türkiye) and the area around th
 **Live site:** https://sguven.github.io/koprukoy-3d/
 
 - **Orbit, Walk, Fly and Toros** modes. Toros mode lets you drive a 1990s Renault 12 Toros station wagon. Touch controls work on phones.
+- **Map-style navigation (Orbit):** works like Google Maps — one finger drags the ground under it, two fingers pinch to zoom, twist to rotate and slide up/down to tilt; double-tap zooms in, two-finger tap zooms out. On desktop: drag, wheel, right-drag or Ctrl+drag to rotate/tilt. See [`src/mapnav.js`](src/mapnav.js).
 - **Terrain:** SRTM 30 m elevation data; the lake (Kapulukaya Reservoir) sits at 724 m.
 - **Roads and buildings:** Google Maps road layer and 0.3 m/px satellite imagery (v0.9 survey), georeferenced on the Çeşnigir Bridge; D.260 and the terrain are the v0.6 survey (SRTM).
 - **Çeşnigir Bridge (13th century, Seljuk):** 110 m long, 6 m wide, 18.60 m central span, 12 arches (9 lower, 3 upper). The lower arches are partly under the reservoir water.
