@@ -12,50 +12,25 @@
 // This module has no three.js dependency: it only produces plain data (used for geometry, collision,
 // the minimap and the headless plan check in tools/plan_check.mjs).
 
+import { ROADS as DATA_ROADS, BUILDINGS as DATA_BUILDINGS, ANCHOR, MOSQUE_SITE } from './village_data.js';
+
 // ---------------------------------------------------------------- image -> model mapping
+// v0.9: the photo-01 frame is anchored on the true position of the market junction (Google Maps pin
+// georeference, see tools/build_village_data.py); only the municipality, market and kahve are still taken
+// from the photo — every other footprint comes from the satellite trace in village_data.js.
 export const PX = 0.25;                // metres per satellite pixel
 const JX = 338, JY = 225;              // market junction in image pixels
-const JM = [55, 50];                   // ... and in model metres
+const JM = [ANCHOR.jx, ANCHOR.jz];     // ... and in model metres
 export const img = (px, py) => [JM[0] + (px - JX) * PX, JM[1] + (py - JY) * PX];
 export const IMG_RECT = { x0: img(0, 0)[0], z0: img(0, 0)[1], x1: img(813, 607)[0], z1: img(813, 607)[1] };
 
 // Everything of the old draft inside this region (roads, houses, trees, the mosque) is removed and rebuilt.
-export const REGION = { x0: -205, x1: 1000, z0: -380, z1: 420 };
+export const REGION = { x0: -340, x1: 890, z0: -780, z1: 890 };
 export const inRegion = (x, z) => x > REGION.x0 && x < REGION.x1 && z > REGION.z0 && z < REGION.z1;
 
 // ---------------------------------------------------------------- roads
 // kind: asphalt | concrete | dirt ; w = width in metres ; kerb = blue/white kerb + pavement strips
-const P = (...pts) => pts.map(([a, b]) => img(a, b));
-export const ROADS = [
-  // --- traced from docs/reference/01 ---
-  { id: 'A_core', kind: 'asphalt', w: 6.0, kerb: true, pts: P([315, 0], [318, 80], [325, 150], [338, 225], [350, 300], [362, 350], [385, 420], [408, 490], [430, 540], [455, 607]) },
-  { id: 'B_core', kind: 'asphalt', w: 6.5, kerb: true, pts: P([338, 225], [420, 222], [500, 226], [560, 232], [600, 240], [650, 262], [700, 282], [760, 298], [813, 308]) },
-  { id: 'C_core', kind: 'asphalt', w: 6.0, kerb: true, pts: P([338, 225], [280, 255], [220, 270], [150, 290], [80, 305], [0, 320]) },
-  { id: 'D_core', kind: 'concrete', w: 4.5, pts: P([0, 460], [80, 447], [160, 436], [220, 438], [265, 455], [310, 485], [370, 510], [405, 520], [428, 526]) },
-  { id: 'E_core', kind: 'asphalt', w: 5.0, kerb: true, pts: P([590, 238], [625, 290], [655, 340], [690, 400], [735, 445], [790, 480], [813, 490]) },
-  { id: 'F_core', kind: 'dirt', w: 4.5, pts: P([680, 0], [715, 80], [745, 160], [775, 240], [800, 295]) },
-  // --- continuation outside the photo: joins the surviving v0.6 roads ---
-  { id: 'A_N', kind: 'asphalt', w: 6.0, pts: [img(315, 0), [46, -120], [41, -250], [36, -340], [32, -423]] },
-  { id: 'A_S', kind: 'asphalt', w: 6.0, pts: [img(455, 607), [95, 220], [120, 300], [160, 370], [206, 425]] },
-  { id: 'C_W', kind: 'asphalt', w: 6.0, pts: [img(0, 320), [-80, 92], [-140, 125], [-190, 150], [-232, 163]] },
-  { id: 'D_W', kind: 'concrete', w: 4.5, pts: [img(0, 460), [-85, 122], [-140, 125]] },
-  { id: 'shore', kind: 'dirt', w: 4.0, pts: [[-140, 125], [-180, 100], [-211, 75]] },
-  { id: 'E_S', kind: 'asphalt', w: 5.0, pts: [img(813, 490), [230, 150], [300, 200], [330, 300], [356, 422]] },
-  { id: 'E2', kind: 'dirt', w: 4.5, pts: [[300, 200], [400, 300], [467, 423]] },
-  { id: 'B_E', kind: 'dirt', w: 5.0, pts: [img(813, 308), [230, 80], [300, 95], [380, 100], [430, 95]] },
-  { id: 'F_N', kind: 'dirt', w: 4.5, pts: [img(680, 0), [150, -120], [160, -250], [167, -422]] },
-  { id: 'W_loop', kind: 'dirt', w: 4.5, pts: [[46, -120], [-40, -115], [-70, -40], [-80, 92]] },
-  { id: 'X1', kind: 'dirt', w: 4.0, pts: [[41, -250], [-60, -240]] },
-  { id: 'X2', kind: 'dirt', w: 4.0, pts: [[-40, -115], [-45, -180], [-60, -240]] },
-  { id: 'E_loop', kind: 'dirt', w: 4.5, pts: [[160, -250], [260, -240], [280, -100], [300, 95]] },
-  { id: 'E_mid', kind: 'dirt', w: 4.0, pts: [[150, -120], [280, -100]] },
-  { id: 'S_W', kind: 'dirt', w: 4.5, pts: [[-85, 122], [-60, 220], [0, 260], [95, 220]] },
-  { id: 'S_W2', kind: 'dirt', w: 4.0, pts: [[-70, -40], [-120, -30], [-150, 40], [-140, 125]] },
-  { id: 'S_E', kind: 'dirt', w: 4.0, pts: [[120, 300], [240, 310], [330, 300]] },
-  { id: 'S_mid', kind: 'dirt', w: 4.0, pts: [[0, 260], [20, 340], [120, 300]] },
-  { id: 'mid', kind: 'dirt', w: 4.0, pts: [[46, -120], [150, -120]] },
-  { id: 'N_mid', kind: 'dirt', w: 4.0, pts: [[41, -250], [160, -250]] },
-];
+export const ROADS = DATA_ROADS.map(r => ({ ...r, poles: /^main_/.test(r.id) }));
 
 // ---------------------------------------------------------------- buildings traced from the photo
 // [cx_px, cy_px, w_px, d_px, angle_rad (long axis, image frame), storeys, roof, kind]
@@ -95,7 +70,7 @@ const T = [
   // flat / light roofs not picked up by the tile-roof detector
   [574, 33, 40, 27, 0, 1, 'f'], [666, 37, 56, 33, 0, 1, 'f'], [150, 328, 46, 37, 0, 1, 'm'],
 ];
-export const TRACED = T.map(([cx, cy, w, d, ang, st, roof, kind]) => {
+export const TRACED = T.filter(t => t[7] === 'municipality' || t[7] === 'market' || t[7] === 'kahve').map(([cx, cy, w, d, ang, st, roof, kind]) => {
   const [x, z] = img(cx, cy);
   // image frame: long axis (cos a, sin a) with y down == model (X, Z); model yaw maps local x to (cos yaw, -sin yaw)
   return { x, z, yaw: -ang, w: w * PX, d: d * PX, storeys: st, roof, kind, traced: true };
@@ -110,7 +85,7 @@ export const SITES = {
   statue: { x: 38.6, z: 42.5 },                           // Atatürk statue on a pedestal in front of the façade
   gazebo: { x: 40, z: 67 },                               // green-roofed çardak
   market: TRACED.find(b => b.kind === 'market'),
-  mosque: { x: img(589, 410)[0], z: img(589, 410)[1], yaw: 0 }, // prayer hall centre; qibla side to the south
+  mosque: { x: MOSQUE_SITE.x, z: MOSQUE_SITE.z, yaw: 0 },     // prayer hall centre (dome in the satellite image); qibla side to the south
   green1: { x: img(403, 541)[0], z: img(403, 541)[1] },  // small green with a bench and a bin (docs/reference/04)
 };
 
@@ -190,6 +165,7 @@ export function buildVillageLayout(terrH, existingRoads = []) {
   };
 
   const buildings = TRACED.map(b => ({ ...b }));
+  for (const [x, z, yaw, w, d, storeys, roof] of DATA_BUILDINGS) buildings.push({ x, z, yaw, w, d, storeys, roof, traced: true, sat: true });
   const S = SITES;
   buildings.push({ x: S.mosque.x, z: S.mosque.z, yaw: 0, w: 13, d: 19, kind: 'mosque' });
   buildings.push({ x: S.mosque.x + 8.7, z: S.mosque.z - 6.7, yaw: 0, w: 2.6, d: 2.6, kind: 'minaret' });
@@ -204,7 +180,7 @@ export function buildVillageLayout(terrH, existingRoads = []) {
     const h = nearestRoad(b.x, b.z), p = h.r.line[h.i], q = h.r.line[Math.min(h.r.line.length - 1, h.i + 1)];
     b.face = Math.atan2(p[1] - b.z, p[0] - b.x); b.front = h.d;
     // the detector's axis is unreliable for near-square roofs: snap those to the road or to north
-    if (Math.max(b.w, b.d) / Math.min(b.w, b.d) < 1.55 && !b.kind) {
+    if (Math.max(b.w, b.d) / Math.min(b.w, b.d) < (b.sat ? 1.12 : 1.55) && !b.kind) {
       const roadYaw = Math.atan2(-(q[1] - p[1]), q[0] - p[0]);
       const m90 = (a) => ((a % (Math.PI / 2)) + Math.PI / 2) % (Math.PI / 2);
       const dRoad = Math.min(Math.abs(m90(b.yaw) - m90(roadYaw)), Math.PI / 2 - Math.abs(m90(b.yaw) - m90(roadYaw)));
@@ -213,44 +189,6 @@ export function buildVillageLayout(terrH, existingRoads = []) {
     } else if (b.kind === 'market' || b.kind === 'kahve') b.yaw = 0;
   }
 
-  // --- generated houses along the streets outside the photographed block ---
-  const centre = [60, 55];
-  const inPhoto = (x, z) => x > IMG_RECT.x0 - 4 && x < IMG_RECT.x1 + 4 && z > IMG_RECT.z0 - 4 && z < IMG_RECT.z1 + 4;
-  const placed = buildings.slice();
-  const tryPlace = (b, margin = 2.5) => {
-    if (inPhoto(b.x, b.z) || !inRegion(b.x, b.z)) return false;
-    if (terrH(b.x, b.z) < 3 || slopeAt(b.x, b.z) > 0.22) return false;
-    if (!roadClear(b, 0.8)) return false;
-    for (const o of placed) if (rectsOverlap(b, o, margin)) return false;
-    placed.push(b); buildings.push(b); return true;
-  };
-  for (const r of roads) {
-    const L = r.line, total = polyLength(L);
-    for (const side of [-1, 1]) {
-      let s = 6 + rnd() * 10;
-      while (s < total - 6) {
-        let acc = 0, i = 0; while (i + 1 < L.length && acc + Math.hypot(L[i + 1][0] - L[i][0], L[i + 1][1] - L[i][1]) < s) { acc += Math.hypot(L[i + 1][0] - L[i][0], L[i + 1][1] - L[i][1]); i++; }
-        const p = L[i], q = L[Math.min(L.length - 1, i + 1)], dx = q[0] - p[0], dz = q[1] - p[1], len = Math.hypot(dx, dz) || 1, t = Math.min(1, (s - acc) / len);
-        const px = p[0] + dx * t, pz = p[1] + dz * t, tx = dx / len, tz = dz / len, nx = -tz * side, nz = tx * side;
-        const dist = Math.hypot(px - centre[0], pz - centre[1]);
-        const pSkip = 0.04 + 0.5 * Math.max(0, Math.min(1, (dist - 150) / 280));
-        const w = 8 + rnd() * 5, d = 7 + rnd() * 4, setback = r.w / 2 + 3 + rnd() * 5 + (rnd() < 0.2 ? 10 + rnd() * 8 : 0);
-        const twoStorey = rnd() < (dist < 200 ? 0.42 : 0.28);
-        const roofs = ['h', 'h', 'h', 'g', 'g', 'm'];
-        const b = { x: px + nx * (setback + d / 2), z: pz + nz * (setback + d / 2), yaw: Math.atan2(-tz, tx), w, d, storeys: twoStorey ? 2 : 1, roof: roofs[Math.floor(rnd() * roofs.length)], face: Math.atan2(-nz, -nx), front: setback };
-        if (rnd() > pSkip && tryPlace(b)) {
-          if (rnd() < 0.4) { // barn / store behind the house
-            const bw = 5 + rnd() * 3, bd = 3.5 + rnd() * 1.5, back = setback + d + 2.5 + rnd() * 4;
-            const o = { x: px + nx * (back + bd / 2) + tx * (rnd() - 0.5) * 6, z: pz + nz * (back + bd / 2) + tz * (rnd() - 0.5) * 6, yaw: b.yaw, w: bw, d: bd, storeys: 1, roof: rnd() < 0.6 ? 'm' : 'g', barn: true };
-            tryPlace(o, 1.2);
-          }
-          b.wall = rnd() < 0.5 ? 'wall' : rnd() < 0.5 ? 'fence' : 'none';
-          b.tree = rnd() < 0.7;
-        }
-        s += w + (dist < 160 ? 2 + rnd() * 6 : 5 + rnd() * 12);
-      }
-    }
-  }
   for (const b of buildings) if (b.traced && !b.kind) { b.wall = rnd() < 0.55 ? 'wall' : 'fence'; b.tree = rnd() < 0.75; }
 
   // per-building ground: floor level at the highest corner, plinth reaching the lowest

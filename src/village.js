@@ -86,9 +86,9 @@ export function buildVillage(ctx, layout, M) {
     }
   }
   // utility poles along the main streets, with three sagging cables between them
-  for (const id of ['A_core', 'B_core', 'C_core', 'E_core', 'A_N', 'A_S', 'C_W', 'E_S']) {
-    const r = roads.find(q => q.id === id); if (!r || centreOnly) continue;
-    const side = id === 'B_core' || id === 'E_core' ? 1 : -1, off = r.w / 2 + (r.kerb ? 2.2 : 1.4);
+  for (const r of roads) {
+    if (!r.poles || centreOnly) continue;
+    const side = roads.indexOf(r) % 2 ? 1 : -1, off = r.w / 2 + (r.kerb ? 2.2 : 1.4);
     let s = 12 + rnd() * 10, prev = null, acc = 0, i = 0;
     const total = r.line.reduce((a, p, k) => k ? a + Math.hypot(p[0] - r.line[k - 1][0], p[1] - r.line[k - 1][1]) : 0, 0);
     while (s < total - 5) {
