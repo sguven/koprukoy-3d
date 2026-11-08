@@ -4,7 +4,7 @@
 // Layout comes from village_layout.js; materials from village_materials.js; props from props.js.
 import * as THREE from 'three';
 import { GeoBatch, box, boxY, cyl, facadeWithHoles, roofGeometry, gableEnds, ribbon, patch } from './geo.js';
-import { inRegion, rectCorners, distToPolyline } from './village_layout.js';
+import { inRegion, inCentreZone, rectCorners, distToPolyline } from './village_layout.js';
 import { buildProps } from './props.js';
 
 const WALLS = ['Duvar_Beyaz', 'Duvar_Beyaz', 'Duvar_Beyaz', 'Duvar_Krem', 'Duvar_Krem', 'Duvar_Okr', 'Duvar_Pembe', 'Duvar_Sari', 'Duvar_Gri'];
@@ -14,15 +14,16 @@ const FLOOR = 2.9, PLINTH = 0.45;
 
 // ---------------------------------------------------------------------------------------------------
 /** Remove the old draft inside the rebuilt region: houses, village roads, the mosque, and the trees. */
-export function pruneOldVillage(model) {
+export function pruneOldVillage(model, full = false) {
+  const inZone = full ? inRegion : inCentreZone;
   const v = new THREE.Vector3(), removed = { houses: 0, roads: 0, trees: 0 };
   const dropChildren = (groupName, test) => {
     const g = model.getObjectByName(groupName); if (!g) return 0; let n = 0;
     for (const c of g.children.slice()) { c.getWorldPosition(v); if (test(c, v)) { c.removeFromParent(); n++; } }
     return n;
   };
-  removed.houses = dropChildren('Konutlar', (c, p) => inRegion(p.x, p.z));
-  removed.roads = dropChildren('Yollar', (c, p) => inRegion(p.x, p.z) && !/^D260/.test(c.name));
+  removed.houses = dropChildren('Konutlar', (c, p) => inZone(p.x, p.z));
+  if (full) removed.roads = dropChildren('Yollar', (c, p) => inRegion(p.x, p.z) && !/^D260/.test(c.name));
   dropChildren('Kiyi_ve_Kamu', (c) => /^Cami/.test(c.name));
   // trees are two merged meshes: drop the triangles whose centroid lies in the region
   for (const name of ['Agaclar_Yaprak', 'Agaclar_Govde']) {
@@ -33,7 +34,7 @@ export function pruneOldVillage(model) {
     for (let t = 0; t < tri; t++) {
       const i0 = idx ? idx[t * 3] : t * 3, i1 = idx ? idx[t * 3 + 1] : t * 3 + 1, i2 = idx ? idx[t * 3 + 2] : t * 3 + 2;
       a.fromBufferAttribute(pos, i0).applyMatrix4(m.matrixWorld); b.fromBufferAttribute(pos, i1).applyMatrix4(m.matrixWorld); c.fromBufferAttribute(pos, i2).applyMatrix4(m.matrixWorld);
-      if (!inRegion((a.x + b.x + c.x) / 3, (a.z + b.z + c.z) / 3)) keep.push(i0, i1, i2); else removed.trees++;
+      if (!inZone((a.x + b.x + c.x) / 3, (a.z + b.z + c.z) / 3)) keep.push(i0, i1, i2); else removed.trees++;
     }
     g.setIndex(keep); g.computeBoundingSphere(); g.computeBoundingBox();
   }
@@ -50,7 +51,7 @@ export function buildVillage(ctx, layout, M) {
   const bat = new GeoBatch();
   const wires = [];                       // line segments for fence wires and overhead cables
   const treeSpots = [], props = [];       // handed to props.js
-  const roads = layout.roads;
+  const roads = layout.roads, centreOnly = !!layout.centreOnly;
   const yAt = (x, z) => terrH(x, z);
   const roadDist = (x, z) => { let best = Infinity, bw = 0; for (const r of roads) { const h = distToPolyline(x, z, r.line); if (h.d < best) { best = h.d; bw = r.w; } } return { d: best, w: bw }; };
   const onRoad = (x, z, margin = 0) => { const h = roadDist(x, z); return h.d < h.w / 2 + margin; };
@@ -59,6 +60,7 @@ export function buildVillage(ctx, layout, M) {
   // ================================================================= roads
   const lift = (r) => LIFT[r.kind] + roads.indexOf(r) * 0.003;
   for (const r of roads) {
+    if (centreOnly) break;
     const hw = r.w / 2, L = lift(r);
     const prof = [{ u: -hw - 1.0, dy: L * 0.25 }, { u: -hw, dy: L }, { u: -hw * 0.5, dy: L }, { u: 0, dy: L + 0.04 }, { u: hw * 0.5, dy: L }, { u: hw, dy: L }, { u: hw + 1.0, dy: L * 0.25 }];
     bat.add('road_' + r.kind, ribbon(r.line, prof, yAt, 1 / hw));
@@ -85,7 +87,7 @@ export function buildVillage(ctx, layout, M) {
   }
   // utility poles along the main streets, with three sagging cables between them
   for (const id of ['A_core', 'B_core', 'C_core', 'E_core', 'A_N', 'A_S', 'C_W', 'E_S']) {
-    const r = roads.find(q => q.id === id); if (!r) continue;
+    const r = roads.find(q => q.id === id); if (!r || centreOnly) continue;
     const side = id === 'B_core' || id === 'E_core' ? 1 : -1, off = r.w / 2 + (r.kerb ? 2.2 : 1.4);
     let s = 12 + rnd() * 10, prev = null, acc = 0, i = 0;
     const total = r.line.reduce((a, p, k) => k ? a + Math.hypot(p[0] - r.line[k - 1][0], p[1] - r.line[k - 1][1]) : 0, 0);
@@ -101,8 +103,10 @@ export function buildVillage(ctx, layout, M) {
   // ================================================================= the square and the lawns
   const S = layout.sites;
   bat.add('square', patch(S.square.x, S.square.z, S.square.w, S.square.d, 0, yAt, LIFT.square, 2.5));
-  const green = S.green1; bat.add('lawn', patch(green.x, green.z, 7, 6, 0, yAt, 0.07, 1.5));
-  props.push({ kind: 'bench', x: green.x - 1.5, z: green.z + 1.0, yaw: 0.2 }, { kind: 'bin', x: green.x + 2.2, z: green.z + 1.5 }, { kind: 'tree', species: 'mulberry', x: green.x + 1.0, z: green.z - 1.5, size: 1.1 });
+  if (!centreOnly) {
+    const green = S.green1; bat.add('lawn', patch(green.x, green.z, 7, 6, 0, yAt, 0.07, 1.5));
+    props.push({ kind: 'bench', x: green.x - 1.5, z: green.z + 1.0, yaw: 0.2 }, { kind: 'bin', x: green.x + 2.2, z: green.z + 1.5 }, { kind: 'tree', species: 'mulberry', x: green.x + 1.0, z: green.z - 1.5, size: 1.1 });
+  }
   props.push({ kind: 'bench', x: S.square.x + 7, z: S.square.z + 13, yaw: 0 }, { kind: 'bench', x: S.square.x + 7, z: S.square.z - 12, yaw: 0 }, { kind: 'bin', x: S.square.x + 9, z: S.square.z + 15 });
   for (const [dx, dz] of [[-2, 14], [8, -16], [9, 10]]) props.push({ kind: 'tree', species: 'mulberry', x: S.square.x + dx, z: S.square.z + dz, size: 1.3 });
 
@@ -442,6 +446,7 @@ export function buildVillage(ctx, layout, M) {
     // trees inside the yard (pines behind the mosque, as in docs/reference/06) and the lawn / picnic table outside the east wall
     for (const [tx, tz] of [[-W2 + 3, cz0 + D2 - 4], [W2 - 3, cz0 + D2 - 3], [-W2 + 3, cz0 + 2], [W2 - 3, cz0 + 9]]) treeSpots.push({ x: b.x + tx, z: b.z + tz, species: 'pine', size: 1.0 + rnd() * 0.3, force: true });
     for (const [tx, tz] of [[-W2 + 5, cz0 - D2 + 11], [W2 - 5, cz0 - D2 + 6]]) treeSpots.push({ x: b.x + tx, z: b.z + tz, species: 'mulberry', size: 1.1, force: true });
+    if (centreOnly) return;   // no new street outside the wall in centre-only mode: the v0.6 roads stay
     const rdE = roadDist(b.x + W2, b.z + cz0), lawnW = Math.max(2, Math.min(9, rdE.d - rdE.w / 2 - 2.2)), lawnX = b.x + W2 + 0.4 + lawnW / 2, lawnZ = b.z + cz0;
     bat.add('lawn', patch(lawnX, lawnZ, lawnW, cd, 0, yAt, 0.07, 1.5));
     props.push({ kind: 'picnic', x: lawnX - 0.3, z: lawnZ - 6, yaw: 0 }, { kind: 'bin', x: lawnX + 0.8, z: lawnZ + 4 });
@@ -451,7 +456,7 @@ export function buildVillage(ctx, layout, M) {
   // ================================================================= props, wires, trees
   // street poplars along the main road and the mosque street
   for (const id of ['B_core', 'C_core', 'A_core']) {
-    const r = roads.find(q => q.id === id); if (!r) continue;
+    const r = roads.find(q => q.id === id); if (!r || centreOnly) continue;
     for (const side of [-1, 1]) {
       const total = r.line.length;
       for (let i = 4; i < total - 4; i += 5 + Math.floor(rnd() * 5)) {
@@ -466,8 +471,10 @@ export function buildVillage(ctx, layout, M) {
   const okSpot = (t) => t.force || (!onRoad(t.x, t.z, 1.2) && !inAnyBuilding(t.x, t.z, 1.0) && terrH(t.x, t.z) > 2);
   const trees = treeSpots.filter(okSpot);
   // stone piles and a few fences out in the plots
-  for (let i = 0; i < 14; i++) { const b = blds[Math.floor(rnd() * blds.length)]; if (!b.barn) continue; props.push({ kind: 'stones', x: b.x + (rnd() - 0.5) * 12, z: b.z + (rnd() - 0.5) * 12 }); }
-  props.push({ kind: 'bench', x: S.market.x + 7.5, z: S.market.z + 2, yaw: Math.PI / 2 }, { kind: 'bin', x: S.market.x + 7.5, z: S.market.z - 1.5 });
+  if (!centreOnly) {
+    for (let i = 0; i < 14; i++) { const b = blds[Math.floor(rnd() * blds.length)]; if (!b.barn) continue; props.push({ kind: 'stones', x: b.x + (rnd() - 0.5) * 12, z: b.z + (rnd() - 0.5) * 12 }); }
+    props.push({ kind: 'bench', x: S.market.x + 7.5, z: S.market.z + 2, yaw: Math.PI / 2 }, { kind: 'bin', x: S.market.x + 7.5, z: S.market.z - 1.5 });
+  }
 
   const propsOut = buildProps(ctx, M, { props: props.filter(p => p.kind === 'tree' || p.force || !onRoad(p.x, p.z, 0.4)), trees, wires }, bat);
   bat.build(M, group);

@@ -261,6 +261,28 @@ export function buildVillageLayout(terrH, existingRoads = []) {
   return { roads, buildings, sites: SITES, rnd };
 }
 
+// ---------------------------------------------------------------- centre-only mode (default)
+// Only the square (old municipality, statue, çardak) and the mosque are rebuilt; the v0.6 roads, houses
+// and trees stay. Old houses / trees inside these zones are removed.
+export const CENTRE_MOSQUE = { x: 107.2, z: 102.6 };   // inside the old courtyard footprint (89.7..128.7, 83.2..125.1)
+export const CENTRE_ZONES = [
+  { x0: 20, x1: 56, z0: 28, z1: 74 },                   // municipality, square, çardak
+  { x0: 93, x1: 121, z0: 88, z1: 124 },                 // mosque courtyard
+];
+export const inCentreZone = (x, z) => CENTRE_ZONES.some(r => x > r.x0 && x < r.x1 && z > r.z0 && z < r.z1);
+export function buildCentreLayout(terrH) {
+  const muniB = { ...TRACED.find(b => b.kind === 'municipality') };
+  const buildings = [muniB,
+    { x: CENTRE_MOSQUE.x, z: CENTRE_MOSQUE.z, yaw: 0, w: 13, d: 19, kind: 'mosque' },
+    { x: CENTRE_MOSQUE.x + 8.7, z: CENTRE_MOSQUE.z - 6.7, yaw: 0, w: 2.6, d: 2.6, kind: 'minaret' }];
+  for (const b of buildings) {
+    const hs = rectCorners(b).map(([x, z]) => terrH(x, z)); hs.push(terrH(b.x, b.z));
+    b.yTop = Math.max(...hs) + 0.05; b.yLow = Math.min(...hs) - 0.4;
+  }
+  const sites = { ...SITES, municipality: muniB, mosque: { ...CENTRE_MOSQUE, yaw: 0 } };
+  return { roads: [], buildings, sites, rnd: mulberry32(20261108), centreOnly: true };
+}
+
 /** Road samples in the data4 format ([x, z, y, halfWidth, ...]) for collision, the car and the minimap. */
 export function roadSamples(roads, terrH, lift) {
   const out = [];

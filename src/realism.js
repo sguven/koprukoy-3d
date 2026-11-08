@@ -94,7 +94,7 @@ export async function setupRealism(ctx) {
     log('village');
   }
   // ---- bridge detail: voussoirs, cutwater caps, parapet stones ------------------------------
-  if (!off.has('no-bridge')) { const br = detailBridge(model, lib, pick); if (br) { ctx.scene.add(br); ctx.layers.bina.push(br); } log('bridge'); }
+  if (off.has('bridge-detail')) { const br = detailBridge(model, lib, pick); if (br) { ctx.scene.add(br); ctx.layers.bina.push(br); } log('bridge'); }   // opt-in: #bridge-detail
 
   return { lib, swapped, update(now) {
     if (waterMat && waterMat.userData.shader) waterMat.userData.shader.uniforms.uTime.value = now * 0.001;
