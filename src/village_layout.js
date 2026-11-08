@@ -1,0 +1,275 @@
+// Köprüköy village layout (v0.8): a connected road network and building footprints.
+//
+// The village centre is traced from the Google satellite image in docs/reference/01 (Güvendioğlu Market
+// junction, "Köprüköy Köyü Yolu", the mosque). Image pixels are mapped to model metres with the market
+// junction as anchor (0.25 m / px, north up = -Z). Tile roofs were detected automatically in the image
+// (tools/trace_roofs.py) and give the footprints, orientations and sizes of the ~30 central buildings.
+// Outside the photographed block the streets are continued as a plausible rural network that joins the
+// surviving v0.6 roads (D.260 access, the two roads leaving north, the three leaving south and the
+// shore road), and houses are placed along those streets in plots with a seeded random generator, so
+// the result is deterministic.
+//
+// This module has no three.js dependency: it only produces plain data (used for geometry, collision,
+// the minimap and the headless plan check in tools/plan_check.mjs).
+
+// ---------------------------------------------------------------- image -> model mapping
+export const PX = 0.25;                // metres per satellite pixel
+const JX = 338, JY = 225;              // market junction in image pixels
+const JM = [55, 50];                   // ... and in model metres
+export const img = (px, py) => [JM[0] + (px - JX) * PX, JM[1] + (py - JY) * PX];
+export const IMG_RECT = { x0: img(0, 0)[0], z0: img(0, 0)[1], x1: img(813, 607)[0], z1: img(813, 607)[1] };
+
+// Everything of the old draft inside this region (roads, houses, trees, the mosque) is removed and rebuilt.
+export const REGION = { x0: -205, x1: 1000, z0: -380, z1: 420 };
+export const inRegion = (x, z) => x > REGION.x0 && x < REGION.x1 && z > REGION.z0 && z < REGION.z1;
+
+// ---------------------------------------------------------------- roads
+// kind: asphalt | concrete | dirt ; w = width in metres ; kerb = blue/white kerb + pavement strips
+const P = (...pts) => pts.map(([a, b]) => img(a, b));
+export const ROADS = [
+  // --- traced from docs/reference/01 ---
+  { id: 'A_core', kind: 'asphalt', w: 6.0, kerb: true, pts: P([315, 0], [318, 80], [325, 150], [338, 225], [350, 300], [362, 350], [385, 420], [408, 490], [430, 540], [455, 607]) },
+  { id: 'B_core', kind: 'asphalt', w: 6.5, kerb: true, pts: P([338, 225], [420, 222], [500, 226], [560, 232], [600, 240], [650, 262], [700, 282], [760, 298], [813, 308]) },
+  { id: 'C_core', kind: 'asphalt', w: 6.0, kerb: true, pts: P([338, 225], [280, 255], [220, 270], [150, 290], [80, 305], [0, 320]) },
+  { id: 'D_core', kind: 'concrete', w: 4.5, pts: P([0, 460], [80, 447], [160, 436], [220, 438], [265, 455], [310, 485], [370, 510], [405, 520], [428, 526]) },
+  { id: 'E_core', kind: 'asphalt', w: 5.0, kerb: true, pts: P([590, 238], [625, 290], [655, 340], [690, 400], [735, 445], [790, 480], [813, 490]) },
+  { id: 'F_core', kind: 'dirt', w: 4.5, pts: P([680, 0], [715, 80], [745, 160], [775, 240], [800, 295]) },
+  // --- continuation outside the photo: joins the surviving v0.6 roads ---
+  { id: 'A_N', kind: 'asphalt', w: 6.0, pts: [img(315, 0), [46, -120], [41, -250], [36, -340], [32, -423]] },
+  { id: 'A_S', kind: 'asphalt', w: 6.0, pts: [img(455, 607), [95, 220], [120, 300], [160, 370], [206, 425]] },
+  { id: 'C_W', kind: 'asphalt', w: 6.0, pts: [img(0, 320), [-80, 92], [-140, 125], [-190, 150], [-232, 163]] },
+  { id: 'D_W', kind: 'concrete', w: 4.5, pts: [img(0, 460), [-85, 122], [-140, 125]] },
+  { id: 'shore', kind: 'dirt', w: 4.0, pts: [[-140, 125], [-180, 100], [-211, 75]] },
+  { id: 'E_S', kind: 'asphalt', w: 5.0, pts: [img(813, 490), [230, 150], [300, 200], [330, 300], [356, 422]] },
+  { id: 'E2', kind: 'dirt', w: 4.5, pts: [[300, 200], [400, 300], [467, 423]] },
+  { id: 'B_E', kind: 'dirt', w: 5.0, pts: [img(813, 308), [230, 80], [300, 95], [380, 100], [430, 95]] },
+  { id: 'F_N', kind: 'dirt', w: 4.5, pts: [img(680, 0), [150, -120], [160, -250], [167, -422]] },
+  { id: 'W_loop', kind: 'dirt', w: 4.5, pts: [[46, -120], [-40, -115], [-70, -40], [-80, 92]] },
+  { id: 'X1', kind: 'dirt', w: 4.0, pts: [[41, -250], [-60, -240]] },
+  { id: 'X2', kind: 'dirt', w: 4.0, pts: [[-40, -115], [-45, -180], [-60, -240]] },
+  { id: 'E_loop', kind: 'dirt', w: 4.5, pts: [[160, -250], [260, -240], [280, -100], [300, 95]] },
+  { id: 'E_mid', kind: 'dirt', w: 4.0, pts: [[150, -120], [280, -100]] },
+  { id: 'S_W', kind: 'dirt', w: 4.5, pts: [[-85, 122], [-60, 220], [0, 260], [95, 220]] },
+  { id: 'S_W2', kind: 'dirt', w: 4.0, pts: [[-70, -40], [-120, -30], [-150, 40], [-140, 125]] },
+  { id: 'S_E', kind: 'dirt', w: 4.0, pts: [[120, 300], [240, 310], [330, 300]] },
+  { id: 'S_mid', kind: 'dirt', w: 4.0, pts: [[0, 260], [20, 340], [120, 300]] },
+  { id: 'mid', kind: 'dirt', w: 4.0, pts: [[46, -120], [150, -120]] },
+  { id: 'N_mid', kind: 'dirt', w: 4.0, pts: [[41, -250], [160, -250]] },
+];
+
+// ---------------------------------------------------------------- buildings traced from the photo
+// [cx_px, cy_px, w_px, d_px, angle_rad (long axis, image frame), storeys, roof, kind]
+// roof: h = hip, g = gable, f = flat, m = metal sheet
+const T = [
+  [216.6, 39.1, 60.3, 36.0, 2.981, 1, 'h'],
+  [106.1, 44.6, 41.7, 27.7, 0.861, 1, 'g'],
+  [735.5, 59.4, 67.5, 30.2, -2.892, 1, 'h'],
+  [519.5, 60.7, 19.6, 11.2, 2.261, 1, 'g'],
+  [564.9, 81.9, 47.6, 30.3, 1.437, 1, 'h'],
+  [802.4, 121.9, 84.2, 20.0, 1.723, 1, 'g'],
+  [378.9, 76.8, 28.0, 12.2, 3.126, 1, 'h'],
+  [51.1, 100.1, 42.7, 29.7, -2.917, 1, 'g'],
+  [707.2, 117.3, 92.9, 52.3, -3.09, 2, 'h'],
+  [443.0, 121.0, 52.8, 29.4, -2.838, 1, 'h'],
+  [236.4, 129.2, 32.9, 16.7, 1.366, 1, 'f', 'kahve'],
+  [372.0, 162.5, 45.1, 37.5, -2.472, 1, 'f', 'market'],
+  [591.7, 192.4, 74.8, 38.8, 1.579, 2, 'h'],
+  [240.5, 195.5, 75.8, 33.0, 1.658, 3, 'h', 'municipality'],
+  [733.2, 206.7, 38.3, 31.7, 2.996, 1, 'h'],
+  [112.4, 234.6, 54.1, 47.0, 1.574, 2, 'h'],
+  [796.4, 242.9, 63.0, 29.1, 1.564, 1, 'h'],
+  [408.1, 293.3, 55.7, 28.7, 3.022, 1, 'h'],
+  [216.1, 309.6, 57.7, 35.8, 1.452, 1, 'h', 'school'],
+  [477.2, 296.8, 63.0, 34.0, 3.137, 2, 'h'],
+  [32.0, 303.8, 48.0, 37.8, 2.436, 1, 'g'],
+  [789.8, 321.4, 32.0, 20.1, 1.564, 1, 'g'],
+  [150.9, 345.5, 40.7, 30.9, 1.198, 1, 'h'],
+  [94.1, 403.4, 62.0, 50.0, 0.862, 2, 'h'],
+  [172.6, 383.9, 49.0, 32.5, 2.572, 1, 'h'],
+  [326.0, 410.1, 60.1, 37.9, -3.038, 2, 'h'],
+  [586.9, 530.3, 103.8, 42.3, 2.874, 1, 'h'],
+  [772.5, 524.6, 49.5, 46.9, 2.77, 1, 'h'],
+  [268.3, 551.3, 34.1, 30.3, 2.603, 1, 'h'],
+  [307.4, 547.1, 22.3, 15.1, 2.631, 1, 'g'],
+  [358.1, 582.9, 49.0, 28.5, 2.312, 1, 'g'],
+  // flat / light roofs not picked up by the tile-roof detector
+  [574, 33, 40, 27, 0, 1, 'f'], [666, 37, 56, 33, 0, 1, 'f'], [150, 328, 46, 37, 0, 1, 'm'],
+];
+export const TRACED = T.map(([cx, cy, w, d, ang, st, roof, kind]) => {
+  const [x, z] = img(cx, cy);
+  // image frame: long axis (cos a, sin a) with y down == model (X, Z); model yaw maps local x to (cos yaw, -sin yaw)
+  return { x, z, yaw: -ang, w: w * PX, d: d * PX, storeys: st, roof, kind, traced: true };
+});
+
+// ---------------------------------------------------------------- special sites (model metres)
+const muni = TRACED.find(b => b.kind === 'municipality');
+export const SITES = {
+  municipality: muni,
+  // stabilised-earth square: the wide junction area between the municipality and the market (docs/reference/02, 05)
+  square: { x: 45, z: 47, w: 20, d: 34 },
+  statue: { x: 38.6, z: 42.5 },                           // Atatürk statue on a pedestal in front of the façade
+  gazebo: { x: 40, z: 67 },                               // green-roofed çardak
+  market: TRACED.find(b => b.kind === 'market'),
+  mosque: { x: img(589, 410)[0], z: img(589, 410)[1], yaw: 0 }, // prayer hall centre; qibla side to the south
+  green1: { x: img(403, 541)[0], z: img(403, 541)[1] },  // small green with a bench and a bin (docs/reference/04)
+};
+
+// ---------------------------------------------------------------- geometry helpers
+export function polyLength(pts) { let L = 0; for (let i = 1; i < pts.length; i++) L += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); return L; }
+/** Round the corners of a polyline with short arcs (radius r) and resample every `step` metres. */
+export function smoothPolyline(pts, step = 3, r = 14) {
+  if (pts.length < 3) return resample(pts, step);
+  const out = [pts[0]];
+  for (let i = 1; i < pts.length - 1; i++) {
+    const p = pts[i - 1], c = pts[i], n = pts[i + 1];
+    const d0 = Math.hypot(c[0] - p[0], c[1] - p[1]), d1 = Math.hypot(n[0] - c[0], n[1] - c[1]);
+    const rr = Math.min(r, d0 * 0.45, d1 * 0.45);
+    const a = [c[0] + (p[0] - c[0]) / d0 * rr, c[1] + (p[1] - c[1]) / d0 * rr], b = [c[0] + (n[0] - c[0]) / d1 * rr, c[1] + (n[1] - c[1]) / d1 * rr];
+    // quadratic bezier a -> c -> b
+    for (let k = 0; k <= 6; k++) { const t = k / 6, u = 1 - t; out.push([u * u * a[0] + 2 * u * t * c[0] + t * t * b[0], u * u * a[1] + 2 * u * t * c[1] + t * t * b[1]]); }
+  }
+  out.push(pts[pts.length - 1]);
+  return resample(out, step);
+}
+function resample(pts, step) {
+  const out = [pts[0]]; let carry = 0;
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1], b = pts[i], L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 1e-6) continue;
+    let s = step - carry;
+    while (s < L) { out.push([a[0] + (b[0] - a[0]) * s / L, a[1] + (b[1] - a[1]) * s / L]); s += step; }
+    carry = L - (s - step);
+  }
+  const last = pts[pts.length - 1], pl = out[out.length - 1]; if (Math.hypot(last[0] - pl[0], last[1] - pl[1]) > step * 0.3) out.push(last); else out[out.length - 1] = last;
+  return out;
+}
+export function distToPolyline(x, z, pts) {
+  let best = Infinity, bt = 0, bi = 0;
+  for (let i = 0; i + 1 < pts.length; i++) {
+    const ax = pts[i][0], az = pts[i][1], bx = pts[i + 1][0], bz = pts[i + 1][1], dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz || 1e-9;
+    let t = ((x - ax) * dx + (z - az) * dz) / L2; t = Math.max(0, Math.min(1, t));
+    const d = Math.hypot(x - (ax + dx * t), z - (az + dz * t));
+    if (d < best) { best = d; bt = t; bi = i; }
+  }
+  return { d: best, i: bi, t: bt };
+}
+export function rectCorners(b) {
+  const c = Math.cos(b.yaw), s = Math.sin(b.yaw), hw = b.w / 2, hd = b.d / 2, out = [];
+  for (const [lx, lz] of [[-hw, -hd], [hw, -hd], [hw, hd], [-hw, hd]]) out.push([b.x + lx * c + lz * s, b.z - lx * s + lz * c]);
+  return out;
+}
+export function rectsOverlap(a, b, margin = 0) {
+  const A = rectCorners({ ...a, w: a.w + 2 * margin, d: a.d + 2 * margin }), B = rectCorners(b);
+  const axes = [];
+  for (const R of [A, B]) for (let i = 0; i < 2; i++) { const dx = R[i + 1][0] - R[i][0], dz = R[i + 1][1] - R[i][1], L = Math.hypot(dx, dz) || 1; axes.push([dx / L, dz / L]); }
+  for (const [ax, az] of axes) {
+    let a0 = Infinity, a1 = -Infinity, b0 = Infinity, b1 = -Infinity;
+    for (const [x, z] of A) { const p = x * ax + z * az; a0 = Math.min(a0, p); a1 = Math.max(a1, p); }
+    for (const [x, z] of B) { const p = x * ax + z * az; b0 = Math.min(b0, p); b1 = Math.max(b1, p); }
+    if (a1 < b0 || b1 < a0) return false;
+  }
+  return true;
+}
+export function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+
+// ---------------------------------------------------------------- the layout
+/**
+ * Builds the village: smooth road centrelines, all buildings (traced + generated) and the plot props.
+ * `terrH(x, z)` gives the terrain height; `existingRoads` are the surviving old road samples [x,z,y,hw,...].
+ */
+export function buildVillageLayout(terrH, existingRoads = []) {
+  const roads = ROADS.map(r => ({ ...r, line: smoothPolyline(r.pts, 3) }));
+  const rnd = mulberry32(20261108);
+  const slopeAt = (x, z) => { const e = 3, dx = terrH(x + e, z) - terrH(x - e, z), dz = terrH(x, z + e) - terrH(x, z - e); return Math.hypot(dx, dz) / (2 * e); };
+  const nearestRoad = (x, z) => { let bestR = null, best = { d: Infinity }; for (const r of roads) { const h = distToPolyline(x, z, r.line); if (h.d < best.d) { best = h; bestR = r; } } return { r: bestR, ...best }; };
+  const roadClear = (b, margin) => {
+    for (const c of rectCorners({ ...b, w: b.w + 2 * margin, d: b.d + 2 * margin })) {
+      for (const r of roads) if (distToPolyline(c[0], c[1], r.line).d < r.w / 2 + 0.4) return false;
+    }
+    for (let k = 0; k < existingRoads.length; k += 4) { const dx = existingRoads[k] - b.x, dz = existingRoads[k + 1] - b.z; if (dx * dx + dz * dz < (existingRoads[k + 3] + Math.hypot(b.w, b.d) / 2 + margin) ** 2) return false; }
+    return true;
+  };
+
+  const buildings = TRACED.map(b => ({ ...b }));
+  const S = SITES;
+  buildings.push({ x: S.mosque.x, z: S.mosque.z, yaw: 0, w: 13, d: 19, kind: 'mosque' });
+  buildings.push({ x: S.mosque.x + 8.7, z: S.mosque.z - 6.7, yaw: 0, w: 2.6, d: 2.6, kind: 'minaret' });
+  // traced houses that landed on a re-drawn road are nudged away from it, perpendicular to the road
+  for (const b of buildings) {
+    if (!b.traced) continue;
+    for (let it = 0; it < 8 && !roadClear(b, 0.6); it++) {
+      const h = nearestRoad(b.x, b.z), p = h.r.line[h.i], q = h.r.line[Math.min(h.r.line.length - 1, h.i + 1)], dx = q[0] - p[0], dz = q[1] - p[1], L = Math.hypot(dx, dz) || 1;
+      const nx = -dz / L, nz = dx / L, side = Math.sign((b.x - p[0]) * nx + (b.z - p[1]) * nz) || 1;
+      b.x += nx * side; b.z += nz * side;
+    }
+    const h = nearestRoad(b.x, b.z), p = h.r.line[h.i], q = h.r.line[Math.min(h.r.line.length - 1, h.i + 1)];
+    b.face = Math.atan2(p[1] - b.z, p[0] - b.x); b.front = h.d;
+    // the detector's axis is unreliable for near-square roofs: snap those to the road or to north
+    if (Math.max(b.w, b.d) / Math.min(b.w, b.d) < 1.55 && !b.kind) {
+      const roadYaw = Math.atan2(-(q[1] - p[1]), q[0] - p[0]);
+      const m90 = (a) => ((a % (Math.PI / 2)) + Math.PI / 2) % (Math.PI / 2);
+      const dRoad = Math.min(Math.abs(m90(b.yaw) - m90(roadYaw)), Math.PI / 2 - Math.abs(m90(b.yaw) - m90(roadYaw)));
+      const dAxis = Math.min(m90(b.yaw), Math.PI / 2 - m90(b.yaw));
+      b.yaw = dRoad < dAxis ? roadYaw : 0;
+    } else if (b.kind === 'market' || b.kind === 'kahve') b.yaw = 0;
+  }
+
+  // --- generated houses along the streets outside the photographed block ---
+  const centre = [60, 55];
+  const inPhoto = (x, z) => x > IMG_RECT.x0 - 4 && x < IMG_RECT.x1 + 4 && z > IMG_RECT.z0 - 4 && z < IMG_RECT.z1 + 4;
+  const placed = buildings.slice();
+  const tryPlace = (b, margin = 2.5) => {
+    if (inPhoto(b.x, b.z) || !inRegion(b.x, b.z)) return false;
+    if (terrH(b.x, b.z) < 3 || slopeAt(b.x, b.z) > 0.22) return false;
+    if (!roadClear(b, 0.8)) return false;
+    for (const o of placed) if (rectsOverlap(b, o, margin)) return false;
+    placed.push(b); buildings.push(b); return true;
+  };
+  for (const r of roads) {
+    const L = r.line, total = polyLength(L);
+    for (const side of [-1, 1]) {
+      let s = 6 + rnd() * 10;
+      while (s < total - 6) {
+        let acc = 0, i = 0; while (i + 1 < L.length && acc + Math.hypot(L[i + 1][0] - L[i][0], L[i + 1][1] - L[i][1]) < s) { acc += Math.hypot(L[i + 1][0] - L[i][0], L[i + 1][1] - L[i][1]); i++; }
+        const p = L[i], q = L[Math.min(L.length - 1, i + 1)], dx = q[0] - p[0], dz = q[1] - p[1], len = Math.hypot(dx, dz) || 1, t = Math.min(1, (s - acc) / len);
+        const px = p[0] + dx * t, pz = p[1] + dz * t, tx = dx / len, tz = dz / len, nx = -tz * side, nz = tx * side;
+        const dist = Math.hypot(px - centre[0], pz - centre[1]);
+        const pSkip = 0.04 + 0.5 * Math.max(0, Math.min(1, (dist - 150) / 280));
+        const w = 8 + rnd() * 5, d = 7 + rnd() * 4, setback = r.w / 2 + 3 + rnd() * 5 + (rnd() < 0.2 ? 10 + rnd() * 8 : 0);
+        const twoStorey = rnd() < (dist < 200 ? 0.42 : 0.28);
+        const roofs = ['h', 'h', 'h', 'g', 'g', 'm'];
+        const b = { x: px + nx * (setback + d / 2), z: pz + nz * (setback + d / 2), yaw: Math.atan2(-tz, tx), w, d, storeys: twoStorey ? 2 : 1, roof: roofs[Math.floor(rnd() * roofs.length)], face: Math.atan2(-nz, -nx), front: setback };
+        if (rnd() > pSkip && tryPlace(b)) {
+          if (rnd() < 0.4) { // barn / store behind the house
+            const bw = 5 + rnd() * 3, bd = 3.5 + rnd() * 1.5, back = setback + d + 2.5 + rnd() * 4;
+            const o = { x: px + nx * (back + bd / 2) + tx * (rnd() - 0.5) * 6, z: pz + nz * (back + bd / 2) + tz * (rnd() - 0.5) * 6, yaw: b.yaw, w: bw, d: bd, storeys: 1, roof: rnd() < 0.6 ? 'm' : 'g', barn: true };
+            tryPlace(o, 1.2);
+          }
+          b.wall = rnd() < 0.5 ? 'wall' : rnd() < 0.5 ? 'fence' : 'none';
+          b.tree = rnd() < 0.7;
+        }
+        s += w + (dist < 160 ? 2 + rnd() * 6 : 5 + rnd() * 12);
+      }
+    }
+  }
+  for (const b of buildings) if (b.traced && !b.kind) { b.wall = rnd() < 0.55 ? 'wall' : 'fence'; b.tree = rnd() < 0.75; }
+
+  // per-building ground: floor level at the highest corner, plinth reaching the lowest
+  for (const b of buildings) {
+    const hs = rectCorners(b).map(([x, z]) => terrH(x, z)); hs.push(terrH(b.x, b.z));
+    b.yTop = Math.max(...hs) + 0.05; b.yLow = Math.min(...hs) - 0.4;
+  }
+  return { roads, buildings, sites: SITES, rnd };
+}
+
+/** Road samples in the data4 format ([x, z, y, halfWidth, ...]) for collision, the car and the minimap. */
+export function roadSamples(roads, terrH, lift) {
+  const out = [];
+  for (const r of roads) for (const [x, z] of smoothPolyline(r.pts, 1.5)) out.push(x, z, terrH(x, z) + lift(r.kind), r.w / 2);
+  return out;
+}
+/** Building boxes in the data4 format ([x, z, yaw, hw, hd, ...]) for collision and the minimap. */
+export function buildingBoxes(buildings) {
+  const out = [];
+  for (const b of buildings) out.push(b.x, b.z, b.yaw, b.w / 2, b.d / 2);
+  return out;
+}

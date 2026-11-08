@@ -114,7 +114,7 @@ canvas { display: block; touch-action: none; }
 <div class="toast" id="toast"></div>
 
 <div class="topbar">
-  <div class="brand"><h1>Köprüköy</h1><div class="sub">Keskin · Kırıkkale, Türkiye — 3D v0.7</div></div>
+  <div class="brand"><h1>Köprüköy</h1><div class="sub">Keskin · Kırıkkale, Türkiye — 3D v0.8</div></div>
   <div class="modes" id="modes" role="tablist" aria-label="Navigation mode">
     <button data-mode="orbit" class="on">Orbit</button>
     <button data-mode="walk">Walk</button>
@@ -133,7 +133,7 @@ canvas { display: block; touch-action: none; }
       <button class="pbtn" data-view="kopru">Bridge</button>
       <button class="pbtn" data-view="gezi">Promenade</button>
       <button class="pbtn" data-view="kanyon">Canyon</button>
-      <button class="pbtn" data-view="detay">Mosque area</button>
+      <button class="pbtn" data-view="detay">Village centre</button><button class="pbtn" data-view="cami">Mosque</button>
       <button class="pbtn" data-view="tepe">Top-down</button>
     </div>
   </div>
@@ -160,7 +160,7 @@ canvas { display: block; touch-action: none; }
     <label class="chip" style="width:100%;justify-content:space-between"><span>Time <b id="sunVal">15:00</b></span>
       <input type="range" id="sun" min="6" max="20" step="0.25" value="15" style="flex:1;margin-left:10px" aria-label="Time of day"></label>
   </div>
-  <p class="note"><strong>v0.7 — materials.</strong> Physically based, world-space textured surfaces: layered steppe terrain (soil, dry grass, gravel, rock on slopes, shoreline), weathered plaster / stone / concrete façades with per-house variation, clay-tile roofs, worn asphalt and dirt roads, Seljuk ashlar on the bridge, a depth-aware reservoir and instanced dry-grass ground cover. Geometry, roads, footprints and the 724 m lake level are unchanged from v0.6 (SRTM 30 m terrain, satellite-traced roads). Storey counts and façade details are still estimates.</p>
+  <p class="note"><strong>v0.8 — village rebuilt.</strong> The centre is re-drawn from the satellite image and street photographs: a connected street network (Köprüköy Köyü Yolu, the Güvendioğlu Market junction, the mosque street) with blue-white kerbs and pavements, the old municipality building and the Atatürk statue on its earth square, the turquoise mosque with its single minaret and red courtyard wall, houses with recessed windows, sills, eaves, gutters, balconies and roof clutter, poplars and mulberry trees, utility poles and fences. Terrain (SRTM 30 m), the reservoir and the Çeşnigir Bridge are unchanged; the bridge now has carved voussoirs, cutwater caps and parapet stones. Storey counts and façade details are still estimates.</p>
 </aside>
 
 <div class="hud" id="hud"><div class="speedo"><b id="spd">0</b><span id="gearTxt">km/h · N</span></div></div>
@@ -186,8 +186,10 @@ import { Sky } from 'three/addons/objects/Sky.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { setupRealism } from './src/realism.js';
 import { tagBuildings } from './src/buildings.js';
+import { buildVillageLayout, roadSamples, buildingBoxes, inRegion } from './src/village_layout.js';
+import { pruneOldVillage, LIFT } from './src/village.js';
 
-const POIS = [{"id": "kopru", "label": "Çeşnigir Bridge", "kind": "tarihi", "pos": [-377, 16, -277]}, {"id": "viyaduk", "label": "D.260 viaduct", "kind": "yol", "pos": [-539, 22, -105]}, {"id": "d260a", "label": "D.260", "kind": "yon", "pos": [-951, 35, -319]}, {"id": "d260b", "label": "D.260", "kind": "yon", "pos": [154, 36, 568]}, {"id": "karakecili", "label": "To Karakeçili", "kind": "yon", "pos": [-825, 21, -209]}, {"id": "gezi", "label": "Promenade", "kind": "yer", "pos": [-267, 14, -57]}, {"id": "seyir", "label": "Viewpoint rock", "kind": "yer", "pos": [-292, 24, -338]}, {"id": "iskele", "label": "Boat pier", "kind": "yer", "pos": [-305, 9, -367]}, {"id": "kanyon", "label": "Çeşnigir Canyon", "kind": "yer", "pos": [-277, 55, -602]}, {"id": "nehir", "label": "Kızılırmak · Kapulukaya Reservoir", "kind": "su", "pos": [-318, 8, 331]}, {"id": "cami", "label": "Village mosque", "kind": "yapi", "pos": [106, 70, 108]}, {"id": "mescit", "label": "Small mosque (mescit)", "kind": "yapi", "pos": [-143, 24, 203]}, {"id": "merkez", "label": "Village centre", "kind": "yapi", "pos": [59, 43, -16]}];
+const POIS = [{"id": "kopru", "label": "Çeşnigir Bridge", "kind": "tarihi", "pos": [-377, 16, -277]}, {"id": "viyaduk", "label": "D.260 viaduct", "kind": "yol", "pos": [-539, 22, -105]}, {"id": "d260a", "label": "D.260", "kind": "yon", "pos": [-951, 35, -319]}, {"id": "d260b", "label": "D.260", "kind": "yon", "pos": [154, 36, 568]}, {"id": "karakecili", "label": "To Karakeçili", "kind": "yon", "pos": [-825, 21, -209]}, {"id": "gezi", "label": "Promenade", "kind": "yer", "pos": [-267, 14, -57]}, {"id": "seyir", "label": "Viewpoint rock", "kind": "yer", "pos": [-292, 24, -338]}, {"id": "iskele", "label": "Boat pier", "kind": "yer", "pos": [-305, 9, -367]}, {"id": "kanyon", "label": "Çeşnigir Canyon", "kind": "yer", "pos": [-277, 55, -602]}, {"id": "nehir", "label": "Kızılırmak · Kapulukaya Reservoir", "kind": "su", "pos": [-318, 8, 331]}];
 const isTouch = matchMedia('(pointer: coarse)').matches;
 const LITE = location.hash === '#lite';
 // render quality tier: 0 = lite, 1 = mobile, 2 = desktop
@@ -285,7 +287,7 @@ function pushOut(p, r) {
 
 // ---------- model ----------
 const layers = { bina: [], agac: [], yol: [] };
-let waterMat = null, terrainMesh = null, realism = null;
+let waterMat = null, terrainMesh = null, realism = null, VILLAGE = null;
 function mergeByMaterial(group) {
   group.updateMatrixWorld(true);
   const buckets = new Map();
@@ -325,6 +327,15 @@ function makeWaterNormals() {
 async function loadAll() {
   const [{ default: b64 }, { default: data }] = await Promise.all([import('./model4.js'), import('./data4.js')]);
   D = data; X0 = D.grid.x0; Z0 = D.grid.z0; TSZ = D.grid.size; terrainSeg = D.grid.seg; terrainCs = TSZ / terrainSeg; Hh = Float32Array.from(D.grid.h);
+  // v0.8: the village centre is re-laid out (see src/village_layout.js); swap its roads / footprints in the collision data
+  const oldR = D.roads, keepR = [];
+  for (let k = 0; k < oldR.length; k += 4) if (!inRegion(oldR[k], oldR[k + 1]) || oldR[k + 3] > 5) keepR.push(oldR[k], oldR[k + 1], oldR[k + 2], oldR[k + 3]);
+  VILLAGE = buildVillageLayout(terrH, keepR);
+  D.roads = keepR.concat(roadSamples(VILLAGE.roads, terrH, kind => LIFT[kind]));
+  const oldB = D.buildings, keepB = [];
+  for (let k = 0; k < oldB.length; k += 5) if (!inRegion(oldB[k], oldB[k + 1])) keepB.push(...oldB.slice(k, k + 5));
+  D.buildings = keepB.concat(buildingBoxes(VILLAGE.buildings));
+  D.spawn = { car: [20, 56], walk: [46, 47] };
   buildHashes();
   const bin = atob(b64), buf = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
   const ld = new GLTFLoader(); ld.setMeshoptDecoder(MeshoptDecoder);
@@ -343,6 +354,8 @@ loadAll().then(gltf => {
       waterMat.normalScale.set(0.35, 0.35); o.material = waterMat; o.castShadow = false;
     }
   });
+  // v0.8: drop the old draft of the village centre (houses, streets, mosque, trees) before merging; it is rebuilt in setupRealism
+  pruneOldVillage(m);
   // tag every building with an id / ground line / roof line / orientation before merging (used by the façade shaders)
   let bid = 1; for (const n of ['Konutlar', 'Kiyi_ve_Kamu', 'Cesnigir_Koprusu', 'Yollar']) { const g = m.getObjectByName(n); if (g) bid = tagBuildings(g, bid); }
   const merged = {};
@@ -355,7 +368,7 @@ loadAll().then(gltf => {
   scene.add(m);
   buildMinimapBase();
   placeCarAtSpawn();
-  return setupRealism({ renderer, scene, model: m, merged, D, terrH, surfaceAt, quality: QUALITY, isTouch, layers, sun, hemi, sky: su, camera, controls })
+  return setupRealism({ renderer, scene, model: m, merged, D, terrH, surfaceAt, quality: QUALITY, isTouch, layers, sun, hemi, sky: su, camera, controls, village: VILLAGE })
     .then(r => { realism = r; waterMat = null; })
     .catch(err => console.error('realism layer failed, falling back to base materials', err));
 }).then(() => {
@@ -369,7 +382,7 @@ document.getElementById('lyEtiket').addEventListener('change', e => labelsEl.sty
 const lbls = POIS.map(p => { const d = document.createElement('div'); d.className = `lbl ${p.kind}`; d.textContent = p.label; labelsEl.appendChild(d); return { el: d, v: new THREE.Vector3(...p.pos) }; });
 const tmpV = new THREE.Vector3();
 function placeLabels() {
-  const far = mode === 'orbit' ? 3000 : 700;
+  const far = mode === 'orbit' ? 3000 : 320;
   for (const l of lbls) {
     tmpV.copy(l.v).project(camera); const dist = camera.position.distanceTo(l.v);
     if (tmpV.z > 1 || tmpV.z < -1 || dist > far) { l.el.style.display = 'none'; continue; }
@@ -642,7 +655,8 @@ const V = {
   kopru:  { p: [-397, 55, -107], t: [-377, 0, -307] },
   gezi:   { p: [-185, 62, -285], t: [-300, 4, -320] },
   kanyon: { p: [-262, 42, -350], t: [-300, 5, -640] },
-  detay:  { p: [-170, 150, 420], t: [-10, 30, 170] },
+  detay:  { p: [150, 62, 15], t: [38, 27, 48] },
+  cami:   { p: [185, 48, 160], t: [118, 32, 96] },
   tepe:   { p: [-60, 1450, 1], t: [-60, 0, 0] },
 };
 let anim = null;

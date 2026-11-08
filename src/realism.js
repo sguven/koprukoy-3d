@@ -7,6 +7,9 @@ import { terrainMaterial } from './terrain.js';
 import { buildingMaterialFactory } from './buildings.js';
 import { roadMaterialFactory, rockMaterial, roughenRocks, waterMaterial } from './surfaces.js';
 import { canopyMaterials, trunkMaterial, groundCover } from './vegetation.js';
+import { villageMaterials } from './village_materials.js';
+import { buildVillage } from './village.js';
+import { detailBridge } from './bridge.js';
 
 export async function setupRealism(ctx) {
   const { renderer, model, quality } = ctx;
@@ -66,14 +69,32 @@ export async function setupRealism(ctx) {
 
   // ---- vegetation ------------------------------------------------------------
   const canopy = model.getObjectByName('Agaclar_Yaprak'), trunks = model.getObjectByName('Agaclar_Govde');
-  if (canopy && !off.has('no-trees')) { const c = canopyMaterials(lib, { quality }); canopy.material = c.material; canopy.customDepthMaterial = c.depth; canopy.customDistanceMaterial = c.distance; }
-  if (trunks && !off.has('no-trees')) trunks.material = trunkMaterial(lib);
+  const canopyM = canopyMaterials(lib, { quality }), trunkM = trunkMaterial(lib);
+  if (canopy && !off.has('no-trees')) { canopy.material = canopyM.material; canopy.customDepthMaterial = canopyM.depth; canopy.customDistanceMaterial = canopyM.distance; }
+  if (trunks && !off.has('no-trees')) trunks.material = trunkM;
+  ctx.canopy = canopyM; ctx.trunkMat = trunkM;
   let cover = null;
   if (!off.has('no-cover')) {
     cover = groundCover(lib, { D: ctx.D, terrH: ctx.terrH, surfaceAt: ctx.surfaceAt, macroImage: ctx.macroMap && ctx.macroMap.image, macroMap: ctx.macroMap, quality });
     if (cover) { for (const m of cover.meshes) { ctx.scene.add(m); ctx.layers.agac.push(m); } }
   }
   log('vegetation');
+
+  // ---- the rebuilt village centre (v0.8) ----------------------------------------------------
+  if (ctx.village && !off.has('no-village')) {
+    const M = villageMaterials(lib, { quality });
+    const v = buildVillage(ctx, ctx.village, M);
+    ctx.scene.add(v.group);
+    v.group.traverse(o => {
+      if (!o.isMesh && !o.isLineSegments) return;
+      if (/^V_(road|kerb|pave|square|lawn)/.test(o.name)) ctx.layers.yol.push(o);
+      else if (/^Koy_Agac/.test(o.name)) ctx.layers.agac.push(o);
+      else ctx.layers.bina.push(o);
+    });
+    log('village');
+  }
+  // ---- bridge detail: voussoirs, cutwater caps, parapet stones ------------------------------
+  if (!off.has('no-bridge')) { const br = detailBridge(model, lib, pick); if (br) { ctx.scene.add(br); ctx.layers.bina.push(br); } log('bridge'); }
 
   return { lib, swapped, update(now) {
     if (waterMat && waterMat.userData.shader) waterMat.userData.shader.uniforms.uTime.value = now * 0.001;
