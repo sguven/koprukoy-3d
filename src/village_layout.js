@@ -196,7 +196,9 @@ export function buildVillageLayout(terrH, existingRoads = []) {
   // per-building ground: floor level at the highest corner, plinth reaching the lowest
   for (const b of buildings) {
     const hs = rectCorners(b).map(([x, z]) => terrH(x, z)); hs.push(terrH(b.x, b.z));
-    b.yTop = Math.max(...hs) + 0.05; b.yLow = Math.min(...hs) - 0.4;
+    const hMax = Math.max(...hs), hMin = Math.min(...hs), range = hMax - hMin;
+    // cut-and-fill on slopes (Street View 99): floor sits part-way down the drop so the plinth never grows past ~3 m
+    b.yTop = (range > 1.5 ? hMax - 0.5 * (range - 1.5) : hMax) + 0.05; b.yLow = hMin - 0.4;
   }
   return { roads, buildings, sites: SITES, rnd };
 }
@@ -217,7 +219,9 @@ export function buildCentreLayout(terrH) {
     { x: CENTRE_MOSQUE.x + 8.7, z: CENTRE_MOSQUE.z - 6.7, yaw: 0, w: 2.6, d: 2.6, kind: 'minaret' }];
   for (const b of buildings) {
     const hs = rectCorners(b).map(([x, z]) => terrH(x, z)); hs.push(terrH(b.x, b.z));
-    b.yTop = Math.max(...hs) + 0.05; b.yLow = Math.min(...hs) - 0.4;
+    const hMax = Math.max(...hs), hMin = Math.min(...hs), range = hMax - hMin;
+    // cut-and-fill on slopes (Street View 99): floor sits part-way down the drop so the plinth never grows past ~3 m
+    b.yTop = (range > 1.5 ? hMax - 0.5 * (range - 1.5) : hMax) + 0.05; b.yLow = hMin - 0.4;
   }
   const sites = { ...SITES, municipality: muniB, mosque: { ...CENTRE_MOSQUE, yaw: 0 } };
   return { roads: [], buildings, sites, rnd: mulberry32(20261108), centreOnly: true };

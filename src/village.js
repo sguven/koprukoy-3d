@@ -211,7 +211,7 @@ export function buildVillage(ctx, layout, M) {
     const add = (key, geo, m) => { if (m) geo.applyMatrix4(m); bat.add(key, geo, frame, bld); };
     const front = frontSide(b), isBarn = !!b.barn;
     // plinth
-    add('plinth', boxY(w + 0.16, d + 0.16, b.yLow - b.yTop - 0.3, y0 + 0.02));
+    add(b.yTop - b.yLow > 1.9 ? 'rubble' : 'plinth', boxY(w + 0.16, d + 0.16, b.yLow - b.yTop - 0.3, y0 + 0.02));   // tall drops read as rubble retaining walls (Street View 78/86)
     // façades with window / door holes
     const balcony = n === 2 && !isBarn && rnd() < 0.5, stair = n === 2 && !isBarn && rnd() < 0.3;
     const stairSide = stair ? (front === '+z' || front === '-z' ? (rnd() < 0.5 ? '+x' : '-x') : (rnd() < 0.5 ? '+z' : '-z')) : null;
@@ -361,7 +361,7 @@ export function buildVillage(ctx, layout, M) {
     const FH = 3.2, n = 3, y0 = 0.5, y1 = y0 + n * FH + 0.3;
     const bld = { id, base: b.yTop, top: b.yTop + y1, yaw: b.yaw, cx: b.x, cz: b.z };
     const add = (key, geo, m) => { if (m) geo.applyMatrix4(m); bat.add(key, geo, frame, bld); };
-    add('plinth', boxY(w + 0.2, d + 0.2, b.yLow - b.yTop - 0.3, y0 + 0.02));
+    add(b.yTop - b.yLow > 1.9 ? 'rubble' : 'plinth', boxY(w + 0.2, d + 0.2, b.yLow - b.yTop - 0.3, y0 + 0.02));
     // the square lies east of the building; local -z faces east (yaw ~ -95°)
     const front = frontSide({ ...b, face: 0 });
     for (const side of ['+z', '-z', '+x', '-x']) {

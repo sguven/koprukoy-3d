@@ -148,3 +148,15 @@
 ## SV92/93 — (449,323) pin frame, SE lane, heading 49 / 220
 - NE: dry granite wall L with bare walnut + cream 1F (431,306); R = long clipped thuja hedge + white wall around (489,342); red tricycle cart on the lane; red/brick houses ahead; rocky ridge.
 - SW: old grey plaster 1F w/ blue steel gate and timber shed (427,327) L; white rendered wall + spruce and white 1F R; wide earth road dropping toward the lake.
+
+## SV94/95 — (165,-84) pin frame, N junction by Yeni Cami, heading 0 / 171
+- N: brick-paved junction; L = grey rough-plaster flat shed (149,-81), big bare tree; open lots; 2F grey house R (190,-96); houses on the N ridge.
+- S: Yeni Cami stone hall + minaret (already modelled); L = rubble stone barn w/ tile roof (144,-68), water tanker trailer, brick-paved forecourt, pines behind.
+
+## SV96/97 — (233,-201) pin frame, N edge lane, heading 66 / 237
+- NE: bare slope with earth/manure heaps, unrendered concrete-block 1F shell (257,-174) R; brick 1F and tile houses on the ridge; power poles.
+- SW: black plastic-sheeted tunnels / hay stores and tarp fences (191,-181); white/cream 1F houses; lake and the D260 escarpment beyond; bare poplar.
+
+## SV98/99 — (301,-151) pin frame, NE lane, heading 96 / 267
+- E: brick-paved lane; white 1F w/ barred windows behind rendered wall + steel double gate (327,-161); tile roofs and 2F houses on the E rise; rocky hills.
+- W: paved lane downhill between a long cream 1F + granite rubble wall (278,-164) R and white 1F w/ solar heater (287,-125) L; lake plateau horizon; power pole.

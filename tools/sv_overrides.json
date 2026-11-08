@@ -1145,5 +1145,93 @@
   "roof": "h",
   "fence": "none",
   "note": "SV93 old grey plaster 1F w/ blue steel gate + timber lean-to, tile roof"
+ },
+ {
+  "xz": [
+   148.9,
+   -80.9
+  ],
+  "storeys": 1,
+  "wall": "Duvar_Gri",
+  "roof": "f",
+  "fence": "none",
+  "note": "SV94 grey rough-plaster flat-roof shed w/ timber edge at the N junction"
+ },
+ {
+  "xz": [
+   144.4,
+   -67.8
+  ],
+  "storeys": 1,
+  "wall": "rubble",
+  "roof": "h",
+  "fence": "none",
+  "note": "SV95 rubble stone barn with tile roof next to Yeni Cami"
+ },
+ {
+  "xz": [
+   256.9,
+   -173.5
+  ],
+  "storeys": 1,
+  "wall": "Duvar_Beton",
+  "roof": "f",
+  "fence": "none",
+  "note": "SV96 unrendered concrete-block 1F shell, manure heap (was 2F)"
+ },
+ {
+  "xz": [
+   248.4,
+   -237.7
+  ],
+  "storeys": 1,
+  "wall": "redWall",
+  "roof": "h",
+  "fence": "none",
+  "note": "SV96 brick 1F on the N ridge"
+ },
+ {
+  "xz": [
+   191.3,
+   -180.6
+  ],
+  "storeys": 1,
+  "wall": "Duvar_Gri",
+  "roof": "f",
+  "fence": "fence",
+  "note": "SV97 plastic-sheeted hay/greenhouse tunnels + grey sheds, tarp fence (was 2F 32x15)"
+ },
+ {
+  "xz": [
+   327.3,
+   -161.4
+  ],
+  "storeys": 1,
+  "wall": "Duvar_Beyaz",
+  "roof": "h",
+  "fence": "wall",
+  "note": "SV98 white 1F w/ barred windows + rendered wall and steel gate (was 2F)"
+ },
+ {
+  "xz": [
+   277.9,
+   -164.3
+  ],
+  "storeys": 1,
+  "wall": "Duvar_Krem",
+  "roof": "h",
+  "fence": "stone",
+  "note": "SV99 long cream 1F on the paved lane, granite rubble wall 1.2 m"
+ },
+ {
+  "xz": [
+   287.3,
+   -124.7
+  ],
+  "storeys": 1,
+  "wall": "Duvar_Beyaz",
+  "roof": "h",
+  "fence": "fence",
+  "note": "SV99 white 1F red roof w/ solar heater L of lane (was 2F)"
  }
 ]
