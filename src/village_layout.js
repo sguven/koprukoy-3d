@@ -166,7 +166,7 @@ export function buildVillageLayout(terrH, existingRoads = []) {
   };
 
   const buildings = TRACED.map(b => ({ ...b }));
-  for (const [x, z, yaw, w, d, storeys, roof, kind] of DATA_BUILDINGS) buildings.push({ x, z, yaw, w, d, storeys, roof, kind, traced: true, sat: true });
+  for (const [x, z, yaw, w, d, storeys, roof, extra] of DATA_BUILDINGS) { const e = { ...(extra || {}) }; if (e.wall) { e.wallKey = e.wall; delete e.wall; } buildings.push({ x, z, yaw, w, d, storeys, roof, ...e, traced: true, sat: true }); }
   const S = SITES;
   buildings.push({ x: S.mosque.x, z: S.mosque.z, yaw: 0, w: 13, d: 19, kind: 'mosque' });
   buildings.push({ x: S.mosque.x + 8.7, z: S.mosque.z - 6.7, yaw: 0, w: 2.6, d: 2.6, kind: 'minaret' });
@@ -191,7 +191,7 @@ export function buildVillageLayout(terrH, existingRoads = []) {
     } else if (b.kind === 'market' || b.kind === 'kahve') b.yaw = 0;
   }
 
-  for (const b of buildings) if (b.traced && !b.kind) { const u = rnd(); b.wall = u < 0.32 ? 'wall' : u < 0.62 ? 'stone' : u < 0.88 ? 'fence' : 'none'; b.tree = rnd() < 0.75; }
+  for (const b of buildings) if (b.traced && !b.kind) { const u = rnd(); b.wall = b.fence || (u < 0.32 ? 'wall' : u < 0.62 ? 'stone' : u < 0.88 ? 'fence' : 'none'); b.tree = rnd() < 0.75; }
 
   // per-building ground: floor level at the highest corner, plinth reaching the lowest
   for (const b of buildings) {

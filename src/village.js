@@ -122,6 +122,10 @@ export function buildVillage(ctx, layout, M) {
   buildStatue(S.statue); buildGazebo(S.gazebo);
   if (!centreOnly) {
     for (const c of S.cemeteries || []) buildCemetery(c);
+    for (const row of S.treeRows || []) {
+      const [a, b] = row.pts, L = Math.hypot(b[0] - a[0], b[1] - a[1]), tx = (b[0] - a[0]) / L, tz = (b[1] - a[1]) / L;
+      for (let s = 3; s < L; s += row.step) for (const side of [-1, 1]) treeSpots.push({ x: a[0] + tx * s - tz * row.offset * side, z: a[1] + tz * s + tx * row.offset * side, species: row.species, size: 1.1 + rnd() * 0.4, force: true });
+    }
     if (S.pitch) { bat.add('lawn', patch(S.pitch.x, S.pitch.z, S.pitch.w, S.pitch.d, 0, yAt, 0.07, 1.0)); for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) props.push({ kind: 'pole', x: S.pitch.x + sx * S.pitch.w / 2, z: S.pitch.z + sz * S.pitch.d / 2, prev: null }); }
   }
   /** Village cemetery (satellite + Street View): low rubble wall, scattered upright headstones, a few pines. */
@@ -161,7 +165,7 @@ export function buildVillage(ctx, layout, M) {
     const n = b.storeys || 1, w = b.w, d = b.d;
     const y0 = PLINTH, y1 = PLINTH + n * FLOOR + 0.2;
     const bld = { id, base: b.yTop, top: b.yTop + y1, yaw: b.yaw, cx: b.x, cz: b.z };
-    const wallKey = b.kind === 'school' ? 'redWall' : b.kind === 'market' || b.kind === 'kahve' ? 'Duvar_Beyaz' : WALLS[Math.floor(rnd() * WALLS.length)];
+    const wallKey = b.wallKey || (b.kind === 'school' ? 'redWall' : b.kind === 'market' || b.kind === 'kahve' ? 'Duvar_Beyaz' : WALLS[Math.floor(rnd() * WALLS.length)]);
     const roofKey = b.roof === 'm' ? (rnd() < 0.7 ? 'Cati_Sac_Gri' : 'Cati_Sac_Mavi') : TILES[Math.floor(rnd() * TILES.length)];
     const add = (key, geo, m) => { if (m) geo.applyMatrix4(m); bat.add(key, geo, frame, bld); };
     const front = frontSide(b), isBarn = !!b.barn;

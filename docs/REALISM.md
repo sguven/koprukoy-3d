@@ -15,7 +15,7 @@ georeferenced on the Çeşnigir Bridge place pin (39.5809021 N, 33.4292022 E == 
 |---|---|---|
 | Map layer (roads) | 12 tiles at z17 (0.60 m/px), stitched to `docs/survey/map_layer_mosaic_small.jpg` | the road network: colour mask → skeleton → graph → junction clustering → 521 centrelines |
 | Satellite | 24 tiles at z18 (0.30 m/px), `docs/survey/satellite_mosaic_0.3m_small.jpg` | 722 roof rectangles (tile / dark-red / blue sheet / white / grey), the mosque compound, cemeteries, the football pitch |
-| Street View (Apr 2026) | 13 panoramas, `docs/reference/streetview/` with `NOTES.md` | storeys, roofs, wall types, kerbs, trees, the two minarets, the market, the school |
+| Street View (Apr 2026) | 17 panoramas, `docs/reference/streetview/` with `NOTES.md` | storeys, roofs, wall types, kerbs, trees, the two minarets, the market, the school |
 
 Scripts: `tools/trace_roads.py` → `tools/clean_roads.py` (map mosaic → `roads_clean.json`), `tools/trace_buildings.py`
 (satellite mosaic → `buildings_traced.json`), `tools/build_village_data.py` (both → `src/village_data.js`).
@@ -44,6 +44,8 @@ road continues south-east of the viaduct's end as a 9 m asphalt ribbon.
 - Keskin Köprü İlkokulu as a 2-storey red-brown building; two walled cemeteries with headstones and pines; the
   football pitch; the real village extends ~150 m east of the terrain edge (x > 870) and is cut there.
 - `#centre-only` restores the v0.8 behaviour (old roads and houses, only the square and the mosque rebuilt).
+
+**Per-building Street View overrides** live in `tools/sv_overrides.json` (pin-frame position → storeys, wall colour, roof, fence type) and are matched to the nearest footprint by `build_village_data.py`; the cedar avenue east of the market is `SITES.treeRows`.
 
 **Still open**: storey counts away from Street View coverage are guesses; the lake shoreline (SRTM) still differs
 from the satellite by tens of metres south of D.260; the second mosque pair (Köprü Köyü Yeni Cami N-W, Fatih Camii

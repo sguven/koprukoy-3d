@@ -1,0 +1,55 @@
+[
+{
+"xz": [
+192,
+-95
+],
+"storeys": 2,
+"wall": "Duvar_Gri",
+"roof": "h",
+"fence": "wall",
+"note": "SV14 unfinished block house"
+},
+{
+"xz": [
+200,
+135
+],
+"storeys": 1,
+"wall": "Duvar_Gri",
+"roof": "f",
+"fence": "none",
+"note": "SV15 derelict shop row W side"
+},
+{
+"xz": [
+198,
+160
+],
+"storeys": 2,
+"wall": "Duvar_Beyaz",
+"roof": "h",
+"note": "SV15 2-storey white, brown roof"
+},
+{
+"xz": [
+210,
+268
+],
+"storeys": 1,
+"wall": "Duvar_Krem",
+"roof": "h",
+"note": "SV16 cream porch house W"
+},
+{
+"xz": [
+243,
+268
+],
+"storeys": 1,
+"wall": "Duvar_Okr",
+"roof": "h",
+"fence": "none",
+"note": "SV16 salmon house E"
+}
+]
