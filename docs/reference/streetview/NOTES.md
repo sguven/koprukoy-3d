@@ -16,3 +16,11 @@
 17 Köprüköy Köyü Yolu E of the market (257,200) looking E: an avenue of tall cedars/pines on both verges for ~60 m, blue-white kerbs, gravel asphalt; L = white single-storey public building with a wooden picket fence (health/muhtarlık?), R = rubble stone wall and pines; green mesh fence and a 2-storey house with brown roof at the end; rocky hill behind.
 18 (thumbnail only) E road further E (320,198): open grassy lot, red-brick 2-storey house, plastic greenhouses N side.
 19 (thumbnail only) N of the Yeni Cami (150,-40) looking W: rubble stone walls both sides of a gravel lane, brown hip-roof single-storey house, big bare mulberry, 6-wire pole.
+20/21 from the main road at (220,-63)/(222,-45) looking W: Köprü Köyü Yeni Cami = low cut-stone (yellow limestone) prayer hall with a hip tile roof, ONE slender stone minaret with a blue (turquoise) cap at its SE corner; playground swing on the open lot between the road and the mosque; single-storey tile houses around; brick-paved lane W.
+22 (thumb) (210,-9) E side: pink/salmon single-storey house with white window frames, green mesh fence; W side: 2-storey building with balconies (cream), parked car, 1-storey tile houses.
+23 (thumb) (222,-78) E: adobe (kerpiç) ruin with wooden lintels, 1-storey, flat earth roof.
+24 (205,24): W = old single-storey outbuildings, grey render + rubble, tile roofs, white house with solar heater behind, wire fence on wooden posts; E = concrete-block wall topped with green mesh, ochre/yellow single-storey houses, bare mulberries.
+25 (202,66): W = pines and a big bare tree, blue tarpaulins (yard); E = beige single-storey house with brown hip roof, concrete pole, brick-paved verge.
+26 (214,99) W: fenced green plot, spreading bare mulberry, cream 2-storey house behind, blue tarp.
+27 (207,132) W (thumb): kahve terrace behind a wooden fence under a big cedar (the photo-02 kahve), blue-white kerb.
+28 (219,217): E = the mosque's red west wall behind poplars, white van; W = tea garden / small park with tall pine, wooden fence, benches (çay bahçesi).

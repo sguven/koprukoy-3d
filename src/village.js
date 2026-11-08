@@ -122,11 +122,33 @@ export function buildVillage(ctx, layout, M) {
   buildStatue(S.statue); buildGazebo(S.gazebo);
   if (!centreOnly) {
     for (const c of S.cemeteries || []) buildCemetery(c);
+    for (const mn of S.minarets || []) buildMinaretAt(mn.x, mn.z);
+    for (const gd of S.gardens || []) {   // small fenced greens with pines and benches
+      bat.add('lawn', patch(gd.x, gd.z, gd.w, gd.d, 0, yAt, 0.07, 1.5));
+      for (let i = 0; i < 3; i++) treeSpots.push({ x: gd.x + (rnd() - 0.5) * (gd.w - 5), z: gd.z + (rnd() - 0.5) * (gd.d - 5), species: i < 2 ? 'pine' : 'mulberry', size: 1.1 + rnd() * 0.4, force: true });
+      props.push({ kind: 'bench', x: gd.x + gd.w / 2 - 2, z: gd.z - 3, yaw: Math.PI / 2 }, { kind: 'bench', x: gd.x + gd.w / 2 - 2, z: gd.z + 4, yaw: Math.PI / 2 }, { kind: 'bin', x: gd.x + gd.w / 2 - 1.5, z: gd.z + 7 });
+    }
     for (const row of S.treeRows || []) {
       const [a, b] = row.pts, L = Math.hypot(b[0] - a[0], b[1] - a[1]), tx = (b[0] - a[0]) / L, tz = (b[1] - a[1]) / L;
       for (let s = 3; s < L; s += row.step) for (const side of [-1, 1]) treeSpots.push({ x: a[0] + tx * s - tz * row.offset * side, z: a[1] + tz * s + tx * row.offset * side, species: row.species, size: 1.1 + rnd() * 0.4, force: true });
     }
     if (S.pitch) { bat.add('lawn', patch(S.pitch.x, S.pitch.z, S.pitch.w, S.pitch.d, 0, yAt, 0.07, 1.0)); for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) props.push({ kind: 'pole', x: S.pitch.x + sx * S.pitch.w / 2, z: S.pitch.z + sz * S.pitch.d / 2, prev: null }); }
+  }
+  /** A free-standing stone minaret (Köprü Köyü Yeni Cami: one slender shaft, single şerefe, turquoise-blue cap). */
+  function buildMinaretAt(x, z) {
+    const id = bid++, yG = yAt(x, z), frame = { x, y: yG, z, yaw: 0 }, bld = { id, base: yG, top: yG + 28, yaw: 0, cx: x, cz: z };
+    const add = (key, geo) => bat.add(key, geo, frame, bld);
+    const mx = 0, mz = 0, mb = 0.3;
+    add('limestone', boxY(2.6, 2.6, -1.5, mb + 3.6, mx, mz));
+    add('limestone', cyl(0.9, 1.75, 1.3, mx, mb + 3.6 + 0.65, mz, 8));
+    add('limestone', cyl(0.78, 0.9, 13.5, mx, mb + 4.9 + 6.75, mz, 12));
+    add('limestone', cyl(1.45, 0.78, 1.0, mx, mb + 18.4 + 0.5, mz, 12));
+    add('limestone', cyl(1.5, 1.5, 0.35, mx, mb + 19.4 + 0.17, mz, 12));
+    for (let i = 0; i < 12; i++) { const a = i / 12 * Math.PI * 2; add('limestone', box(0.12, 0.9, 0.12, mx + Math.cos(a) * 1.38, mb + 19.75 + 0.45, mz + Math.sin(a) * 1.38)); }
+    add('limestone', cyl(1.45, 1.45, 0.12, mx, mb + 20.65, mz, 12));
+    add('limestone', cyl(0.62, 0.68, 4.8, mx, mb + 19.75 + 2.4, mz, 12));
+    const cap = new THREE.ConeGeometry(0.85, 4.0, 12); cap.translate(mx, mb + 24.55 + 2.0, mz); add('turquoise', cap);
+    add('metal', cyl(0.05, 0.05, 1.4, mx, mb + 26.55 + 0.7, mz, 8));
   }
   /** Village cemetery (satellite + Street View): low rubble wall, scattered upright headstones, a few pines. */
   function buildCemetery(c) {

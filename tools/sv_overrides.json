@@ -100,5 +100,59 @@
 "roof": "f",
 "fence": "none",
 "note": "SV23 adobe ruin E"
+},
+{
+"xz": [
+190,
+22
+],
+"storeys": 1,
+"wall": "Duvar_Gri",
+"roof": "h",
+"fence": "wall",
+"note": "SV (205,24) W old barns grey render"
+},
+{
+"xz": [
+175,
+18
+],
+"storeys": 1,
+"wall": "Duvar_Beyaz",
+"roof": "h",
+"note": "SV W white house solar heater"
+},
+{
+"xz": [
+222,
+22
+],
+"storeys": 1,
+"wall": "Duvar_Sari",
+"roof": "h",
+"fence": "fence",
+"note": "SV E ochre houses behind green mesh"
+},
+{
+"xz": [
+218,
+66
+],
+"storeys": 1,
+"wall": "Duvar_Krem",
+"roof": "h",
+"fence": "none",
+"note": "SV (202,66) E beige house"
+},
+{
+"xz": [
+190,
+100
+],
+"storeys": 2,
+"wall": "Duvar_Krem",
+"roof": "h",
+"fence": "fence",
+"note": "SV26 cream 2-storey W of plot"
 }
 ]
