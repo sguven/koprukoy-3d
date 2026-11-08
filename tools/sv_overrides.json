@@ -439,5 +439,416 @@
   "roof": "h",
   "fence": "stone",
   "note": "SV49 dark red/oxblood 1F, tile roof, barred window, rubble plinth, hedge"
+ },
+ {
+  "xz": [
+   242.6,
+   -28.4
+  ],
+  "storeys": 2,
+  "wall": "redWall",
+  "roof": "h",
+  "fence": "wall",
+  "note": "SV50 unrendered red-brick 2F, tile roof, brick/block yard wall"
+ },
+ {
+  "xz": [
+   263.8,
+   14.8
+  ],
+  "storeys": 1,
+  "wall": "Duvar_Gri",
+  "roof": "f",
+  "fence": "none",
+  "note": "SV51 corrugated-sheet animal shed / carport in paved yard"
+ },
+ {
+  "xz": [
+   293.6,
+   6.7
+  ],
+  "storeys": 1,
+  "wall": "Duvar_Beyaz",
+  "roof": "h",
+  "fence": "none",
+  "note": "SV51 white 1F on ridge"
+ },
+ {
+  "xz": [
+   300.2,
+   -15.3
+  ],
+  "storeys": 2,
+  "wall": "redWall",
+  "roof": "h",
+  "fence": "none",
+  "note": "SV51 red-brick 2F on ridge"
+ },
+ {
+  "xz": [
+   407.5,
+   51.3
+  ],
+  "storeys": 1,
+  "wall": "Duvar_Krem",
+  "roof": "h",
+  "fence": "none",
+  "note": "SV52 adobe/plaster 1F barn, brick gable, sagging tile roof, firewood pile"
+ },
+ {
+  "xz": [
+   426.4,
+   36.3
+  ],
+  "storeys": 1,
+  "wall": "Duvar_Beyaz",
+  "roof": "h",
+  "fence": "none",
+  "note": "SV52 white 1F hip tile roof behind the barn (was 2F)"
+ },
+ {
+  "xz": [
+   447.0,
+   66.8
+  ],
+  "storeys": 1,
+  "wall": "Duvar_Krem",
+  "roof": "h",
+  "fence": "stone",
+  "note": "SV53 cream 1F + rubble stone outbuilding, granite dry-stone wall 1.5 m along lane (was 2F)"
+ },
+ {
+  "xz": [
+   298.1,
+   128.6
+  ],
+  "storeys": 1,
+  "wall": "Duvar_Krem",
+  "roof": "h",
+  "fence": "none",
+  "note": "SV54 long adobe-plaster 1F, timber eaves, tiny window, rubble plinth, on lane edge"
+ },
+ {
+  "xz": [
+   308.7,
+   148.2
+  ],
+  "storeys": 1,
+  "wall": "Duvar_Krem",
+  "roof": "h",
+  "fence": "none",
+  "note": "SV55 cream lime-wash 1F wall right on lane, rubble plinth (was 2F)"
+ },
+ {
+  "xz": [
+   475.2,
+   106.5
+  ],
+  "storeys": 2,
+  "wall": "Duvar_Beyaz",
+  "roof": "h",
+  "fence": "stone",
+  "note": "SV56 white 2F behind rubble wall + tall spruce"
+ },
+ {
+  "xz": [
+   481.7,
+   138.8
+  ],
+  "storeys": 2,
+  "wall": "Duvar_Somon",
+  "roof": "h",
+  "fence": "stone",
+  "note": "SV57 salmon/peach plaster 2F, small windows, grey plinth, ashlar+rubble garden wall, ploughed garden"
+ },
+ {
+  "xz": [
+   562.6,
+   97.1
+  ],
+  "add": {
+   "w": 6,
+   "d": 3,
+   "yaw": -0.3
+  },
+  "storeys": 1,
+  "wall": "Duvar_Beyaz",
+  "roof": "f",
+  "fence": "stone",
+  "note": "SV58 white portable cabin (konteyner) on a rubble-walled plot at the E road bend"
+ },
+ {
+  "xz": [
+   549.4,
+   85.0
+  ],
+  "storeys": 1,
+  "wall": "Duvar_Krem",
+  "roof": "h",
+  "fence": "stone",
+  "note": "SV58 1F behind rubble plot wall"
+ },
+ {
+  "xz": [
+   532.8,
+   124.8
+  ],
+  "storeys": 1,
+  "wall": "Duvar_Beyaz",
+  "roof": "h",
+  "fence": "none",
+  "note": "SV59 white/cream 1F, red-brown tile roof, barred windows, concrete steps to road (was 2F)"
+ },
+ {
+  "xz": [
+   398.1,
+   132.5
+  ],
+  "add": {
+   "w": 12,
+   "d": 9,
+   "yaw": 0.54
+  },
+  "storeys": 1,
+  "wall": "Duvar_Pembe",
+  "roof": "h",
+  "fence": "stone",
+  "note": "SV60 pale pink 1F, tile roof, two big spruces, rubble wall + chain-link (undetected under trees)"
+ },
+ {
+  "xz": [
+   391.4,
+   181.7
+  ],
+  "add": {
+   "w": 14,
+   "d": 10,
+   "yaw": 0.0
+  },
+  "storeys": 2,
+  "wall": "redWall",
+  "roof": "h",
+  "fence": "none",
+  "note": "SV61 red-brick 2F in green lot (undetected)"
+ },
+ {
+  "xz": [
+   367.7,
+   186.9
+  ],
+  "storeys": 1,
+  "wall": "Duvar_Krem",
+  "roof": "h",
+  "fence": "none",
+  "note": "SV61 small adobe shed"
+ },
+ {
+  "xz": [
+   359.0,
+   171.7
+  ],
+  "storeys": 2,
+  "wall": "Duvar_Beyaz",
+  "roof": "h",
+  "fence": "none",
+  "note": "SV61 white 2F"
+ },
+ {
+  "xz": [
+   508.5,
+   184.4
+  ],
+  "storeys": 2,
+  "wall": "Duvar_Okr",
+  "roof": "h",
+  "fence": "fence",
+  "note": "SV63 ochre 2F with external concrete stair, wire fence, parked car"
+ },
+ {
+  "xz": [
+   557.5,
+   194.7
+  ],
+  "storeys": 1,
+  "wall": "Duvar_Krem",
+  "roof": "h",
+  "fence": "fence",
+  "note": "SV62 1F tile house E of the green-gated plot (was 2F)"
+ },
+ {
+  "xz": [
+   426.1,
+   191.1
+  ],
+  "storeys": 1,
+  "wall": "Duvar_Krem",
+  "roof": "h",
+  "fence": "stone",
+  "note": "SV64 cream 1F hip tile roof, satellite dish, garden w/ fruit trees, rubble wall + rusty ornamental steel gate"
+ },
+ {
+  "xz": [
+   439.2,
+   183.0
+  ],
+  "storeys": 1,
+  "wall": "Duvar_Beyaz",
+  "roof": "h",
+  "fence": "stone",
+  "note": "SV64 white 1F behind"
+ },
+ {
+  "xz": [
+   322.0,
+   212.4
+  ],
+  "storeys": 1,
+  "wall": "Duvar_Beyaz",
+  "roof": "h",
+  "fence": "wall",
+  "note": "SV66 white 1F behind white rendered wall, big bare tree at the fork"
+ },
+ {
+  "xz": [
+   324.7,
+   193.3
+  ],
+  "storeys": 1,
+  "wall": "Duvar_Krem",
+  "roof": "h",
+  "fence": "wall",
+  "note": "SV66 cream 1F w/ solar heater, concrete balustrade terrace (was 2F)"
+ },
+ {
+  "xz": [
+   316.3,
+   261.1
+  ],
+  "storeys": 1,
+  "wall": "Duvar_Gri",
+  "roof": "h",
+  "fence": "fence",
+  "note": "SV67 grey-beige unrendered 1F hip roof, chain-link plot"
+ },
+ {
+  "xz": [
+   295.5,
+   261.2
+  ],
+  "storeys": 2,
+  "wall": "Duvar_Mavi",
+  "roof": "h",
+  "fence": "none",
+  "note": "SV67 pale blue 2F at the left"
+ },
+ {
+  "xz": [
+   468.2,
+   290.7
+  ],
+  "storeys": 1,
+  "wall": "redWall",
+  "roof": "h",
+  "fence": "wall",
+  "note": "SV69 dark red 1F w/ white trim, tile roof, behind concrete-block wall on ashlar base"
+ },
+ {
+  "xz": [
+   481.2,
+   259.4
+  ],
+  "storeys": 1,
+  "wall": "Duvar_Gri",
+  "roof": "h",
+  "fence": "wall",
+  "note": "SV69 low grey 1F behind block wall (not prominent in SV; was 2F)"
+ },
+ {
+  "xz": [
+   271.9,
+   263.1
+  ],
+  "storeys": 1,
+  "wall": "Duvar_Krem",
+  "roof": "h",
+  "fence": "stone",
+  "note": "SV70 long 1F behind dry rubble wall on the road"
+ },
+ {
+  "xz": [
+   284.6,
+   302.3
+  ],
+  "storeys": 1,
+  "wall": "Duvar_Gri",
+  "roof": "h",
+  "fence": "fence",
+  "note": "SV71 grey 1F brown tile roof, wire fence"
+ },
+ {
+  "xz": [
+   297.8,
+   308.1
+  ],
+  "storeys": 2,
+  "wall": "Duvar_Beyaz",
+  "roof": "h",
+  "fence": "none",
+  "note": "SV71 white 2F behind"
+ },
+ {
+  "xz": [
+   417.9,
+   256.8
+  ],
+  "storeys": 2,
+  "wall": "Duvar_Somon",
+  "roof": "h",
+  "fence": "stone",
+  "note": "SV72 salmon-pink 2F, white window trim, balcony, low rubble wall; big bare poplar/ash in the green lot"
+ },
+ {
+  "xz": [
+   376.6,
+   338.4
+  ],
+  "storeys": 2,
+  "wall": "Duvar_Mavi",
+  "roof": "h",
+  "fence": "wall",
+  "note": "SV73 pale blue 2F with white balcony, hip tile roof, rendered block wall around"
+ },
+ {
+  "xz": [
+   366.0,
+   317.0
+  ],
+  "storeys": 1,
+  "wall": "Duvar_Krem",
+  "roof": "h",
+  "fence": "wall",
+  "note": "SV73 cream 1F behind rendered wall"
+ },
+ {
+  "xz": [
+   550.1,
+   313.8
+  ],
+  "storeys": 1,
+  "wall": "rubble",
+  "roof": "h",
+  "fence": "stone",
+  "note": "SV74 roofless granite rubble ruin + adobe barn with timber lintel, dry-stone walls on 2 levels"
+ },
+ {
+  "xz": [
+   523.5,
+   338.6
+  ],
+  "storeys": 1,
+  "wall": "redWall",
+  "roof": "h",
+  "fence": "fence",
+  "note": "SV75 dark red/pink painted 1F hip tile roof, solar heater, timber gate (was 2F)"
  }
 ]

@@ -60,3 +60,55 @@
 ## SV48/49 — (109,-14) pin frame, west main road N end, heading 321 / 132
 - NW: white 2F house (87,-30) with concrete balcony and external stair, solar heater, satellite dish; attached older 1F tile-roof wing on the left; terraced garden behind a dry rubble wall (~1.2 m) topped by wire fence; bare vine/trees.
 - SE: dark red (oxblood) painted 1F house (120,-4), tile roof + corrugated lean-to, barred window, rubble plinth; dense hedge and tall poplar/ash in front; brick-paved footpath + concrete kerb.
+
+## SV50/51 — (263,-8) pin frame (snapped NW of requested (304,28)), heading 306 / 117
+- NW: unrendered red-brick 2F house w/ tile roof (243,-28) behind a brick + concrete-block yard wall, parked car, chain-link along road; Yeni Cami minaret on the far left horizon; young fruit tree.
+- SE: brick-paved yard with a steel-frame carport (sheet roof), corrugated animal sheds behind (264,15); terraced fields; on the ridge a red-brick 2F (300,-15), white 1F houses, tall pines; concrete kerb.
+
+## SV52/53 — (434,54) pin frame, E main road, heading 324 / 135
+- NW: adobe-plaster 1F barn (408,51) with exposed brick gable and sagging tile roof, firewood heap; white 1F hip house behind (426,36); concrete power pole; dirt road, grass verge.
+- SE: granite dry-stone wall ~1.5 m along the lane; behind it cream plaster 1F (447,67) with tile roof + rubble-stone outbuilding with stovepipe; bare fruit trees.
+
+## SV54/55 — (303,142) pin frame, narrow lane S of the E road, heading 351 / 162
+- N: 2.5 m grass/earth lane; L = long adobe-plaster 1F (298,129) with timber eaves and one small window, rubble plinth; R = rubble garden wall + bare trees; blue tractor trailer with firewood at the end.
+- S: cream lime-washed 1F wall (309,148) on rough rubble plinth right at the lane edge (detector said 2F → 1F).
+
+## SV56/57 — (469,136) pin frame, Köprüköy Köyü Yolu E, heading 346 / 157
+- N: two rubble walls (1.2 m roadside + 1.5 m garden), rusty steel post, chain-link above; white 2F hip house (475,107) with tall spruce; pylon; more houses NW.
+- S: salmon/peach plaster 2F (482,139) with small windows and timber eaves; garden wall of white ashlar blocks over rubble; ploughed vegetable plot, bare walnut; power pole.
+
+## SV58/59 — (539,106) pin frame, E end of Köprüköy Köyü Yolu, heading 73 / 244
+- E: road bends N at a rubble-walled plot with a white portable cabin (blue-trim windows) (~563,97); dry-stone walls, rubbish, granite outcrop ridge behind; row of young poplars/pines on the R verge; 1F tile houses NE.
+- W: white/cream 1F (533,125) with red-brown tile roof, barred windows, concrete steps; bare fruit tree in front; earth road 5 m; R = 1F tile-roof house (528,86); power poles.
+
+## SV60/61 — (389,148) pin frame, Köprüköy Köyü Yolu, heading 31 / 202
+- NE: pale-pink 1F (398,132) w/ tile roof, laundry on the porch, two tall spruces; rubble wall 1.5 m topped with chain-link, concrete kerb, grass verge.
+- SW: roadside rubble wall + chain-link on blue steel posts; green lot with old white car, a small adobe shed (368,187); red-brick 2F (391,182) and white 2F (359,172) behind; pines.
+
+## SV62/63 — (529,162) pin frame, E edge, heading 90 / 261
+- E: fenced grass plot with a green steel double gate and low rubble kerb; white 2F + 1F tile houses beyond; poplars; granite outcrop ridge NE.
+- W: wide earth road with central grass ridge; L = ochre 2F with external stair (508,184), wire fence, car; rubble/boulder heap on R verge; olive-green 1F house and tile roofs ahead; distant plateau.
+
+## SV64/65 — (429,213) pin frame, lane S of Köprüköy Köyü Yolu, heading 3 / 174
+- N: cream 1F hip-roof house (426,191) with dish; garden with young fruit trees behind a 1 m rubble wall; rusty ornamental steel gate; old tractor implement + hay pile on the verge; white 1F (439,183) to the right.
+- S: a big mulberry growing out of a rubble garden wall; ploughed garden; houses beyond.
+
+## SV66/67 — (325,236) pin frame, fork S of the E road, heading 17 / 188
+- N: Y-fork of two earth roads; L = white rendered wall + white 1F (322,212) under a big bare tree; cream 1F with solar heater + balustraded terrace (325,193) ahead; rubble/ashlar wall and fenced grass on R; concrete power pole.
+- S: grey-beige 1F hip house (316,261) in a chain-link plot with weeds; pale-blue 2F (296,261) on the L; lamp post; grass verge, earth road.
+
+## SV68/69 — (502,245) pin frame, SE lane, heading 58 / 229
+- NE: rubble retaining wall ~1 m topped by chain-link with green shade mesh; white 1F with red tile roof and solar heater behind; bare trees.
+- SW: concrete-block wall (rendered, on ashlar/rubble base) along a weedy plot; dark red 1F with white window trim and tile roof (468,291) behind, big bare tree; power poles.
+
+## SV70/71 — (257,281) pin frame, S of the mosque, heading 311 / 122
+- NW: wide pale earth road, big bare ash tree; R = dry rubble wall ~1.2 m with 1F house behind (272,263); red-brick 2F + tractor down the road; plateau horizon W.
+- SE: junction with a blue-white kerbed road going E; grey 1F w/ brown tile roof (285,302) and white 2F (298,308) beyond; rubble wall + bare trees L.
+
+## SV72/73 — (397,299) pin frame, S lane, heading 31 / 202
+- NE: overgrown green lot with a big bare ash and a dead poplar; salmon-pink 2F w/ balcony (418,257) behind a low rubble wall; grey 2F with timber balcony further R; pines L.
+- SW: large grass meadow (old farm implement); pale-blue 2F with white balcony (377,338) and cream 1F (366,317) behind a long rendered block wall; poplars; plateau horizon.
+
+## SV74/75 — (533,324) pin frame, SE edge, heading 61 / 232
+- NE: two-tier dry granite walls (boulders), a roofless rubble ruin (550,314) and an adobe barn with timber lintel behind; bare trees; red roof W.
+- SW: dark red/pink painted 1F (524,339) with hip tile roof, solar heater, timber gate/fence, parked white sedan; red 1F + pines beyond; plateau horizon.
