@@ -120,7 +120,7 @@ out_b[k]['kind'] = 'school'; out_b[k]['storeys'] = 2; out_b[k]['roof'] = 'h'
 def rect(x0, x1, z0, z1):
     a = warp(x0, z0); b = warp(x1, z1); return {'x': round((a[0] + b[0]) / 2, 1), 'z': round((a[1] + b[1]) / 2, 1), 'w': round(b[0] - a[0], 1), 'd': round(b[1] - a[1], 1)}
 TREE_ROWS = [{'pts': [list(warp(257, 196)), list(warp(320, 198))], 'species': 'pine', 'step': 6.5, 'offset': 5.0}]   # cedar avenue E of the market (Street View 17)
-GARDENS = [dict(zip(('x', 'z'), warp(196, 216)), w=16, d=22), dict(zip(('x', 'z'), warp(212, 102)), w=18, d=16)]   # tea garden S-W of the market, fenced green plot N (Street View 26/28)
+GARDENS = [dict(zip(('x', 'z'), warp(196, 216)), w=16, d=22), dict(zip(('x', 'z'), warp(212, 102)), w=18, d=16), dict(zip(('x', 'z'), warp(375, 383)), w=34, d=26, play=True)]   # tea garden S-W of the market, fenced green plot N (Street View 26/28)
 MINARETS = [dict(zip(('x', 'z'), warp(158, -26)))]   # Köprü Köyü Yeni Cami, single minaret at the SE corner (Street View 20/21)
 SITES = {'treeRows': TREE_ROWS, 'gardens': GARDENS, 'minarets': MINARETS, 'cemeteries': [rect(150, 210, 493, 568), rect(290, 365, 568, 685)], 'pitch': rect(532, 560, 735, 780), 'school': {'x': out_b[k]['x'], 'z': out_b[k]['z']}}
 with open(OUT, 'w') as f:

@@ -127,12 +127,31 @@ export function buildVillage(ctx, layout, M) {
       bat.add('lawn', patch(gd.x, gd.z, gd.w, gd.d, 0, yAt, 0.07, 1.5));
       for (let i = 0; i < 3; i++) treeSpots.push({ x: gd.x + (rnd() - 0.5) * (gd.w - 5), z: gd.z + (rnd() - 0.5) * (gd.d - 5), species: i < 2 ? 'pine' : 'mulberry', size: 1.1 + rnd() * 0.4, force: true });
       props.push({ kind: 'bench', x: gd.x + gd.w / 2 - 2, z: gd.z - 3, yaw: Math.PI / 2 }, { kind: 'bench', x: gd.x + gd.w / 2 - 2, z: gd.z + 4, yaw: Math.PI / 2 }, { kind: 'bin', x: gd.x + gd.w / 2 - 1.5, z: gd.z + 7 });
+      if (gd.play) buildPlayground(gd.x - gd.w / 4, gd.z);
     }
     for (const row of S.treeRows || []) {
       const [a, b] = row.pts, L = Math.hypot(b[0] - a[0], b[1] - a[1]), tx = (b[0] - a[0]) / L, tz = (b[1] - a[1]) / L;
       for (let s = 3; s < L; s += row.step) for (const side of [-1, 1]) treeSpots.push({ x: a[0] + tx * s - tz * row.offset * side, z: a[1] + tz * s + tx * row.offset * side, species: row.species, size: 1.1 + rnd() * 0.4, force: true });
     }
     if (S.pitch) { bat.add('lawn', patch(S.pitch.x, S.pitch.z, S.pitch.w, S.pitch.d, 0, yAt, 0.07, 1.0)); for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) props.push({ kind: 'pole', x: S.pitch.x + sx * S.pitch.w / 2, z: S.pitch.z + sz * S.pitch.d / 2, prev: null }); }
+  }
+  /** Children's playground (Street View 77, S park): orange/yellow slide with ladder, a two-seat swing frame, a sandpit kerb. */
+  function buildPlayground(x, z) {
+    const id = bid++, yG = yAt(x, z), frame = { x, y: yG, z, yaw: 0 }, bld = { id, base: yG - 1, top: yG + 3, yaw: 0, cx: x, cz: z };
+    const add = (key, geo) => bat.add(key, geo, frame, bld);
+    // slide: platform on 4 legs, ladder, sloping chute
+    for (const [sx, sz] of [[-0.6, -0.6], [0.6, -0.6], [-0.6, 0.6], [0.6, 0.6]]) add('metalDark', box(0.08, 2.0, 0.08, sx, 1.0, sz));
+    add('orange', box(1.4, 0.08, 1.4, 0, 2.0, 0));
+    add('orange', box(1.4, 0.9, 0.06, 0, 2.5, -0.7)); add('orange', box(0.06, 0.9, 1.4, -0.7, 2.5, 0));
+    for (let i = 0; i < 5; i++) add('metalDark', box(1.0, 0.05, 0.05, 0, 0.4 + i * 0.4, 0.75 + i * 0.1));
+    const chute = box(0.7, 0.06, 3.4, 0, 0, 0); chute.rotateX(-Math.PI / 2 + Math.atan2(3.0, 1.9)); chute.translate(1.8, 1.05, 0); add('flag', chute);
+    // swings
+    const sw = { x: 6, z: 0 };
+    for (const side of [-1.6, 1.6]) { for (const dz of [-0.6, 0.6]) { const leg = box(0.07, 2.4, 0.07, 0, 1.2, 0); leg.rotateX(dz > 0 ? 0.26 : -0.26); leg.translate(sw.x + side, 0, sw.z + dz); add('metalDark', leg); } }
+    add('metalDark', box(3.4, 0.07, 0.07, sw.x, 2.35, sw.z));
+    for (const dx of [-0.7, 0.7]) { for (const dr of [-0.2, 0.2]) add('metal', box(0.02, 1.8, 0.02, sw.x + dx + dr, 1.45, sw.z)); add('orange', box(0.5, 0.05, 0.22, sw.x + dx, 0.55, sw.z)); }
+    // low concrete kerb around a sand/rubber pad
+    for (const [w, d, ox, oz] of [[11, 0.25, 3, -3.2], [11, 0.25, 3, 3.2], [0.25, 6.6, -2.5, 0], [0.25, 6.6, 8.5, 0]]) add('kerb', box(w, 0.25, d, ox, 0.12, oz));
   }
   /** A free-standing stone minaret (Köprü Köyü Yeni Cami: one slender shaft, single şerefe, turquoise-blue cap). */
   function buildMinaretAt(x, z) {

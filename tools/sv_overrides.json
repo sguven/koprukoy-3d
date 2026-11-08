@@ -850,5 +850,38 @@
   "roof": "h",
   "fence": "fence",
   "note": "SV75 dark red/pink painted 1F hip tile roof, solar heater, timber gate (was 2F)"
+ },
+ {
+  "xz": [
+   453.4,
+   391.9
+  ],
+  "storeys": 1,
+  "wall": "Duvar_Mavi",
+  "roof": "h",
+  "fence": "stone",
+  "note": "SV76 blue 1F w/ white trim behind 1.5 m granite rubble wall, fruit trees (was 2F)"
+ },
+ {
+  "xz": [
+   451.1,
+   409.3
+  ],
+  "storeys": 1,
+  "wall": "Duvar_Krem",
+  "roof": "h",
+  "fence": "stone",
+  "note": "SV76 cream 1F + rubble barn (was 2F)"
+ },
+ {
+  "xz": [
+   355.5,
+   405.9
+  ],
+  "storeys": 1,
+  "wall": "Duvar_Beyaz",
+  "roof": "h",
+  "fence": "none",
+  "note": "SV77 1F red-roof house W of the park (was 2F)"
  }
 ]

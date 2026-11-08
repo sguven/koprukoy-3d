@@ -112,3 +112,7 @@
 ## SV74/75 — (533,324) pin frame, SE edge, heading 61 / 232
 - NE: two-tier dry granite walls (boulders), a roofless rubble ruin (550,314) and an adobe barn with timber lintel behind; bare trees; red roof W.
 - SW: dark red/pink painted 1F (524,339) with hip tile roof, solar heater, timber gate/fence, parked white sedan; red 1F + pines beyond; plateau horizon.
+
+## SV76/77 — (404,400) pin frame, S main road, heading 95 / 266
+- E: 1.5 m granite rubble wall along the road; blue 1F with white trim (453,392) and cream 1F + rubble barn (451,409) behind, poplars, rocky ridge.
+- W: village PARK: mown lawn, big bare ash on the verge, children's playground (orange/yellow slide, swings), timber gazebo; red-roof 1F houses and a blue pickup beyond → added as garden with `play` at (375,383).
