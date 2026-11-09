@@ -29,6 +29,10 @@ export function villageMaterials(lib, { quality = 2 } = {}) {
   // mown lawn in front of the mosque and on the small greens: fine dry-grass texture, greener and even
   M.lawn = triplanarMaterial({ set: grass, scale: 1.1, normalScale: 0.5, antiTile: 0.5, sharp: 8, tint: new THREE.Color(0x8aa050), roughBase: 1.0, cacheKey: 'lawn', polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
     extraFrag: 'albedo = mix(albedo, albedo * vec3(0.8, 1.05, 0.6), 0.5); albedo *= 0.9 + 0.2 * kk_tri(tRgh, vWPos * 0.25, kkW).r;' });
+  // v0.9.7: grapevine (asma) leaves over a pergola: the dry-grass texture, deep green and coarse
+  M.vine = triplanarMaterial({ set: grass, scale: 0.7, normalScale: 0.9, antiTile: 0.5, sharp: 4, tint: new THREE.Color(0x6a8f38), roughBase: 1.0, cacheKey: 'vine',
+    extraFrag: 'albedo = mix(albedo, albedo * vec3(0.75, 1.1, 0.55), 0.6); albedo *= 0.8 + 0.35 * kk_tri(tRgh, vWPos * 0.9 + 3.0, kkW).r;' });
+  M.grape = std({ color: 0x3b2440, roughness: 0.5 });
   // pale limestone of the minaret, mosque base and gate posts
   M.limestone = triplanarMaterial({ set: stone, scale: stone.size, normalScale: 0.9, antiTile: 0.3, sharp: 8, tint: new THREE.Color(0xe6dac2), roughBase: 0.95, cacheKey: 'limestone',
     extraFrag: 'albedo *= 1.25; albedo *= 0.88 + 0.24 * kk_tri(tRgh, vWPos * 0.21 + 2.0, kkW).r; albedo *= 1.0 - 0.2 * smoothstep(0.6, 0.9, texture2D(tRgh, vec2(vWPos.x * 0.35 + vWPos.z * 0.35, vWPos.y * 0.02)).r) * (1.0 - abs(kkN.y));' });
@@ -87,6 +91,8 @@ export function villageMaterials(lib, { quality = 2 } = {}) {
   // mosque: pale green / turquoise lime wash (docs/reference/06)
   // village render colours seen in Street View (mint green, pale blue, salmon)
   M.Duvar_Mint = plasterTint('mint', 0xb6c9a3); M.Duvar_Mavi = plasterTint('mavi', 0xa9c4d6); M.Duvar_Somon = plasterTint('somon', 0xd99a7a); M.Duvar_Beton = plasterTint('cbeton', 0x9a9890); M.Duvar_Lila = plasterTint('lila', 0xb4aec6);
+  // v0.9.7: soft red-magenta (dusty rose) render, a natural earth-pigment tone (owner); adobe mud plaster for the tandır house
+  M.Duvar_Gul = plasterTint('gul', 0xb27a8b); M.adobe = plasterTint('adobe', 0xbba283, 'albedo *= 0.85 + 0.25 * smoothstep(0.3, 0.8, texture2D(tAlb, vec2(vWPos.x * 0.5 + vWPos.z * 0.5, vWPos.y * 0.4)).g);');
   M.turquoise = plasterTint('turq', 0x8fc9b8, 'albedo *= 1.0 - 0.25 * (1.0 - smoothstep(0.0, 1.2, vWPos.y - 27.0));');
   // courtyard wall: red ochre plaster, faded and dusty at the base
   M.redWall = plasterTint('redwall', 0xb0624a, `

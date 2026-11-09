@@ -5,6 +5,33 @@ Two passes so far: **v0.7 "materials"** (surfaces only, nothing moved) and **v0.
 `model/koprukoy.glb` are still the v0.6 files. Terrain (SRTM 30 m), the reservoir at 724 m, the
 Çeşnigir Bridge body, D.260 and the roads outside the village are unchanged.
 
+## v0.9.7 — the owner's houses by the lake road (Nov 2026)
+
+Corrections from the owner's screenshot of the lane north-west of the big cemetery, above the D.260 lake road
+(`OWNER_FIX` and `STONE_WALLS` in `src/village_layout.js`, builders in `src/village.js`):
+
+- **Tandır house** (101.4, 359.6): the small building in front is the village bake-house with the bread oven, not
+  a dwelling — one low room, fieldstone base course under mud-plastered (adobe) walls, plank door with a timber
+  lintel, one small window and a high vent, a wide soot-blackened smoke chimney, a low tile roof on wooden eaves
+  and firewood stacked against the side wall.
+- **Dusty-rose house** (88.6, 350.0): soft red-magenta natural render (`Duvar_Gul`). The ground falls about one
+  storey to the west, so the downhill side shows a full lower storey (windows where the ground is low enough, a
+  door on the lowest side, a floor band between the storeys); the east side, where the ground stays high, reads
+  as a single storey over a rubble plinth. On that east side the roof runs on over a stone-faced terrace with a
+  table and four white plastic chairs, a grapevine (asma) pergola in front of it, then the trees. The terrace
+  leaves the south end of the side free, where the tandır stands.
+- **Back house** (60.0, 319.4): single storey instead of two.
+- **Stone wall**: a dry-stone wall along the lane on its north / west side, from the cream house round the bend
+  and up the hill (with an opening at the cream house's gate), replacing that house's wire fence. It blocks
+  walking and bullets like the buildings.
+
+Every other house keeps its random colours and details: a corrected house is first built "dry" as generated,
+recording its random draws, and the corrected version replays them (same roof / wall colour, chimney, trees) —
+a pixel diff of a 600 m overview away from these houses is unchanged.
+
+![owner's houses](screenshots/v0.9.7_owner_houses.jpg)
+![terrace and vine](screenshots/v0.9.7_porch_vine.jpg)
+
 ## v0.9.6 — Köprüköy Arena (Nov 2026)
 
 The owner asked for a game version "like the walk and fly functions": a Counter-Strike-style fight against bots,
