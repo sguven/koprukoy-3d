@@ -124,19 +124,39 @@ export function carsiSites(muni) {
       P(27.5, 3.5, { species: 'mulberry', size: 1.2 }),
     ],
     marketTree: { x: 258.2, z: 123.6 },                      // the old tree on the pavement in front of the market (SV01, satellite crown)
-    // raised park plot south of the lane: rubble wall with blue-white kerb stones, big wooden çardak, notice board, two big trees (photo 02 left)
-    plot: { x0: 235.5, x1: 250.0, z0: 139.8, z1: 153.0, h: 0.7 },
-    cardak: { x: 245.0, z: 145.4, size: 5.6 },
-    board: { x: 248.6, z: 148.6 },
-    plotTrees: [{ x: 240.3, z: 141.8, species: 'mulberry', size: 1.55 }, { x: 237.8, z: 147.8, species: 'mulberry', size: 1.4 }],
+    // v0.9.8 (owner's photos, Nov 2026): the plot south of the lane is the paved forecourt of the ÇEŞNİGİR-DER
+    // association building on its west side — grey interlocking pavers, low wall with blue-white kerb stones on the
+    // lane and road sides, the big wooden çardak just in front of the building's north half, the notice board by
+    // the road, folding tables and white plastic chairs, big trees north of the çardak and by the walkway.
+    plot: { x0: 230.4, x1: 250.0, z0: 139.8, z1: 153.4, h: 0.35, paved: true, open: 'w' },
+    cardak: { x: 237.8, z: 145.6, size: 5.6 },
+    board: { x: 248.6, z: 141.8 },                          // notice board at the corner by the lane, facing the square
+    plotTrees: [{ x: 240.6, z: 141.0, species: 'mulberry', size: 1.55 }, { x: 246.6, z: 152.4, species: 'mulberry', size: 0.95 }],
+    der: DER_SITE,
   };
 }
+// ÇEŞNİGİR-DER (Köprüköy Çeşnigir Kültür Sosyal Yardımlaşma ve Dayanışma Derneği), owner's photos of the opening:
+// seen from the main road the forecourt with the çardak is on the right, a paved walkway with blue-white kerbs runs
+// in to the building between them, the flag pole and a twin street lamp stand at its mouth, and on the left a raised
+// garden terrace behind a blue-white railing (tables, chairs, spruces). The building itself is in OWNER_FIX.
+const DER_SITE = {
+  walk: { x0: 230.4, x1: 253.0, z0: 153.4, z1: 156.6 },                     // pale red pavers, blue-white kerbs
+  terrace: { x0: 233.6, x1: 251.0, z0: 156.6, z1: 170.6, h: 0.6 },          // raised lawn, rubble wall, kerb stones, railing
+  flag: { x: 249.4, z: 153.0 },                                              // tall pole with the Turkish flag, right of the walkway
+  lamp: { x: 246.4, z: 157.2 },                                              // twin-headed street lamp, left of the walkway
+  tables: [ // forecourt (on the plot) and terrace: grey folding tables with white plastic chairs
+    { x: 243.6, z: 143.6, yaw: 0.0 }, { x: 244.2, z: 148.0, yaw: 0.0 }, { x: 247.2, z: 145.6, yaw: Math.PI / 2 }, { x: 233.6, z: 146.4, yaw: Math.PI / 2 },
+    { x: 241.0, z: 160.0, yaw: 0.0 }, { x: 245.4, z: 160.4, yaw: 0.0 }, { x: 243.0, z: 165.6, yaw: 0.0 },
+  ],
+  terraceTrees: [{ x: 236.0, z: 159.4, species: 'fir', size: 0.85 }, { x: 235.6, z: 166.0, species: 'fir', size: 0.8 }, { x: 239.0, z: 169.0, species: 'mulberry', size: 1.25 }],
+};
 /** Is (x, z) on the çarşı square (or in the raised plot)? */
 export function inCarsi(sites, x, z, margin = 0) {
   const q = sites.square; if (!q) return false;
   const c = Math.cos(q.yaw), s = Math.sin(q.yaw), dx = x - q.x, dz = z - q.z, lx = dx * c - dz * s, lz = dx * s + dz * c;
   if (Math.abs(lx) < q.w / 2 + margin && Math.abs(lz) < q.d / 2 + margin) return true;
-  const p = sites.plot; return !!p && x > p.x0 - margin && x < p.x1 + margin && z > p.z0 - margin && z < p.z1 + margin;
+  const inR = (p) => !!p && x > p.x0 - margin && x < p.x1 + margin && z > p.z0 - margin && z < p.z1 + margin;
+  return inR(sites.plot) || (!!sites.der && (inR(sites.der.walk) || inR(sites.der.terrace)));
 }
 
 // ---------------------------------------------------------------- special sites (model metres)
@@ -148,6 +168,8 @@ export const SITES = {
   mosque: { x: MOSQUE_SITE.x, z: MOSQUE_SITE.z, yaw: 0 },     // prayer hall centre (dome in the satellite image); qibla side to the south
   green1: { x: img(403, 541)[0], z: img(403, 541)[1] },  // small green with a bench and a bin (docs/reference/04)
   ...DATA_SITES,                                          // cemeteries, football pitch, school (satellite / Street View, v0.9)
+  // v0.9.8: the green south of the çarşı plot is the ÇEŞNİGİR-DER garden terrace (built from DER_SITE)
+  gardens: (DATA_SITES.gardens || []).map(g => (Math.hypot(g.x - 239.9, g.z - 161.4) < 1 ? { ...g, der: true } : g)),
 };
 
 // ---------------------------------------------------------------- geometry helpers
@@ -268,7 +290,7 @@ export function buildVillageLayout(terrH, existingRoads = []) {
   for (const b of buildings) if (b.traced && !b.kind) { const u = rnd(); b.wall = b.fence || (u < 0.32 ? 'wall' : u < 0.62 ? 'stone' : u < 0.88 ? 'fence' : 'none'); b.tree = rnd() < 0.75; }
 
   // per-building ground: floor level at the highest corner, plinth reaching the lowest
-  for (const b of buildings) {
+  const setGround = (b) => {
     const hs = rectCorners(b).map(([x, z]) => terrH(x, z)); hs.push(terrH(b.x, b.z));
     const hMax = Math.max(...hs), hMin = Math.min(...hs);
     // v0.9.6: the floor is level with the ground on the street side (the door opens onto the lane), the plinth takes
@@ -280,7 +302,8 @@ export function buildVillageLayout(terrH, existingRoads = []) {
     const plinth = yTop - (hMin - 0.4); if (plinth > 2.6) yTop -= (plinth - 2.6) * 0.6;
     b.yTop = yTop; b.yLow = hMin - 0.4;
     if (b.floorAtFront && b.face !== undefined) { const fx = b.x + Math.cos(b.face) * (b.w / 2 + 1), fz = b.z + Math.sin(b.face) * (b.w / 2 + 1); b.yTop = terrH(fx, fz) + 0.15; }
-  }
+  };
+  for (const b of buildings) setGround(b);
 
   // v0.9.7: the owner's corrections. Applied last, so the seeded draws above stay as they were; `orig` keeps the
   // house as generated so village.js can replay its random draws and leave every other house untouched.
@@ -289,6 +312,8 @@ export function buildVillageLayout(terrH, existingRoads = []) {
     for (const c of buildings) { const dd = Math.hypot(c.x - f.xz[0], c.z - f.xz[1]); if (dd < best) { best = dd; b = c; } }
     if (!b) { console.warn('[layout] owner fix: no building at', f.xz, f.note); continue; }
     b.orig = { ...b }; Object.assign(b, f.set);
+    if (f.set.faceFix !== undefined) b.face = f.set.faceFix;
+    if (f.set.x !== undefined || f.set.z !== undefined) setGround(b);   // moved onto its true spot: new floor level
     if (b.lowerFloor) {   // a full storey under the floor on the downhill side: the lowest ground sits one storey below
       const hMin = Math.min(...rectCorners(b).map(([x, z]) => terrH(x, z)), terrH(b.x, b.z));
       b.yTop = Math.max(b.yTop, hMin + 2.55); b.yLow = hMin - 0.4;
@@ -309,6 +334,13 @@ const OWNER_FIX = [
           '(span: the part of the side clear of the tandır, from its south end)' },
   { xz: [60.0, 319.4], set: { storeys: 1 }, note: 'single storey, not two' },
   { xz: [88.5, 322.8], set: { wall: 'none' }, note: 'its plot is closed by the stone wall along the lane (STONE_WALLS), not a wire fence' },
+  // v0.9.8 (owner's photos of the opening): the white house among the trees west of the çardak plot is the
+  // ÇEŞNİGİR-DER association building — single storey, pale grey render, a long glazed front facing the çardak and
+  // the main road under a flat concrete canopy, the navy name board over the door, red tile hip roof with a yellow
+  // solar water heater. Moved 4 m north so that, as in the photos, the çardak stands in front of its north half and
+  // the walkway from the road reaches its south half.
+  { xz: [225.3, 154.6], set: { kind: 'dernek', x: 226.2, z: 150.8, faceFix: 0, wall: 'none', tree: false },
+    note: 'ÇEŞNİGİR-DER: Köprüköy Çeşnigir Kültür Sosyal Yardımlaşma ve Dayanışma Derneği' },
 ];
 // Dry-stone walls along a lane: `road` = road id, the wall runs on the `toward` side of it, `off` metres from the
 // centreline, between the points of the lane nearest to `from` and `to`; `gaps` = openings (x, z, width).

@@ -108,6 +108,35 @@ export function villageMaterials(lib, { quality = 2 } = {}) {
   M.coping = triplanarMaterial({ set: concrete, scale: 1.5, normalScale: 0.5, antiTile: 0.3, sharp: 8, tint: new THREE.Color(0xc9c3b6), roughBase: 0.9, cacheKey: 'coping' });
   M.step = M.beton;
 
+  // ---- ÇEŞNİGİR-DER (v0.9.8, owner's photos): pale grey render, navy name board, white PVC frames, yellow solar
+  // tank, blue-painted railing, pale red pavers on the walkway, grey folding tables ----
+  M.derWall = plasterTint('dergri', 0xd3d5d2);
+  M.pvc = std({ color: 0xf1f1ee, roughness: 0.45 });
+  M.yellowTank = std({ color: 0xe1b62c, roughness: 0.45, metalness: 0.2 });
+  M.railBlue = std({ color: 0x2b55a6, roughness: 0.5, metalness: 0.35 });
+  M.tableGrey = std({ color: 0x9a9fa3, roughness: 0.55, metalness: 0.15 });
+  M.navy = std({ color: 0x1f2638, roughness: 0.5, metalness: 0.2 });
+  const paving = lib.set('paving');
+  M.pavingRed = triplanarMaterial({ set: paving, scale: paving.size, normalScale: 0.8, antiTile: 0.4, sharp: 12, tint: new THREE.Color(0xc59484), roughBase: 0.9, cacheKey: 'pavered', polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  M.signDer = std({ map: canvasTex(1024, 480, (c, W, H) => {   // "ÇEŞNİGİR-DER" board over the door (owner's photo)
+    c.fillStyle = '#1f2638'; c.fillRect(0, 0, W, H);
+    const g = c.createLinearGradient(0, 0, 0, H); g.addColorStop(0, 'rgba(255,255,255,0.06)'); g.addColorStop(1, 'rgba(0,0,0,0.12)'); c.fillStyle = g; c.fillRect(0, 0, W, H);
+    // round gold emblem with the bridge's arches
+    const ex = W / 2, ey = 82;
+    c.fillStyle = '#b8924a'; c.beginPath(); c.arc(ex, ey, 58, 0, Math.PI * 2); c.fill();
+    c.fillStyle = '#1f2638'; c.beginPath(); c.arc(ex, ey, 47, 0, Math.PI * 2); c.fill();
+    c.fillStyle = '#c9a55a'; c.fillRect(ex - 36, ey - 2, 72, 8);
+    for (const [ax, r] of [[-22, 11], [0, 15], [22, 11]]) { c.beginPath(); c.arc(ex + ax, ey + 26, r, Math.PI, 0); c.lineTo(ex + ax + r, ey + 6); c.lineTo(ex + ax - r, ey + 6); c.closePath(); c.fill(); }
+    c.fillStyle = '#1f2638'; for (const [ax, r] of [[-22, 7], [0, 10], [22, 7]]) { c.beginPath(); c.arc(ex + ax, ey + 28, r, Math.PI, 0); c.closePath(); c.fill(); }
+    // name: ÇEŞNİGİR in light grey, -DER in orange-gold
+    c.font = 'bold 116px sans-serif'; c.textAlign = 'left'; c.textBaseline = 'alphabetic';
+    const a = 'ÇEŞNİGİR', b2 = '-DER', wa = c.measureText(a).width, wb = c.measureText(b2).width, x0 = (W - wa - wb) / 2;
+    c.fillStyle = '#e9e6de'; c.fillText(a, x0, 268); c.fillStyle = '#e0a03a'; c.fillText(b2, x0 + wa, 268);
+    c.fillStyle = '#b8924a'; c.fillRect(W * 0.12, 298, W * 0.76, 3);
+    c.fillStyle = '#e9e6de'; c.textAlign = 'center'; c.font = '600 40px sans-serif';
+    c.fillText('KÖPRÜKÖY ÇEŞNİGİR KÜLTÜR SOSYAL', W / 2, 356); c.fillText('YARDIMLAŞMA VE DAYANIŞMA DERNEĞİ', W / 2, 410);
+  }), roughness: 0.5 });
+
   // ---- roads with per-road UVs ----------------------------------------------------------------
   // uv.x = signed distance from the centreline / half width (|1| at the edge), uv.y = metres along.
   const ROADV = 'varying vec2 vRuv;';
