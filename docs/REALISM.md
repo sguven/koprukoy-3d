@@ -33,7 +33,17 @@ The data corrections are `tools/v095_fix.py` (run once on the v0.9.4 data, like 
   wall / fence / kind data) are untouched.
 - **Off the roads.** 134 footprints moved away from the road ribbon (≤ 3.5 m), 48 also shrunk on the road side.
 - **Roads.** Centrelines simplified (Douglas–Peucker 1.0 m) and despiked (turns > 60° between segments < 7 m),
-  five dead-end stubs under 12 m removed. Surfaces follow the panoramas: only the main road and the streets within
+  dead-end stubs under 12 m removed. **Snapped to the satellite image** (`tools/sat_roads.py`): the owner noticed
+  that the Google road layer the network was traced from is generalised — it runs 10–20 m off the real lane in the
+  mahalles, cuts across yards and the corner of the football pitch, and shows a few lanes that are not there. The
+  0.3 m mosaic (`docs/survey/satellite_mosaic_0.3m_small.jpg`, georeferenced on the main roads) gives a road
+  evidence map (pale, low-saturation ground above its 9 m neighbourhood, not green, never inside a building
+  footprint or the pitch, averaged along the road direction over ±12 m so roofs and bright yards do not count);
+  each centreline is re-fitted within ±16.5 m by dynamic programming (strongest evidence, fewest bends, a prior to
+  stay) and accepted only when clearly better than the traced line. 274 roads moved (4.3 m on average), 113 kept,
+  82 outside the mosaic left as traced, 3 lanes with no visible track removed, 2 trimmed; shared endpoints move
+  together and T-junctions are re-projected. `docs/survey/v0.9.5_roads_snapped_to_satellite.jpg`: blue = traced,
+  yellow = snapped. Surfaces follow the panoramas: only the main road and the streets within
   ~150 m of the çarşı (and the brick-paved lanes by Yeni Cami) stay asphalt / paved; 342 mahalle lanes and the
   outer secondary roads are compacted earth / gravel with grass verges (Street View 07, 08, 29, 44, 54, 58, 62,
   66, 70, 96). Village asphalt is pale and dusty (02, 15, 17), not dark.
