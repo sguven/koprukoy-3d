@@ -203,6 +203,22 @@ for b in B:
     n2 += b['storeys'] == 2
 print('storeys: two-storey', n2, 'of', len(B))
 
+# ------------------------------------------------------------------ 2b. Street View coverage
+# Every notable two-storey house seen in the 86 panoramas already has an override in tools/sv_overrides.json;
+# an unconfirmed two-storey house within sight of a panorama point is therefore a detector guess that the
+# panorama does not support (checked on the renders of SV02, 16, 17, 34: all single storey in reality).
+SV_PIN = [(214, 187), (214, 200), (195, 182), (243, 236), (205, 60), (150, -10), (360, 90), (468, 628), (368, 540), (560, 860), (202, -103), (212, 120), (227, 249),
+          (257, 200), (320, 198), (150, -40), (220, -63), (210, -9), (222, -78), (205, 24), (202, 66), (214, 99), (207, 132), (219, 217), (55, 335), (49, 310), (98, 275), (63, 241),
+          (4.8, 217), (139, 221), (52, 204), (139, 55), (70, 67), (107, 118), (189, 155), (109, -14), (263, -8), (434, 54), (303, 142), (469, 136), (539, 106), (389, 148), (529, 162),
+          (429, 213), (325, 236), (502, 245), (257, 281), (397, 299), (533, 324), (404, 400), (351, 469), (517, 625), (600, 512), (537, 622), (471, 469), (561, 389), (344, 348),
+          (449, 323), (165, -84), (233, -201), (301, -151)]
+SV_PTS = [warp(x, z) for x, z in SV_PIN]
+n_sv1 = 0
+for b in B:
+    if protected(b) or b['storeys'] != 2: continue
+    if any(math.hypot(b['x'] - x, b['z'] - z) < 55 for x, z in SV_PTS): b['storeys'] = 1; n_sv1 += 1
+print('storeys: unconfirmed two-storey houses within 55 m of a panorama -> single storey', n_sv1, '; two-storey now', sum(b['storeys'] == 2 for b in B))
+
 # ------------------------------------------------------------------ 3. off the road ribbons
 def intrusion(b):
     cs = corners(b); pts = []

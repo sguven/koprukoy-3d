@@ -45,8 +45,8 @@ export function pruneOldVillage(model, full = false) {
 /**
  * v0.9.5: the v0.6 GLB scatters granite boulders over the whole hillside, including the streets and yards of the
  * rebuilt village (Street View 56/57: a plastered house and an ashlar garden wall where the model had a 6 m boulder).
- * Boulders are connected components of the merged rock mesh; a boulder that sits on a road ribbon or on a building
- * footprint is dropped. Boulders on open ground stay (the granite ridge NE of the village is real: Street View 07/08/58).
+ * Boulders are connected components of the merged rock mesh; a boulder on a road ribbon, in a yard or within 18 m of a
+ * house is dropped. Boulders on open ground stay (the granite ridge NE of the village is real: Street View 07/08/58).
  */
 export function pruneRocks(model, layout) {
   const m = model.getObjectByName('Granit_Kayalar'); if (!m || !m.isMesh || !layout || layout.centreOnly) return 0;
@@ -71,12 +71,14 @@ export function pruneRocks(model, layout) {
   for (const [r, c] of comp) {
     const cx = c.sx / c.n, cz = c.sz / c.n, rad = Math.max(c.maxx - c.minx, c.maxz - c.minz) / 2;
     if (!inRegion(cx, cz)) continue;
+    // a boulder on a road, in a yard or between the houses is gone (the E / SE lanes in Street View 56–69 are
+    // houses, rubble walls and gardens; the outcrops start beyond the last houses)
     let hit = false;
-    for (const rd of layout.roads) { if (distToPolyline(cx, cz, rd.line).d < rd.w / 2 + rad * 0.7 + 1.0) { hit = true; break; } }
+    for (const rd of layout.roads) { if (distToPolyline(cx, cz, rd.line).d < rd.w / 2 + rad * 0.7 + 6.0) { hit = true; break; } }
     if (!hit) for (const b of layout.buildings) {
-      if (Math.abs(b.x - cx) > 40 || Math.abs(b.z - cz) > 40) continue;
+      if (Math.abs(b.x - cx) > 60 || Math.abs(b.z - cz) > 60) continue;
       const co = Math.cos(b.yaw), si = Math.sin(b.yaw), dx = cx - b.x, dz = cz - b.z, lx = dx * co - dz * si, lz = dx * si + dz * co;
-      if (Math.abs(lx) < b.w / 2 + rad * 0.7 + 1.5 && Math.abs(lz) < b.d / 2 + rad * 0.7 + 1.5) { hit = true; break; }
+      if (Math.abs(lx) < b.w / 2 + rad * 0.7 + 18 && Math.abs(lz) < b.d / 2 + rad * 0.7 + 18) { hit = true; break; }
     }
     if (hit) drop.add(r);
   }
@@ -385,7 +387,7 @@ export function buildVillage(ctx, layout, M) {
       // stretches on long walls (Street View 03/36/57/60) — never a ribbon of six
       let nw = isBarn ? (L > 9 ? 2 : L > 5 ? 1 : 0) : Math.max(L > 2.6 ? 1 : 0, Math.min(isFront ? (L > 15 ? 4 : 3) : 2, Math.round((L - 1.0) / 3.8)));
       if (b.kind === 'market' || b.kind === 'kahve') nw = isFront ? Math.max(2, Math.round(L / 2.2)) : Math.round(L / 3.5);
-      if (b.kind === 'school') nw = Math.round(L / 2.0);
+      if (b.kind === 'school') nw = Math.round(L / 3.0);
       const doorIdx = isFront && nw > 0 ? Math.floor(nw / 2) : -1;
       const balIdx = balcony && isFront && nw > 0 ? (nw > 1 ? (doorIdx + 1) % nw : 0) : -1;
       for (let k = 0; k < n; k++) {
