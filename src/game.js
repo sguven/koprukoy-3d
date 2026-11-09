@@ -8,8 +8,10 @@
 // reload when the magazine is empty, run for cover when hurt, turn towards shots that hit them and towards gunfire
 // they hear. Line of sight and bullets are blocked by the terrain height field and the building boxes.
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 const BOT_NAMES = ['Keskinli', 'Kırıkkaleli', 'Çeşnigir', 'Kapulukaya', 'Hırka', 'Köprübaşı', 'Kızılırmak', 'Bozkır', 'Karakeçili', 'Ceritler', 'Yeşilyurt', 'Göçeri'];
+const botName = (i) => BOT_NAMES[i % BOT_NAMES.length] + (i >= BOT_NAMES.length ? ' ' + (Math.floor(i / BOT_NAMES.length) + 1) : '');
 // dmg = body damage at close range, head = multiplier, rate = shots per second, spread in radians (standing),
 // kick = camera kick per shot (degrees), climb = how fast the spread grows while holding the trigger
 export const WEAPONS = {
@@ -115,6 +117,20 @@ export function createGame(ctx) {
     return g;
   }
   const flashSprite = (size) => { const s = new THREE.Sprite(M.flash); s.scale.setScalar(size); s.visible = false; return s; };
+  // bots are many (up to 100): every rigid part becomes ONE mesh with vertex colours, so a bot costs 7 draw calls
+  const vcMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, metalness: 0.15 });
+  function bake(root) {
+    root.updateMatrixWorld(true); const inv = new THREE.Matrix4().copy(root.matrixWorld).invert(); const gs = [];
+    root.traverse(o => {
+      if (!o.isMesh) return;
+      const g = o.geometry.clone().applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld));
+      for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal') g.deleteAttribute(k);
+      const c = o.material.color, n = g.attributes.position.count, col = new Float32Array(n * 3);
+      for (let i = 0; i < n; i++) { col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b; }
+      g.setAttribute('color', new THREE.BufferAttribute(col, 3)); if (g.index) gs.push(g.toNonIndexed()); else gs.push(g);
+    });
+    const m = new THREE.Mesh(mergeGeometries(gs, false), vcMat); m.frustumCulled = true; return m;
+  }
 
   // ------------------------------------------------------------------ sound (synthesised)
   let ac = null;
@@ -195,28 +211,30 @@ export function createGame(ctx) {
   // ------------------------------------------------------------------ bots
   function botMesh(weapon) {
     const g = new THREE.Group();
-    const leg = (x) => { const m = box(0.2, 0.84, 0.24, x, 0.42, 0, M.cloth2); m.geometry.translate(0, -0.42, 0); m.position.y = 0.84; return m; };   // pivot at the hip
+    const body = new THREE.Group();
+    body.add(box(0.22, 0.1, 0.3, -0.13, 0.05, 0.02, M.boot), box(0.22, 0.1, 0.3, 0.13, 0.05, 0.02, M.boot));
+    body.add(box(0.5, 0.6, 0.28, 0, 1.16, 0, M.cloth));                                   // torso
+    body.add(box(0.44, 0.34, 0.32, 0, 1.22, 0, M.vest));                                   // vest
+    body.add(box(0.54, 0.16, 0.34, 0, 1.5, 0, M.team));                                    // red scarf: the other team
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.15, 10, 8), M.skin); head.position.y = 1.72; body.add(head);
+    const mask = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 8, 0, Math.PI * 2, 0, Math.PI * 0.6), M.cloth); mask.position.y = 1.735; body.add(mask);
+    g.add(bake(body));
+    const leg = (x) => { const m = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.84, 0.24), vcMat); const n = m.geometry.attributes.position.count, col = new Float32Array(n * 3); for (let i = 0; i < n; i++) { col[i * 3] = M.cloth2.color.r; col[i * 3 + 1] = M.cloth2.color.g; col[i * 3 + 2] = M.cloth2.color.b; } m.geometry.setAttribute('color', new THREE.BufferAttribute(col, 3)); m.geometry.translate(0, -0.42, 0); m.position.set(x, 0.84, 0); return m; };   // pivot at the hip
     const l1 = leg(-0.13), l2 = leg(0.13); g.add(l1, l2);
-    g.add(box(0.22, 0.1, 0.3, -0.13, 0.05, 0.02, M.boot), box(0.22, 0.1, 0.3, 0.13, 0.05, 0.02, M.boot));
-    const torso = box(0.5, 0.6, 0.28, 0, 1.16, 0, M.cloth); g.add(torso);
-    g.add(box(0.44, 0.34, 0.32, 0, 1.22, 0, M.vest));                                   // vest
-    g.add(box(0.54, 0.16, 0.34, 0, 1.5, 0, M.team));                                     // red scarf: the other team
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.15, 10, 8), M.skin); head.position.y = 1.72; g.add(head);
-    const mask = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 8, 0, Math.PI * 2, 0, Math.PI * 0.6), M.cloth); mask.position.y = 1.735; g.add(mask);
     // arms pivot at the shoulder, hold the rifle in front
-    const arm = (x) => { const a = new THREE.Group(); a.position.set(x, 1.42, 0); const m = box(0.13, 0.56, 0.15, 0, -0.28, 0, M.cloth); a.add(m); const hand = box(0.11, 0.11, 0.11, 0, -0.58, 0, M.skin); a.add(hand); return a; };
+    const arm = (x) => { const a = new THREE.Group(); a.position.set(x, 1.42, 0); const parts = new THREE.Group(); parts.add(box(0.13, 0.56, 0.15, 0, -0.28, 0, M.cloth), box(0.11, 0.11, 0.11, 0, -0.58, 0, M.skin)); a.add(bake(parts)); return a; };
     const a1 = arm(-0.32), a2 = arm(0.32); g.add(a1, a2);
-    const gun = weaponModel(weapon); gun.rotation.y = Math.PI; gun.scale.setScalar(0.95); gun.position.set(0.1, 1.28, 0.3); g.add(gun);
-    const flash = flashSprite(0.5); gun.add(flash); flash.position.copy(gun.userData.muzzle); g.userData.flash = flash;
-    g.traverse(o => { if (o.isMesh) o.castShadow = true; });
-    Object.assign(g.userData, { l1, l2, a1, a2, gun, torso, head });
+    const gunModel = weaponModel(weapon), gun = new THREE.Group(); gun.add(bake(gunModel)); gun.rotation.y = Math.PI; gun.scale.setScalar(0.95); gun.position.set(0.1, 1.28, 0.3); g.add(gun);
+    const flash = flashSprite(0.5); gun.add(flash); flash.position.copy(gunModel.userData.muzzle); g.userData.flash = flash;
+    g.traverse(o => { if (o.isMesh) o.castShadow = G.botCount <= 12; });
+    Object.assign(g.userData, { l1, l2, a1, a2, gun });
     return g;
   }
   function spawnBot(i) {
     const kinds = ['ak47', 'ak47', 'm4a1', 'mp5', 'mp5', 'ak47', 'deagle', 'm4a1'];
     const weapon = kinds[Math.floor(rnd() * kinds.length)], W = WEAPONS[weapon];
     const p = roadPoint(P, 70, 260);
-    const b = { id: i, name: BOT_NAMES[i % BOT_NAMES.length], weapon, x: p.x, z: p.z, y: surfaceAt(p.x, p.z).y, yaw: rnd() * 6.28, hp: 100,
+    const b = { id: i, name: botName(i), weapon, x: p.x, z: p.z, y: surfaceAt(p.x, p.z).y, yaw: rnd() * 6.28, hp: 100,
       state: 'patrol', route: null, pauseT: 0, lookYaw: 0, speedK: 0.85 + rnd() * 0.3, lateral: (rnd() - 0.5) * 2.4,
       seen: 0, lastSeen: null, hasLos: false, losT: rnd() * 0.3, aimT: 0, reaction: 0.3 + rnd() * 0.4,
       mag: W.mag, burst: 0, cd: 1 + rnd(), reloadT: 0, walk: 0, stuck: 0, lastX: p.x, lastZ: p.z, dead: 0, flee: 0, side: 1, sideT: 0, crouch: 0,
@@ -252,6 +270,8 @@ export function createGame(ctx) {
       return;
     }
     const ex = P.x, ez = P.z, dx = ex - b.x, dz = ez - b.z, dist = Math.hypot(dx, dz);
+    // far bots think ~10 times a second instead of every frame (100 bots)
+    if (dist > 180) { b.acc = (b.acc || 0) + dt; if (b.acc < 0.1) return; dt = b.acc; b.acc = 0; }
     // ---- perception: line of sight a few times a second
     b.losT -= dt;
     if (b.losT <= 0) {
@@ -472,7 +492,7 @@ export function createGame(ctx) {
   function stop() {
     G.on = false; group.visible = false; hud.style.display = 'none'; for (const b of [fireBtn, reloadBtn, swapBtn]) b.classList.remove('show'); setScope(false); camera.remove(vm); G.firing = false;
   }
-  function setBots(n) { G.botCount = n; while (G.bots.length > n) { const b = G.bots.pop(); group.remove(b.mesh); } while (G.bots.length < n) G.bots.push(spawnBot(G.bots.length)); }
+  function setBots(n) { G.botCount = n; while (G.bots.length > n) { const b = G.bots.pop(); group.remove(b.mesh); } while (G.bots.length < n) G.bots.push(spawnBot(G.bots.length)); group.traverse(o => { if (o.isMesh) o.castShadow = n <= 12; }); }
   function setPrimary(k) { if (!WEAPONS[k] || WEAPONS[k].slot !== 1) return; G.primary = k; if (G.on) { G.ammo[k] = { mag: WEAPONS[k].mag, reserve: WEAPONS[k].reserve }; setWeapon(k); } }
   function setDifficulty(d) { G.difficulty = d; }
   function cycleWeapon(dir) { const order = [G.primary, 'deagle', 'knife'], i = order.indexOf(G.weapon); setWeapon(order[(i + dir + 3) % 3]); }

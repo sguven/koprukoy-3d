@@ -270,9 +270,15 @@ export function buildVillageLayout(terrH, existingRoads = []) {
   // per-building ground: floor level at the highest corner, plinth reaching the lowest
   for (const b of buildings) {
     const hs = rectCorners(b).map(([x, z]) => terrH(x, z)); hs.push(terrH(b.x, b.z));
-    const hMax = Math.max(...hs), hMin = Math.min(...hs), range = hMax - hMin;
-    // cut-and-fill on slopes (Street View 99): floor sits part-way down the drop so the plinth never grows past ~3 m
-    b.yTop = (range > 1.0 ? hMax - 0.6 * (range - 1.0) : hMax) + 0.05; b.yLow = hMin - 0.4;   // v0.9.5: cut deeper, plinths stay ~1–2 m
+    const hMax = Math.max(...hs), hMin = Math.min(...hs);
+    // v0.9.6: the floor is level with the ground on the street side (the door opens onto the lane), the plinth takes
+    // the drop on the downhill side; only when that plinth would pass 2.6 m is the house cut into the slope. The old
+    // mid-slope floor left houses on the uphill side of a lane looking buried in the road (owner's report).
+    const r = Math.min(b.w, b.d) / 2 + 1;
+    const hFront = b.face !== undefined ? terrH(b.x + Math.cos(b.face) * r, b.z + Math.sin(b.face) * r) : hMax;
+    let yTop = Math.max(hFront, hMin + 0.2) + 0.08;
+    const plinth = yTop - (hMin - 0.4); if (plinth > 2.6) yTop -= (plinth - 2.6) * 0.6;
+    b.yTop = yTop; b.yLow = hMin - 0.4;
     if (b.floorAtFront && b.face !== undefined) { const fx = b.x + Math.cos(b.face) * (b.w / 2 + 1), fz = b.z + Math.sin(b.face) * (b.w / 2 + 1); b.yTop = terrH(fx, fz) + 0.15; }
   }
   return { roads, buildings, sites: SITES, rnd };
