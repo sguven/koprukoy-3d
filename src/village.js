@@ -106,7 +106,10 @@ export function buildVillage(ctx, layout, M) {
   let bid = 5000;
 
   // ================================================================= roads
-  const lift = (r) => LIFT[r.kind] + roads.indexOf(r) * 0.003;
+  // v0.9.5: the per-road stagger only has to separate overlapping ribbons at junctions — the old index * 3 mm grew
+  // to 1.4 m over 467 roads and put the lanes on raised causeways (owner's report). Now at most 3 cm on top of the
+  // 6–12 cm lift, so the roads lie on the ground and differ from it by surface only.
+  const lift = (r) => LIFT[r.kind] + (roads.indexOf(r) % 8) * 0.004;
   for (const r of roads) {
     if (centreOnly) break;
     const hw = r.w / 2, L = lift(r);

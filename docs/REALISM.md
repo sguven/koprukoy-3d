@@ -53,6 +53,9 @@ Rendering (`src/village.js`, `village_layout.js`, `village_materials.js`, `terra
 - windows: 2–3 on a 10–12 m street front, at most 4 on a long one, 1–2 on side walls, blank stretches on long
   walls (03, 36, 57, 60); floor-to-floor 2.8 m; barns / annexes 2.6 m high with small openings, no balcony, no
   garden wall;
+- roads lie on the ground: the per-road stagger that separates overlapping ribbons at junctions was index × 3 mm and
+  had grown to 1.4 m over 467 roads, so the lanes ran on raised causeways; it is now at most 3 cm on a 6–12 cm lift,
+  and a lane is told from the ground by its paler surface alone (owner's request);
 - houses on slopes are cut deeper into the ground, so plinths stay 1–2 m instead of 3 m;
 - `pruneRocks`: the merged GLB rock mesh is split into boulders (connected components); the 144 boulders on a road
   ribbon, in a yard or within 18 m of a house are dropped (56/57: a plastered house and an ashlar garden wall where
