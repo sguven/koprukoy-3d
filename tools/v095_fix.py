@@ -16,7 +16,10 @@ What it does (run once on the v0.9.4 data; it refuses to run twice):
      the panoramas; long single-storey halls get a sheet roof sometimes (barns, workshops);
   3. footprints are moved off the road ribbons (shifted away from the road; shrunk when the shift would be > 3.5 m);
   4. roads: Douglas–Peucker simplification (1.0 m) and spike removal (turns > 60° between segments < 7 m),
-     dead-end stubs shorter than 12 m removed.
+     centrelines snapped to the lanes visible in the satellite mosaic (tools/sat_roads.py; the Google road layer
+     is 10–20 m off in the mahalles and crosses the football pitch), lanes with no visible track removed,
+     dead-end stubs shorter than 12 m removed;
+  5. lane surfaces: only the main road and the streets around the çarşı / Yeni Cami stay asphalt or paved.
 Street View overrides (buildings with wall / fence / kind data) are left exactly as they were.
 Usage: python3 tools/v095_fix.py   (from the repo root)
 """
@@ -110,6 +113,13 @@ for r in roads:
     P = [list(p) for p in r['pts']]
     P = despike(rdp(P, 1.0))
     r['pts'] = [[round(p[0], 1), round(p[1], 1)] for p in P]
+# 4b. snap the centrelines to the lanes visible in the satellite image, drop lanes that are not there (tools/sat_roads.py)
+sys.path.insert(0, 'tools'); from sat_roads import snap_roads
+_rects = [(b['x'], b['z'], b['yaw'], b['w'], b['d']) for b in B] + [(g['x'], g['z'], g['yaw'], g['w'], g['d']) for g in GF]
+_pitch = json.loads(re.search(r"export const SITES = (\{.*\});", head).group(1))['pitch']
+_rects.append((_pitch['x'], _pitch['z'], 0.0, _pitch['w'], _pitch['d']))
+snap_report = snap_roads(roads, _rects)
+for r in roads: r['pts'] = [[round(p[0], 1), round(p[1], 1)] for p in despike(rdp([list(p) for p in r['pts']], 0.8))]
 def plen(P): return sum(math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]) for i in range(1, len(P)))
 def free_end(ri, p):
     p = np.array(p)
