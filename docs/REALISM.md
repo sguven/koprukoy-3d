@@ -53,6 +53,11 @@ Rendering (`src/village.js`, `village_layout.js`, `village_materials.js`, `terra
 - windows: 2–3 on a 10–12 m street front, at most 4 on a long one, 1–2 on side walls, blank stretches on long
   walls (03, 36, 57, 60); floor-to-floor 2.8 m; barns / annexes 2.6 m high with small openings, no balcony, no
   garden wall;
+- junctions and ends: each ribbon runs on past its end by the other road's half width so the carriageways overlap
+  instead of stopping short of each other; endpoints within 7 m of the road they lead to are joined to it in the
+  data; a lane that ends in the open tapers out over its last 10 m; a utility pole that would stand on a crossing
+  road steps a few metres aside instead of breaking the line of cables; the road-clearance nudge keeps a step only
+  when it reduces the intrusion (a house between two lanes used to be pushed off one straight onto the other);
 - roads lie on the ground: the per-road stagger that separates overlapping ribbons at junctions was index × 3 mm and
   had grown to 1.4 m over 467 roads, so the lanes ran on raised causeways; it is now at most 3 cm on a 6–12 cm lift,
   and a lane is told from the ground by its paler surface alone (owner's request);

@@ -110,14 +110,40 @@ export function buildVillage(ctx, layout, M) {
   // to 1.4 m over 467 roads and put the lanes on raised causeways (owner's report). Now at most 3 cm on top of the
   // 6–12 cm lift, so the roads lie on the ground and differ from it by surface only.
   const lift = (r) => LIFT[r.kind] + (roads.indexOf(r) % 8) * 0.004;
+  // v0.9.5: at a junction each ribbon runs on past its end by the other road's half width, so the carriageways
+  // overlap instead of stopping short of each other; a lane that ends in the open tapers out (owner's screenshots)
+  const endJoin = (r, end) => {
+    if (r.line.length < 2) return null;
+    const p = r.line[end], q = r.line[end === 0 ? 1 : r.line.length - 2]; let best = null;
+    for (const o of roads) { if (o === r) continue; const h = distToPolyline(p[0], p[1], o.line); if (h.d < o.w / 2 + 2.5 && (!best || h.d < best.d)) best = { d: h.d, w: o.w }; }
+    if (!best) return null;
+    const dx = p[0] - q[0], dz = p[1] - q[1], L = Math.hypot(dx, dz) || 1, ext = best.w / 2 + 0.8;
+    return [p[0] + dx / L * ext, p[1] + dz / L * ext];
+  };
   for (const r of roads) {
     if (centreOnly) break;
     const hw = r.w / 2, L = lift(r);
     const prof = [{ u: -hw - 1.0, dy: L * 0.25 }, { u: -hw, dy: L }, { u: -hw * 0.5, dy: L }, { u: 0, dy: L + 0.04 }, { u: hw * 0.5, dy: L }, { u: hw, dy: L }, { u: hw + 1.0, dy: L * 0.25 }];
+    const j0 = endJoin(r, 0), j1 = endJoin(r, r.line.length - 1);
+    const line = r.line.slice(); if (j0) line.unshift(j0); if (j1) line.push(j1);
     // on the çarşı the open square is the carriageway: no asphalt ribbon there, the square's gravel shows (photos 02, 05)
     let seg = [];
-    const flushRoad = () => { if (seg.length > 1) bat.add('road_' + r.kind, ribbon(seg, prof, yAt, 1 / hw)); seg = []; };
-    for (const p of r.line) { if (inCarsi(layout.sites, p[0], p[1], -1.0)) flushRoad(); else seg.push(p); }
+    const flushRoad = () => {
+      if (seg.length > 1) {
+        // taper: a free end (no junction) narrows over its last ~10 m — tracks fade into the ground, they do not stop at a wall
+        let ws = null;
+        const first = seg[0] === line[0] && !j0, last = seg[seg.length - 1] === line[line.length - 1] && !j1;
+        if (first || last) {
+          ws = new Array(seg.length).fill(1); let acc = 0;
+          if (first) for (let i = 0; i < seg.length; i++) { if (i) acc += Math.hypot(seg[i][0] - seg[i - 1][0], seg[i][1] - seg[i - 1][1]); ws[i] = Math.min(ws[i], 0.35 + 0.65 * Math.min(1, acc / 10)); }
+          acc = 0;
+          if (last) for (let i = seg.length - 1; i >= 0; i--) { if (i < seg.length - 1) acc += Math.hypot(seg[i][0] - seg[i + 1][0], seg[i][1] - seg[i + 1][1]); ws[i] = Math.min(ws[i], 0.35 + 0.65 * Math.min(1, acc / 10)); }
+        }
+        bat.add('road_' + r.kind, ribbon(seg, prof, yAt, 1 / hw, ws));
+      }
+      seg = [];
+    };
+    for (const p of line) { if (inCarsi(layout.sites, p[0], p[1], -1.0)) flushRoad(); else seg.push(p); }
     flushRoad();
     if (!r.kerb) continue;
     // kerb + 1.5 m pavement on both sides, interrupted around junctions with other roads
@@ -151,8 +177,15 @@ export function buildVillage(ctx, layout, M) {
     while (s < total - 5) {
       while (i + 1 < r.line.length && acc + Math.hypot(r.line[i + 1][0] - r.line[i][0], r.line[i + 1][1] - r.line[i][1]) < s) { acc += Math.hypot(r.line[i + 1][0] - r.line[i][0], r.line[i + 1][1] - r.line[i][1]); i++; }
       const p = r.line[i], q = r.line[Math.min(r.line.length - 1, i + 1)], dx = q[0] - p[0], dz = q[1] - p[1], len = Math.hypot(dx, dz) || 1, t = (s - acc) / len;
-      const x = p[0] + dx * t + (-dz / len) * off * side, z = p[1] + dz * t + (dx / len) * off * side;
-      if (!onRoad(x, z, 0.6) && !inCarsi(layout.sites, x, z, 2)) { props.push({ kind: 'pole', x, z, prev }); prev = { x, z }; } else prev = null;
+      // a pole that would stand on a crossing road steps a few metres along or to the other side instead of
+      // breaking the line of cables (owner's screenshots: cables ending in mid-air)
+      let placed = false;
+      for (const [ds, sd] of [[0, side], [4, side], [-4, side], [8, side], [-8, side], [0, -side], [4, -side], [-4, -side]]) {
+        const tt = Math.max(0, Math.min(1, (s + ds - acc) / len));
+        const x = p[0] + dx * tt + (-dz / len) * off * sd, z = p[1] + dz * tt + (dx / len) * off * sd;
+        if (!onRoad(x, z, 0.6) && !inCarsi(layout.sites, x, z, 2)) { props.push({ kind: 'pole', x, z, prev }); prev = { x, z }; placed = true; break; }
+      }
+      if (!placed) prev = null;
       s += 32 + rnd() * 10;
     }
   }
