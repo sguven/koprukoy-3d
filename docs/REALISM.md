@@ -5,6 +5,38 @@ Two passes so far: **v0.7 "materials"** (surfaces only, nothing moved) and **v0.
 `model/koprukoy.glb` are still the v0.6 files. Terrain (SRTM 30 m), the reservoir at 724 m, the
 Çeşnigir Bridge body, D.260 and the roads outside the village are unchanged.
 
+## v0.9.4 — checked against the Google Maps map layer (Nov 2026)
+
+The owner pointed at the area south of Keskin Köprü İlkokulu: in reality it is all cemetery, with only a small
+workshop (two long buildings) at its lower end — the model had houses and roads all over it. Cause: the v0.9 roof
+detector took grave clusters, bushes and bare red ground for roofs, and the road tracer turned the lane markings of
+the D.260 on the map into a ladder of short 9 m "roads".
+
+Method: the Google Maps map layer (lyrs=m, z18, 13 × 19 tiles) was fetched in the browser and reduced to three classes
+(road / building footprint / rest), `docs/survey/gmap_layer_classes.png` (0.92 m/px, origin tile 155414/99633). It
+lies on the satellite image to within a metre (`docs/screenshots/v0.9.4_google_layer_over_satellite.png`). Every road
+centreline and every building of `src/village_data.js` was tested against it; the 188 buildings with no Google
+footprint within 4 m were checked one by one on z19 satellite thumbnails (Google's footprint layer misses many real
+houses, so it was not used blindly). The corrections live in `tools/gmap_fix.json` and are applied to the v0.9.2 data
+by `tools/gmap_fix.py`.
+
+- **Cemetery** (`SITES.cemeteries`, new polygon form in `buildCemeteryPoly`): one polygon between the top road, the
+  frontage road along the D.260, the curved road and the school road — scattered headstones with slabs, loosely in
+  rows and clusters, junipers / pines / mulberries, a low rubble wall on the north and west edges — plus the dense
+  grave strip on its east side. The two rectangular walled cemeteries are gone.
+- **Ekinoğulları Demir Doğrama**: the "big two-storey house" was the first of two long single-storey workshops; both
+  are now on their Google footprints (32.5 × 12.8 m and 26.5 × 10.6 m).
+- **Buildings**: 124 false roofs removed (bare ground, grave clusters, pools, tarps, garden plots, concrete pads and
+  7 on the D.260 carriageway itself); buildings with Street View overrides were kept even without a footprint (the
+  roofless concrete frame etc.). 71 Google footprints that had no building were added (single storey, two storeys
+  when compact and 125–300 m², sheet roof above 300 m²); nothing added near the mosque, the çarşı or Yeni Cami.
+- **D.260**: the GLB viaduct stopped at (166, 576) and a single 9 m ribbon ran down the frontage road into a tangle of
+  ~40 short pieces at the junction. Now both carriageways (8 m each, 12 m apart) continue along the Google band to the
+  terrain edge; the curved road crosses it once (`d260x_crossing`). Village roads that had been labelled "D.260
+  extension" got their real class (school road 6.5 m, junction roads 7 m, the curved road 8 m).
+- **Roads**: 9 dead-end stubs and junction curls not on the map removed, one missing lane (`local_gm1`, the loop north of the cemetery)
+  added. After the fix every road is on the map layer and every map-layer road inside the model area has a road.
+
 ## v0.9.3 — the old stone building by Yeni Cami (Nov 2026)
 
 The owner pointed out the abandoned historic stone building just north-west of Köprü Köyü Yeni Cami (his satellite

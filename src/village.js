@@ -241,6 +241,7 @@ export function buildVillage(ctx, layout, M) {
   }
   /** Village cemetery (satellite + Street View): low rubble wall, scattered upright headstones, a few pines. */
   function buildCemetery(c) {
+    if (c.poly) return buildCemeteryPoly(c);
     const id = bid++, yG = yAt(c.x, c.z), frame = { x: c.x, y: yG, z: c.z, yaw: 0 }, bld = { id, base: yG - 2, top: yG + 2, yaw: 0, cx: c.x, cz: c.z };
     const add = (key, geo) => bat.add(key, geo, frame, bld);
     const W2 = c.w / 2, D2 = c.d / 2, wh = 1.0;
@@ -253,6 +254,51 @@ export function buildVillage(ctx, layout, M) {
       if (rnd() < 0.7) add('limestone', box(0.45, 0.25, 1.4, x, dy + 0.1, z + 0.8));      // low grave slab / kerb
     }
     for (let i = 0; i < Math.max(3, n / 12); i++) treeSpots.push({ x: c.x + (rnd() - 0.5) * (c.w - 6), z: c.z + (rnd() - 0.5) * (c.d - 6), species: rnd() < 0.7 ? 'pine' : 'mulberry', size: 0.9 + rnd() * 0.5, force: true });
+  }
+  /** v0.9.4: cemetery traced as a polygon on the satellite (the big one south of the school is an open hillside of
+   *  scattered graves and trees with a rubble wall on some edges, plus a dense strip of graves on its east side).
+   *  c.poly = [[x,z],...] model metres; c.graves = m² of ground per grave; c.trees = m² per tree; c.wallEdges = edge
+   *  indices (edge i runs from poly[i] to poly[i+1]) that carry the low rubble wall. */
+  function buildCemeteryPoly(c) {
+    const P = c.poly, nP = P.length;
+    let cx = 0, cz = 0, x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity, area = 0;
+    for (let i = 0; i < nP; i++) {
+      const [ax, az] = P[i], [bx, bz] = P[(i + 1) % nP]; cx += ax; cz += az; area += ax * bz - bx * az;
+      x0 = Math.min(x0, ax); x1 = Math.max(x1, ax); z0 = Math.min(z0, az); z1 = Math.max(z1, az);
+    }
+    cx /= nP; cz /= nP; area = Math.abs(area) / 2;
+    const inside = (x, z) => { let s = false; for (let i = 0, j = nP - 1; i < nP; j = i++) { const [xi, zi] = P[i], [xj, zj] = P[j]; if ((zi > z) !== (zj > z) && x < (xj - xi) * (z - zi) / (zj - zi) + xi) s = !s; } return s; };
+    const clear = (x, z) => inside(x, z) && !onRoad(x, z, 2.5);
+    const id = bid++, yG = yAt(cx, cz), frame = { x: cx, y: yG, z: cz, yaw: 0 }, bld = { id, base: yG - 4, top: yG + 2, yaw: 0, cx, cz };
+    const add = (key, geo) => bat.add(key, geo, frame, bld);
+    const wh = 0.9;
+    for (const e of c.wallEdges || []) {                                   // low dry-stone wall, follows the slope in 6 m pieces
+      const [ax, az] = P[e], [bx, bz] = P[(e + 1) % nP], L = Math.hypot(bx - ax, bz - az), k = Math.max(1, Math.round(L / 6));
+      for (let s = 0; s < k; s++) {
+        const px = ax + (bx - ax) * (s + 0.5) / k, pz = az + (bz - az) * (s + 0.5) / k, dy = yAt(px, pz) - yG;
+        const g = box(L / k + 0.3, wh + 2, 0.55, 0, dy + (wh - 2) / 2, 0); g.rotateY(Math.atan2(-(bz - az), bx - ax)); g.translate(px - cx, 0, pz - cz); add('rubble', g);
+      }
+    }
+    // graves: headstone + low slab, loosely in rows facing the same way (axis of the longest edge), some in clusters
+    let ex = 1, ez = 0, best = 0;
+    for (let i = 0; i < nP; i++) { const [ax, az] = P[i], [bx, bz] = P[(i + 1) % nP], L = Math.hypot(bx - ax, bz - az); if (L > best) { best = L; ex = (bx - ax) / L; ez = (bz - az) / L; } }
+    const yaw0 = Math.atan2(-ez, ex), n = Math.floor(area / (c.graves || 25));
+    let placed = 0, tries = 0, cl = null;
+    while (placed < n && tries++ < n * 30) {
+      let x, z;
+      if (cl && rnd() < 0.75) { x = cl.x + (rnd() - 0.5) * 9; z = cl.z + (rnd() - 0.5) * 9; } else { x = x0 + rnd() * (x1 - x0); z = z0 + rnd() * (z1 - z0); cl = rnd() < 0.5 ? { x, z } : null; }
+      if (!clear(x, z)) continue;
+      const lx = x - cx, lz = z - cz, dy = yAt(x, z) - yG, h = 0.45 + rnd() * 0.55, yaw = yaw0 + (rnd() - 0.5) * 0.25;
+      const st = box(0.36, h + 0.35, 0.1, 0, dy + h / 2 - 0.17, 0); st.rotateY(yaw); st.translate(lx, 0, lz); add('limestone', st);
+      if (rnd() < 0.75) { const sl = box(0.5, 0.22, 1.5, 0, dy + 0.08, 0.85); sl.rotateY(yaw); sl.translate(lx, 0, lz); add('limestone', sl); }
+      placed++;
+    }
+    // trees: junipers / pines / the odd mulberry scattered over the hillside
+    const nt = Math.floor(area / (c.trees || 300));
+    for (let i = 0, t = 0; i < nt && t < nt * 20; t++) {
+      const x = x0 + rnd() * (x1 - x0), z = z0 + rnd() * (z1 - z0); if (!clear(x, z)) continue;
+      treeSpots.push({ x, z, species: rnd() < 0.75 ? 'pine' : 'mulberry', size: 0.7 + rnd() * 0.6, force: true }); i++;
+    }
   }
 
   // ---------------------------------------------------------------- generic house -------------
