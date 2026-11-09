@@ -1233,5 +1233,29 @@
   "roof": "h",
   "fence": "fence",
   "note": "SV99 white 1F red roof w/ solar heater L of lane (was 2F)"
+ },
+ {
+  "xz": [
+   120.1,
+   -51.1
+  ],
+  "remove": true,
+  "tol": 4,
+  "note": "user satellite Nov 2026: fused roof trace over the open lot W of the stone ruin - nothing there"
+ },
+ {
+  "xz": [
+   131.6,
+   -50.9
+  ],
+  "add": {
+   "w": 12.6,
+   "d": 10.4,
+   "yaw": -0.316
+  },
+  "storeys": 1,
+  "roof": "h",
+  "kind": "stone_ruin",
+  "note": "user satellite + Street View Nov 2026: abandoned historic stone building NW of Yeni Cami - fieldstone, limestone quoins, arched windows, rusted hip roof"
  }
 ]

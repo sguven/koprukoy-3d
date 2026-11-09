@@ -5,6 +5,22 @@ Two passes so far: **v0.7 "materials"** (surfaces only, nothing moved) and **v0.
 `model/koprukoy.glb` are still the v0.6 files. Terrain (SRTM 30 m), the reservoir at 724 m, the
 Çeşnigir Bridge body, D.260 and the roads outside the village are unchanged.
 
+## v0.9.3 — the old stone building by Yeni Cami (Nov 2026)
+
+The owner pointed out the abandoned historic stone building just north-west of Köprü Köyü Yeni Cami (his satellite
+screenshot + a Street View frame); it was missing. Placed from his 0.2 m/px satellite crop relative to the model roads
+(narrow lane on its east side, the wider road to the south-west): centre (175.5, -105.5) model, 12.6 × 10.4 m,
+yaw -0.316. Built by `buildStoneRuin` (`src/village.js`): 0.6 m fieldstone walls extruded with round-arched openings
+(3 windows on the long sides, 2 on the short ones, an arched doorway on the unseen north side), cut-limestone arch
+surrounds with keystones and sills, alternating limestone quoins, a mud-plastered base band, a stone cornice, a low
+hipped roof of rusted corrugated sheet on timber eaves with two slipped sheets; most windows half or fully blocked
+with loose rubble, the rest show the dark empty hall. A pine N and a mulberry at the NE corner (satellite crowns).
+A fused 21 × 10 m roof trace on the open lot to its west (not in the current satellite photo) was dropped —
+`tools/sv_overrides.json` now supports `"remove": true`.
+
+Note: Street View 20/21 (`NOTES.md`) had read this stone building as the Yeni Cami prayer hall; the real mosque is
+the tile-roofed building under the Google pin, south-east of it.
+
 ## v0.9.2 — the çarşı (Nov 2026)
 
 The owner reported that the Atatürk statue in front of the old municipality / Güvendioğlu Market had disappeared,

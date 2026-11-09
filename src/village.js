@@ -121,6 +121,7 @@ export function buildVillage(ctx, layout, M) {
     if (b.kind === 'mosque') { buildMosque(b); continue; }
     if (b.kind === 'minaret') continue; // built with the mosque
     if (b.kind === 'municipality') { buildMunicipality(b); continue; }
+    if (b.kind === 'stone_ruin') { buildStoneRuin(b); continue; }
     buildHouse(b);
   }
   buildCarsi(S);
@@ -172,6 +173,71 @@ export function buildVillage(ctx, layout, M) {
     add('limestone', cyl(0.62, 0.68, 4.8, mx, mb + 19.75 + 2.4, mz, 12));
     const cap = new THREE.ConeGeometry(0.85, 4.0, 12); cap.translate(mx, mb + 24.55 + 2.0, mz); add('turquoise', cap);
     add('metal', cyl(0.05, 0.05, 1.4, mx, mb + 26.55 + 0.7, mz, 8));
+  }
+  /**
+   * The abandoned historic stone building just NW of Köprü Köyü Yeni Cami (user's satellite + Street View, Nov 2026):
+   * thick fieldstone walls with dressed limestone quoins, tall round-arched windows with cut-stone surrounds (empty or
+   * half blocked with rubble), a mud-plastered base band, a stone cornice and a low hipped roof of rusted sheet on
+   * timber eaves. No glass, no door leaf, weeds around it.
+   */
+  function buildStoneRuin(b) {
+    const id = bid++, frame = { x: b.x, y: b.yTop, z: b.z, yaw: b.yaw };
+    const w = b.w, d = b.d, T = 0.6, H = 5.3, BAND = 1.6;          // wall thickness, eaves height, mud band
+    const bld = { id, base: b.yTop, top: b.yTop + H + 2, yaw: b.yaw, cx: b.x, cz: b.z };
+    const add = (key, geo, m) => { if (m) geo.applyMatrix4(m); bat.add(key, geo, frame, bld); };
+    const r = 0.5, sill = 1.9, spring = 3.7;                        // window half-width, sill and arch spring heights
+    // openings per side: three windows on the long sides, two on the short ones, an arched doorway in the middle of -z
+    const sides = { '+z': [-4.2, 0, 4.2], '-z': [-4.2, 'door', 4.2], '+x': [-2.3, 2.3], '-x': [-2.3, 2.3] };
+    const archPath = (p, x, y0, y1, rr) => { p.moveTo(x - rr, y0); p.lineTo(x + rr, y0); p.lineTo(x + rr, y1); p.absarc(x, y1, rr, 0, Math.PI, false); p.lineTo(x - rr, y0); };
+    // rubble plinth down to the lowest corner on the slope
+    add('rubble', boxY(w + 0.1, d + 0.1, b.yLow - b.yTop - 0.3, 0.02));
+    for (const side of ['+z', '-z', '+x', '-x']) {
+      const long = side === '+z' || side === '-z', L = long ? w : d - 2 * T, fm = faceMatrix(side, w, d);
+      const ops = sides[side].map(o => o === 'door' ? { x: 0, y0: 0, y1: 2.3, rr: 0.75, door: true } : { x: o, y0: sill, y1: spring, rr: r });
+      // the wall: one extruded slab with arched holes, so the deep reveals come for free
+      const sh = new THREE.Shape(); sh.moveTo(-L / 2, 0); sh.lineTo(L / 2, 0); sh.lineTo(L / 2, H); sh.lineTo(-L / 2, H); sh.closePath();
+      for (const o of ops) { const p = new THREE.Path(); archPath(p, o.x, o.y0, o.y1, o.rr); sh.holes.push(p); }
+      const wall = new THREE.ExtrudeGeometry(sh, { depth: T, bevelEnabled: false, curveSegments: 10 }); wall.translate(0, 0, -T);
+      add('fieldstone', wall, fm);
+      // mud-plastered base band, a hand's width proud of the stone
+      const band = new THREE.Shape(); const BL = long ? L + 0.08 : L + 2 * T + 0.08; band.moveTo(-BL / 2, 0); band.lineTo(BL / 2, 0); band.lineTo(BL / 2, BAND); band.lineTo(-BL / 2, BAND); band.closePath();
+      for (const o of ops) if (o.door) { const p = new THREE.Path(); p.moveTo(o.x - o.rr, 0); p.lineTo(o.x + o.rr, 0); p.lineTo(o.x + o.rr, BAND); p.lineTo(o.x - o.rr, BAND); p.closePath(); band.holes.push(p); }
+      const bandG = new THREE.ExtrudeGeometry(band, { depth: 0.05, bevelEnabled: false }); add('mudBase', bandG, fm);
+      // stone cornice under the eaves
+      add('limestone', box(L + (long ? 0.24 : 0), 0.24, 0.14, 0, H - 0.12, 0.07), fm);
+      for (const o of ops) {
+        const t = 0.2, top = o.y1 + o.rr;
+        // cut-stone arch surround (jambs + voussoir ring), keystone, sill
+        const ring = new THREE.Shape(); ring.moveTo(o.x - o.rr - t, o.y0); ring.lineTo(o.x - o.rr - t, o.y1); ring.absarc(o.x, o.y1, o.rr + t, Math.PI, 0, true);
+        ring.lineTo(o.x + o.rr + t, o.y0); ring.lineTo(o.x + o.rr, o.y0); ring.lineTo(o.x + o.rr, o.y1); ring.absarc(o.x, o.y1, o.rr, 0, Math.PI, false); ring.lineTo(o.x - o.rr, o.y0); ring.closePath();
+        add('limestone', new THREE.ExtrudeGeometry(ring, { depth: 0.07, bevelEnabled: false, curveSegments: 10 }), fm);
+        add('limestone', box(0.32, 0.42, 0.1, o.x, top + t - 0.12, 0.05), fm);
+        if (!o.door) add('limestone', box(2 * o.rr + 0.5, 0.13, 0.3, o.x, o.y0 - 0.065, 0.1), fm);
+        // behind the opening: the dark empty hall, and in most windows a half or full infill of loose rubble
+        const hgt = top - o.y0, back = new THREE.PlaneGeometry(2 * o.rr + 0.2, hgt + 0.2); back.translate(o.x, o.y0 + hgt / 2, -T - 0.05); add('voidDark', back, fm);
+        if (!o.door && rnd() < 0.7) { const fh = rnd() < 0.5 ? hgt - 0.05 : hgt * (0.35 + rnd() * 0.3); add('rubble', box(2 * o.rr - 0.02, Math.min(fh, o.y1 - o.y0 + o.rr * 0.6), 0.3, o.x, o.y0 + Math.min(fh, o.y1 - o.y0 + o.rr * 0.6) / 2, -0.38), fm); }
+        if (o.door) add('beton', box(1.9, 0.12, 0.7, o.x, 0.06, 0.3), fm);   // worn threshold slab
+      }
+    }
+    // dressed limestone quoins at the four corners, alternating long and short blocks
+    for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+      for (let k = 0, y = BAND; y < H - 0.3; k++, y += 0.33) {
+        const lx = k % 2 ? 0.42 : 0.72, lz = k % 2 ? 0.72 : 0.42;
+        add('limestone', box(lx, 0.31, lz, sx * (w / 2 - lx / 2 + 0.025), y + 0.155, sz * (d / 2 - lz / 2 + 0.025)));
+      }
+    }
+    // low hipped roof of rusted corrugated sheet on timber eaves; a few rafter tails show under the overhang
+    const e = 0.6, pitch = 0.3, ry = H + 0.02, W = w / 2 + e, Dd = d / 2 + e;
+    const roof = roofGeometry(w, d, e, pitch, ry, 'h'); add('rustSheet', roof);
+    const sof = new THREE.PlaneGeometry(2 * W, 2 * Dd); sof.rotateX(Math.PI / 2); sof.translate(0, ry - 0.03, 0); add('woodRaw', sof);
+    add('woodRaw', box(2 * W + 0.05, 0.18, 0.05, 0, ry - 0.06, Dd)); add('woodRaw', box(2 * W + 0.05, 0.18, 0.05, 0, ry - 0.06, -Dd));
+    add('woodRaw', box(0.05, 0.18, 2 * Dd, W, ry - 0.06, 0)); add('woodRaw', box(0.05, 0.18, 2 * Dd, -W, ry - 0.06, 0));
+    for (let x = -w / 2 + 0.4; x < w / 2; x += 0.7) for (const s of [-1, 1]) add('woodRaw', box(0.08, 0.1, e, x, ry - 0.08, s * (d / 2 + e / 2)));
+    // two sheets slipped out of line near the ridge
+    for (const [ox, s] of [[-2.6, 1], [3.1, -1]]) { const p = box(1.0, 0.03, 2.2, 0, 0, 0); p.rotateX(s * pitch); p.translate(ox, ry + (Dd - 1.6) * Math.tan(pitch) + 0.06, s * 1.6); p.rotateY(0.07 * s); add('rustSheet', p); }
+    // trees on the satellite: a dark pine N of the building and a bare mulberry at its NE corner (Street View)
+    const wpt = (lx, lz) => ({ x: b.x + lx * Math.cos(b.yaw) + lz * Math.sin(b.yaw), z: b.z - lx * Math.sin(b.yaw) + lz * Math.cos(b.yaw) });
+    treeSpots.push({ ...wpt(-3, -d / 2 - 4.5), species: 'pine', size: 0.95, force: true }, { ...wpt(w / 2 + 2.5, -d / 2 - 1.5), species: 'mulberry', size: 0.9, force: true });
   }
   /** Village cemetery (satellite + Street View): low rubble wall, scattered upright headstones, a few pines. */
   function buildCemetery(c) {

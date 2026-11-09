@@ -110,6 +110,7 @@ if os.path.exists('tools/sv_overrides.json'):
         else:
             k = min(range(len(out_b)), key=lambda i: math.hypot(out_b[i]['x'] - ox, out_b[i]['z'] - oz))
             if math.hypot(out_b[k]['x'] - ox, out_b[k]['z'] - oz) > o.get('tol', 22): continue
+            if o.get('remove'): out_b.pop(k); continue   # a false roof trace (open lot, trees)
         for key in ('storeys', 'wall', 'roof', 'fence', 'kind'):
             if key in o: out_b[k][key] = o[key]
 # school: the building nearest the Keskin Köprü İlkokulu pin (2 storeys, red-brown render, Street View 08)

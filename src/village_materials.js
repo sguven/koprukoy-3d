@@ -61,6 +61,13 @@ export function villageMaterials(lib, { quality = 2 } = {}) {
   // dry-stone / rubble garden walls of granite boulders (Street View 07, 08, 12)
   M.rubble = triplanarMaterial({ set: lib.set('rubble_wall'), scale: lib.set('rubble_wall').size, normalScale: 1.0, antiTile: 0.3, sharp: 8, tint: new THREE.Color(0xb9a98f), roughBase: 0.95, cacheKey: 'rubblewall',
     extraFrag: 'albedo *= 0.9 + 0.25 * kk_tri(tRgh, vWPos * 0.3 + 1.0, kkW).r;' });
+  // abandoned stone building by Yeni Cami: grey-beige fieldstone (smaller stones than the garden walls), mud-plastered
+  // base band, rusted corrugated roof sheet, and the dark empty hall seen through the window openings
+  M.fieldstone = triplanarMaterial({ set: lib.set('rubble_wall'), scale: 1.1, normalScale: 1.0, antiTile: 0.35, sharp: 8, tint: new THREE.Color(0xd8d0c0), roughBase: 0.95, cacheKey: 'fieldstone',
+    extraFrag: 'albedo *= 0.92 + 0.2 * kk_tri(tRgh, vWPos * 0.4 + 5.0, kkW).r;' });
+  M.rustSheet = triplanarMaterial({ set: lib.set('metal_corr'), scale: lib.set('metal_corr').size, normalScale: 0.9, antiTile: 0.4, sharp: 8, tint: new THREE.Color(0x7a4630), roughBase: 0.85, cacheKey: 'rustsheet',
+    extraFrag: 'albedo = vec3(dot(albedo, vec3(0.33))) * vec3(1.0, 0.74, 0.58) * 0.95; albedo *= 0.75 + 0.45 * kk_tri(tRgh, vWPos * 0.35 + 7.0, kkW).r;' });
+  M.voidDark = std({ color: 0x17130f, roughness: 1.0 });
   M.woodRaw = triplanarMaterial({ set: lib.set('wood'), scale: 1.0, normalScale: 0.8, antiTile: 0.0, sharp: 8, tint: new THREE.Color(0xa08866), roughBase: 0.85, cacheKey: 'woodraw' });
   M.flag = std({ color: 0xc8102e, roughness: 0.8, side: THREE.DoubleSide });
   M.pole = triplanarMaterial({ set: concrete, scale: 1.0, normalScale: 0.6, antiTile: 0.2, sharp: 8, tint: new THREE.Color(0xa9a59c), roughBase: 0.9, cacheKey: 'pole', extraFrag: 'albedo *= 1.0 - 0.3 * (1.0 - smoothstep(0.0, 0.8, vWPos.y - 20.0)) * 0.0;' });
@@ -88,6 +95,7 @@ export function villageMaterials(lib, { quality = 2 } = {}) {
       albedo *= 1.0 - 0.22 * streak;
       albedo *= 1.0 - 0.3 * (1.0 - smoothstep(0.0, 1.0, vWPos.y - 25.0)) * 0.0;`);
   M.pilaster = triplanarMaterial({ set: concrete, scale: 2.0, normalScale: 0.6, antiTile: 0.3, sharp: 8, tint: new THREE.Color(0x9a5a48), roughBase: 0.9, cacheKey: 'pilaster', extraFrag: 'albedo = vec3(dot(albedo, vec3(0.33))) * vec3(1.3, 0.95, 0.85) * 1.25; albedo *= 0.85 + 0.3 * kk_tri(tRgh, vWPos * 0.4, kkW).r;' });
+  M.mudBase = plasterTint('mudbase', 0x9f927c, 'albedo *= 0.85 + 0.25 * smoothstep(0.3, 0.8, texture2D(tAlb, vec2(vWPos.x * 0.5 + vWPos.z * 0.5, vWPos.y * 0.4)).g);');
   M.coping = triplanarMaterial({ set: concrete, scale: 1.5, normalScale: 0.5, antiTile: 0.3, sharp: 8, tint: new THREE.Color(0xc9c3b6), roughBase: 0.9, cacheKey: 'coping' });
   M.step = M.beton;
 
