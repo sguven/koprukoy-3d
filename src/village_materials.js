@@ -20,7 +20,10 @@ export function villageMaterials(lib, { quality = 2 } = {}) {
   for (const n of ['Duvar_Beyaz', 'Duvar_Krem', 'Duvar_Okr', 'Duvar_Pembe', 'Duvar_Sari', 'Duvar_Gri']) M[n] = pick(n);
   for (const n of ['Cati_Kiremit', 'Cati_Kiremit_Koyu', 'Cati_Kiremit_Turuncu', 'Cati_Kiremit_Acik']) M[n] = pick(n);
   M.Cati_Sac_Gri = pick('Cati_Sac_Gri'); M.Cati_Sac_Mavi = pick('Cati_Sac_Mavi');
-  M.plinth = pick('Subasman'); M.garden = pick('Bahce_Duvari'); M.glass = pick('Cam'); M.door = pick('Kapi'); M.trim = pick('Beyaz_Silme'); M.chimney = pick('Baca');
+  M.plinth = pick('Subasman');
+  // v0.9.5: rendered garden walls are whitewashed or grey concrete block in the panoramas (06, 09, 31, 44, 88)
+  M.garden = triplanarMaterial({ set: plaster, scale: plaster.size, normalScale: 0.6, antiTile: 0.3, sharp: 8, tint: new THREE.Color(0xd3cec4), roughBase: 0.95, cacheKey: 'gardenwall',
+    extraFrag: 'albedo *= 1.08; albedo *= 0.88 + 0.24 * kk_tri(tRgh, vWPos * 0.27 + 5.0, kkW).r; albedo *= 1.0 - 0.18 * smoothstep(0.5, 0.8, kk_tri(tRgh, vWPos * 0.06, kkW).r);' }); M.glass = pick('Cam'); M.door = pick('Kapi'); M.trim = pick('Beyaz_Silme'); M.chimney = pick('Baca');
   M.ashlar = pick('Kesme_Tas');
   M.beton = pickRoad('Beton'); M.paving = pickRoad('Parke_Tasi'); M.pave = M.paving;
   // mown lawn in front of the mosque and on the small greens: fine dry-grass texture, greener and even
@@ -119,7 +122,8 @@ export function villageMaterials(lib, { quality = 2 } = {}) {
       ${frag}
       albedo = mix(albedo, dustC * 1.3, shoulder);
       rough = mix(rough, 0.95, shoulder);` });
-  M.road_asphalt = roadMat('rd_asphalt', { set: asphalt, ns: 0.7, tint: 0xb0afa9, rough: 0.95 }, /* glsl */`
+  // v0.9.5: pale, dusty worn asphalt as in Street View 02/15/17
+  M.road_asphalt = roadMat('rd_asphalt', { set: asphalt, ns: 0.6, tint: 0xc6c1b6, rough: 0.97 }, /* glsl */`
       // old village asphalt: dust creeping in from the edges, tyre-polished tracks, faded patches
       albedo *= 1.35;
       float edgeDust = smoothstep(0.55, 0.98, au) * (0.5 + 0.5 * wear);
@@ -136,18 +140,19 @@ export function villageMaterials(lib, { quality = 2 } = {}) {
       joint = max(joint, 1.0 - smoothstep(0.02, 0.05, abs(au - 0.0)) * 0.0);
       albedo *= 1.0 - 0.4 * joint;
       albedo = mix(albedo, dustC, smoothstep(0.6, 1.0, au) * 0.4 + track * 0.25);`);
-  M.road_dirt = roadMat('rd_dirt', { set: gravel, ns: 0.8, tint: 0xd9c5a2, rough: 1.0 }, /* glsl */`
-      // compacted earth track: two darker, smoother wheel ruts, a grassy crown in the middle, gravel in patches
+  // v0.9.5: pale compacted earth / gravel lanes, almost white in the sun (Street View 62/70)
+  M.road_dirt = roadMat('rd_dirt', { set: gravel, ns: 0.7, tint: 0xf0e8d6, rough: 1.0 }, /* glsl */`
+      // compacted earth track: two slightly darker wheel ruts, a grassy crown in the middle, gravel in patches
       vec3 pd = vWPos * 0.25;
       vec3 earth = kk_tri2(tDirtC, pd, kkW, kkK).rgb;
       float gravelK = smoothstep(0.35, 0.7, kk_tri(tSoilR, vWPos * 0.05, kkW).r);
-      albedo = mix(earth * 1.05, albedo, gravelK * 0.6);
+      albedo = mix(earth * 1.3, albedo, 0.35 + gravelK * 0.45);
       wN = normalize(mix(kk_triNormal(tDirtN, pd, kkW, kkN, 0.9), wN, gravelK * 0.6));
-      albedo *= 1.0 - 0.22 * track;
+      albedo *= 1.0 - 0.14 * track;
       float crown = (1.0 - smoothstep(0.0, 0.22, au)) * smoothstep(0.35, 0.7, kk_tri(tSoilR, vWPos * 0.3 + 1.0, kkW).r);
       vec3 grassC = kk_tri(tGrassC, vWPos * 0.5, kkW).rgb * vec3(0.95, 1.0, 0.75);
-      albedo = mix(albedo, grassC, crown * 0.7);
-      albedo *= 0.88 + 0.24 * wear;
+      albedo = mix(albedo, grassC, crown * 0.55);
+      albedo *= (0.88 + 0.24 * wear) * 1.18;
       rough = mix(rough, 0.7, track * 0.4);`);
   // stabilised earth square: no ruts, lots of tyre scuffing
   M.square = roadMat('rd_square', { set: gravel, ns: 0.7, tint: 0xe0d8c8, rough: 1.0 }, /* glsl */`

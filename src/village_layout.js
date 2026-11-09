@@ -260,7 +260,7 @@ export function buildVillageLayout(terrH, existingRoads = []) {
     const hs = rectCorners(b).map(([x, z]) => terrH(x, z)); hs.push(terrH(b.x, b.z));
     const hMax = Math.max(...hs), hMin = Math.min(...hs), range = hMax - hMin;
     // cut-and-fill on slopes (Street View 99): floor sits part-way down the drop so the plinth never grows past ~3 m
-    b.yTop = (range > 1.5 ? hMax - 0.5 * (range - 1.5) : hMax) + 0.05; b.yLow = hMin - 0.4;
+    b.yTop = (range > 1.0 ? hMax - 0.6 * (range - 1.0) : hMax) + 0.05; b.yLow = hMin - 0.4;   // v0.9.5: cut deeper, plinths stay ~1–2 m
     if (b.floorAtFront && b.face !== undefined) { const fx = b.x + Math.cos(b.face) * (b.w / 2 + 1), fz = b.z + Math.sin(b.face) * (b.w / 2 + 1); b.yTop = terrH(fx, fz) + 0.15; }
   }
   return { roads, buildings, sites: SITES, rnd };
