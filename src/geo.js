@@ -103,7 +103,7 @@ export function gableEnds(w, d, pitch, y0) {
  * { u, dy } cross-section stations (u in metres from the centre, dy = height above the ground);
  * `yAt(x, z)` gives the ground height. UV: x = u / halfWidth (signed), y = distance along in metres.
  */
-export function ribbon(line, profile, yAt, uScale = 1) {
+export function ribbon(line, profile, yAt, uScale = 1, wScale = null) {
   const n = line.length, m = profile.length, pos = [], uv = [], idx = [];
   let s = 0;
   for (let i = 0; i < n; i++) {
@@ -112,7 +112,7 @@ export function ribbon(line, profile, yAt, uScale = 1) {
     const nx = -tz, nz = tx;
     if (i > 0) s += Math.hypot(p[0] - line[i - 1][0], p[1] - line[i - 1][1]);
     for (let j = 0; j < m; j++) {
-      const st = profile[j], x = p[0] + nx * st.u, z = p[1] + nz * st.u;
+      const st = profile[j], ws = wScale ? wScale[i] : 1, x = p[0] + nx * st.u * ws, z = p[1] + nz * st.u * ws;
       pos.push(x, yAt(x, z, st) + st.dy, z); uv.push(st.u * uScale, s);
     }
     if (i > 0) for (let j = 0; j + 1 < m; j++) {

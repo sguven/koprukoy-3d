@@ -5,6 +5,33 @@ Two passes so far: **v0.7 "materials"** (surfaces only, nothing moved) and **v0.
 `model/koprukoy.glb` are still the v0.6 files. Terrain (SRTM 30 m), the reservoir at 724 m, the
 Çeşnigir Bridge body, D.260 and the roads outside the village are unchanged.
 
+## v0.9.6 — Köprüköy Arena (Nov 2026)
+
+The owner asked for a game version "like the walk and fly functions": a Counter-Strike-style fight against bots,
+then for CS 1.5-quality weapons and livelier, armed, realistically roaming bots. `src/game.js`, entered with the
+**Game** button; it reuses the walk controls, the collision data and the minimap.
+
+- **Weapons** (CS 1.5 numbers, roughly): AK-47 (36 dmg, 10/s, climbing spread), M4A1 (33, 11/s), MP5 Navy (26,
+  13.3/s), AWP (115, bolt action, right-mouse scope with 14° FOV, hopeless unscoped), Desert Eagle (54, 7 rounds,
+  semi-automatic), knife. Primary chosen in Settings; 1 / 2 / 3, Q, wheel switch with a lower-and-raise animation,
+  R reloads, magazines and reserve per weapon, camera recoil (the AK climbs), spread that grows while firing and
+  while moving, headshots × 4, damage falloff with distance. Low-poly view models (receiver, handguard, curved or
+  straight magazine, stock, sights, scope tube, muzzle brake), muzzle flash sprite, tracers, dust on walls, blood
+  puffs on hits, synthesised per-weapon sounds.
+- **Bots**: figures with vest, scarf, mask, boots and the same rifle models held in both hands (lowered on patrol,
+  levelled when aiming; crouch pose at mid range sometimes). Each has its own speed, reaction time (0.3–0.7 s) and
+  weapon (AK / M4 / MP5 / Deagle). They **roam the real road network**: `village_layout` lanes are turned into a graph
+  of lanes and junctions; a bot walks a lane a little off the centreline, at a junction picks another lane at random
+  (dead ends turn it round), stops now and then to look around. Perception: line of sight checked 4–5 times a second
+  (terrain + 5.5 m building boxes, 120 m); they also hear gunfire (90 m, AWP 160 m) and turn towards shots that hit
+  them. Combat: chase with run-and-gun sprints and aiming stops, strafe and crouch at 12–32 m, back off under 12 m,
+  bursts whose length depends on the weapon, magazines that run out → fall back and reload, flee for cover under
+  40 hp, hit chance from weapon accuracy × difficulty × distance, lower when either side moves, tracers and
+  near-miss whizzes. 100 hp, headshots kill; they fall over and respawn out of sight after 6 s.
+- Settings: 4 / 8 / 12 bots, primary weapon, Easy / Normal / Hard (bot accuracy × 0.6 / 1 / 1.5). Rounds of 5
+  minutes, kills : deaths and a kill feed, Enter starts a new round; touch: joystick + FIRE / R / WPN buttons.
+  Minimap shows bots only within 60 m.
+
 ## v0.9.5 — the village as Street View shows it (Nov 2026)
 
 The owner asked for the model to look like the real place, Street View being the measure: the houses were too
@@ -53,6 +80,14 @@ Rendering (`src/village.js`, `village_layout.js`, `village_materials.js`, `terra
 - windows: 2–3 on a 10–12 m street front, at most 4 on a long one, 1–2 on side walls, blank stretches on long
   walls (03, 36, 57, 60); floor-to-floor 2.8 m; barns / annexes 2.6 m high with small openings, no balcony, no
   garden wall;
+- junctions and ends: each ribbon runs on past its end by the other road's half width so the carriageways overlap
+  instead of stopping short of each other; endpoints within 7 m of the road they lead to are joined to it in the
+  data; a lane that ends in the open tapers out over its last 10 m; a utility pole that would stand on a crossing
+  road steps a few metres aside instead of breaking the line of cables; the road-clearance nudge keeps a step only
+  when it reduces the intrusion (a house between two lanes used to be pushed off one straight onto the other);
+- roads lie on the ground: the per-road stagger that separates overlapping ribbons at junctions was index × 3 mm and
+  had grown to 1.4 m over 467 roads, so the lanes ran on raised causeways; it is now at most 3 cm on a 6–12 cm lift,
+  and a lane is told from the ground by its paler surface alone (owner's request);
 - houses on slopes are cut deeper into the ground, so plinths stay 1–2 m instead of 3 m;
 - `pruneRocks`: the merged GLB rock mesh is split into boulders (connected components); the 144 boulders on a road
   ribbon, in a yard or within 18 m of a house are dropped (56/57: a plastered house and an ashlar garden wall where

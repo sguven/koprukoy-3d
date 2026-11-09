@@ -232,12 +232,24 @@ export function buildVillageLayout(terrH, existingRoads = []) {
   buildings.push({ x: S.mosque.x + 8.7, z: S.mosque.z - 6.7, yaw: 0, w: 2.6, d: 2.6, kind: 'minaret' });
   buildings.push({ x: S.mosque.x - 8.7, z: S.mosque.z - 6.7, yaw: 0, w: 2.6, d: 2.6, kind: 'minaret' });
   // traced houses that landed on a re-drawn road are nudged away from it, perpendicular to the road
+  // how far the footprint (plus a margin) reaches into the nearest road ribbon; 0 when clear
+  const intrusion = (b, margin) => {
+    let worst = 0;
+    for (const c of rectCorners({ ...b, w: b.w + 2 * margin, d: b.d + 2 * margin })) for (const r of roads) worst = Math.max(worst, r.w / 2 + 0.4 - distToPolyline(c[0], c[1], r.line).d);
+    return worst;
+  };
   for (const b of buildings) {
     if (!b.traced) continue;
-    for (let it = 0; it < 8 && !b.fixed && !roadClear(b, 0.6); it++) {
+    // v0.9.5: a step is kept only if it reduces the intrusion — a house between two lanes used to be pushed off one
+    // lane straight onto the other (the long house S of the mosque sat across the asphalt)
+    let cur = b.fixed ? 0 : intrusion(b, 0.6);
+    for (let it = 0; it < 8 && cur > 0; it++) {
       const h = nearestRoad(b.x, b.z), p = h.r.line[h.i], q = h.r.line[Math.min(h.r.line.length - 1, h.i + 1)], dx = q[0] - p[0], dz = q[1] - p[1], L = Math.hypot(dx, dz) || 1;
       const nx = -dz / L, nz = dx / L, side = Math.sign((b.x - p[0]) * nx + (b.z - p[1]) * nz) || 1;
-      b.x += nx * side; b.z += nz * side;
+      const ox = b.x, oz = b.z; b.x += nx * side; b.z += nz * side;
+      const nxt = intrusion(b, 0.6);
+      if (nxt >= cur - 0.05) { b.x = ox; b.z = oz; break; }
+      cur = nxt;
     }
     const h = nearestRoad(b.x, b.z), p = h.r.line[h.i], q = h.r.line[Math.min(h.r.line.length - 1, h.i + 1)];
     b.face = Math.atan2(p[1] - b.z, p[0] - b.x); b.front = h.d;

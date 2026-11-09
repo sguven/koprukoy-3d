@@ -151,8 +151,8 @@ export function villageMaterials(lib, { quality = 2 } = {}) {
       albedo *= 1.0 - 0.14 * track;
       float crown = (1.0 - smoothstep(0.0, 0.22, au)) * smoothstep(0.35, 0.7, kk_tri(tSoilR, vWPos * 0.3 + 1.0, kkW).r);
       vec3 grassC = kk_tri(tGrassC, vWPos * 0.5, kkW).rgb * vec3(0.95, 1.0, 0.75);
-      albedo = mix(albedo, grassC, crown * 0.55);
-      albedo *= (0.88 + 0.24 * wear) * 1.18;
+      albedo = mix(albedo, grassC, crown * 0.4);
+      albedo *= (0.88 + 0.24 * wear) * 1.3;   // flush with the ground, so the lane is told by its paler surface alone
       rough = mix(rough, 0.7, track * 0.4);`);
   // stabilised earth square: no ruts, lots of tyre scuffing
   M.square = roadMat('rd_square', { set: gravel, ns: 0.7, tint: 0xe0d8c8, rough: 1.0 }, /* glsl */`

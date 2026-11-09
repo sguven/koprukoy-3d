@@ -121,6 +121,30 @@ _rects.append((_pitch['x'], _pitch['z'], 0.0, _pitch['w'], _pitch['d']))
 snap_report = snap_roads(roads, _rects)
 for r in roads: r['pts'] = [[round(p[0], 1), round(p[1], 1)] for p in despike(rdp([list(p) for p in r['pts']], 0.8))]
 def plen(P): return sum(math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]) for i in range(1, len(P)))
+# 4c. close the gaps: an endpoint that ends within 7 m of another road is put onto it (the snap moved roads
+#     independently; the owner's screenshots showed lanes stopping short of the road they lead to)
+def _proj(p, Q):
+    best = (1e9, None)
+    for k in range(len(Q) - 1):
+        a, b = Q[k], Q[k + 1]; ab = b - a; t = max(0.0, min(1.0, float(np.dot(p - a, ab) / (ab @ ab or 1e-9)))); q = a + ab * t
+        d = float(np.hypot(*(p - q)))
+        if d < best[0]: best = (d, q)
+    return best
+n_conn = 0
+for i, r in enumerate(roads):
+    if r['id'].startswith('d260'): continue
+    for e in (0, -1):
+        p = np.array(r['pts'][e], float); best = (1e9, None)
+        for j, o in enumerate(roads):
+            if j == i: continue
+            Q = np.array(o['pts'], float)
+            if np.min(np.hypot(Q[:, 0] - p[0], Q[:, 1] - p[1])) > 40: continue
+            d, q = _proj(p, Q)
+            if d < best[0]: best = (d, q)
+        if 0.3 < best[0] < 7.0:
+            r['pts'][e] = [round(float(best[1][0]), 1), round(float(best[1][1]), 1)]; n_conn += 1
+print('roads: endpoints joined to the road they lead to', n_conn)
+roads = [r for r in roads if r['id'].startswith('d260') or plen(r['pts']) >= 4]   # joining can collapse a tiny connector
 def free_end(ri, p):
     p = np.array(p)
     for j, o in enumerate(roads):
@@ -249,14 +273,15 @@ def intrusion(b):
     return worst, nrm
 n_moved = n_shrunk2 = 0
 for b in B:
-    if protected(b) and 'barn' not in b['extra']: continue
+    prot = protected(b) and 'barn' not in b['extra']   # Street View overrides: may slide off a road, never shrink
     moved = 0.0
     for it in range(8):
         dep, nn = intrusion(b)
         if dep <= 0.2: break
         step = min(1.2, dep + 0.2)
-        if moved + step <= 3.5:
+        if moved + step <= 6.0:   # roads are now the satellite-fitted truth: a house slides up to 6 m before it shrinks
             b['x'] = round(b['x'] + nn[0] * step, 1); b['z'] = round(b['z'] + nn[1] * step, 1); moved += step
+        elif prot: break
         else:
             # shrink the side that faces the road
             lx, lz = world2local(dict(b, x=0, z=0), nn[0], nn[1])
