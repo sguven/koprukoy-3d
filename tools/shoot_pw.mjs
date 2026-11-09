@@ -26,7 +26,7 @@ const server = http.createServer((req, res) => {
     let s = body.toString();
     s = s.replace('https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js', '/three/build/three.module.js')
          .replace('https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/', '/three/examples/jsm/');
-    if (!s.includes('window.__kk')) s = s.replace('</script>\n</body>', 'window.__kk = { go, setSun, setMode, camera, controls, renderer, scene, P, CS, surfaceAt, sun, hemi, terrH, D: () => D, V: () => VILLAGE };\n</script>\n</body>');
+    if (!s.includes('window.__kk')) s = s.replace('</script>\n</body>', 'window.__kk = { go, setSun, setMode, camera, controls, renderer, scene, P, CS, surfaceAt, sun, hemi, terrH, D: () => D, V: () => VILLAGE, game: () => game };\n</script>\n</body>');
     body = Buffer.from(s);
   }
   res.writeHead(200, { 'content-type': mime[path.extname(file)] || 'application/octet-stream', 'cache-control': 'no-store' });
@@ -52,6 +52,12 @@ for (const v of views) {
   else if (v.startsWith('walk:')) { // walk:x,z,headingDeg[,pitch][,label]
     const parts = v.slice(5).split(','); const [x, z, hd] = parts.slice(0, 3).map(Number); const pitch = parts[3] !== undefined && parts[3] !== '' ? +parts[3] : 0.0; if (parts[4]) name = parts[4];
     await page.evaluate(([x, z, hd, pitch]) => { const k = window.__kk; k.setMode('walk'); k.P.x = x; k.P.z = z; k.P.yaw = -hd * Math.PI / 180; k.P.pitch = pitch; k.P.y = k.surfaceAt(x, z).y + 0.8; k.P.vy = 0; }, [x, z, hd, pitch]);
+  } else if (v.startsWith('game:')) { // game:x,z,headingDeg[,label] — enter the arena, let the bots move for a moment
+    const parts = v.slice(5).split(','); const [x, z, hd] = parts.slice(0, 3).map(Number); if (parts[3]) name = parts[3];
+    await page.evaluate(([x, z, hd]) => { const k = window.__kk; k.setMode('game'); k.P.x = x; k.P.z = z; k.P.yaw = -hd * Math.PI / 180; k.P.pitch = 0; k.P.y = k.surfaceAt(x, z).y; k.P.vy = 0; }, [x, z, hd]);
+    await settle(6);
+    await page.evaluate(() => { const g = window.__kk.game(); const b = g.state.bots[0]; const p = window.__kk.P; const d = 14, a = -p.yaw; b.x = p.x - Math.sin(a) * d + 2; b.z = p.z - Math.cos(a) * d; b.y = window.__kk.surfaceAt(b.x, b.z).y; b.dead = 0; g.fire(); });
+    await settle(2);
   } else await page.evaluate(v => window.__kk.go(v, true), v);
   await settle(4);
   await page.screenshot({ path: path.join(out, `${name}.jpg`), type: 'jpeg', quality: 85, timeout: 600000, animations: 'disabled' });

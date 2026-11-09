@@ -80,6 +80,20 @@ canvas { display: block; touch-action: none; }
 #tGas { right: 18px; bottom: 26px; width: 84px; height: 112px; }
 #tBrake { right: 112px; bottom: 26px; width: 74px; height: 74px; }
 #tUp { right: 18px; bottom: 112px; width: 64px; height: 64px; }
+#tFire { right: 18px; bottom: 26px; width: 110px; height: 110px; border-radius: 50%; background: rgba(162,72,47,0.6); }
+#tReload { right: 140px; bottom: 26px; width: 64px; height: 64px; }
+#gameHud { position: fixed; inset: 0; pointer-events: none; display: none; font-family: var(--display); color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.7); }
+#gameHud .gh-top { position: absolute; top: 70px; left: 50%; transform: translateX(-50%); display: flex; gap: 22px; font: 800 24px var(--display); background: rgba(30,27,23,0.55); padding: 6px 18px; border-radius: 10px; letter-spacing: 0.04em; }
+#gameHud .gh-feed { position: absolute; top: 120px; left: 50%; transform: translateX(-50%); font: 600 14px var(--display); text-align: center; }
+#gameHud .gh-health { position: absolute; left: 20px; bottom: 22px; display: flex; align-items: center; gap: 10px; font: 800 26px var(--display); }
+#gameHud .gh-bar { width: 220px; height: 14px; background: rgba(0,0,0,0.45); border-radius: 7px; overflow: hidden; border: 1px solid rgba(255,255,255,0.4); }
+#gameHud .gh-bar i { display: block; height: 100%; width: 100%; background: #7cc26b; transition: width 0.15s; }
+#gameHud .gh-ammo { position: absolute; right: 24px; bottom: 22px; font: 800 34px var(--display); display: flex; align-items: baseline; gap: 8px; }
+#gameHud .gh-ammo span { font-size: 18px; opacity: 0.85; } #gameHud .gh-ammo em { font: 600 13px var(--display); color: #ffd27a; margin-left: 8px; }
+#gameHud .gh-hurt { position: absolute; inset: 0; background: radial-gradient(ellipse at center, rgba(200,30,20,0) 45%, rgba(200,30,20,0.9) 100%); opacity: 0; }
+#gameHud .gh-dead, #gameHud .gh-end { position: absolute; inset: 0; display: none; place-items: center; background: rgba(30,10,8,0.45); }
+#gameHud .gh-dead > div, #gameHud .gh-end > div { text-align: center; display: grid; gap: 8px; } #gameHud .gh-dead b, #gameHud .gh-end b { font: 900 46px var(--display); letter-spacing: 0.08em; } #gameHud .gh-dead span, #gameHud .gh-end span { font: 600 18px var(--display); } #gameHud small { opacity: 0.8; }
+@media (max-width: 720px) { #gameHud .gh-top { top: 60px; font-size: 18px; } #gameHud .gh-health { bottom: 150px; } #gameHud .gh-ammo { bottom: 150px; right: 16px; font-size: 28px; } }
 #tDn { right: 18px; bottom: 30px; width: 64px; height: 64px; }
 #tCam { right: 18px; top: 256px; width: 64px; height: 44px; font-size: 14px; }
 
@@ -115,13 +129,14 @@ canvas { display: block; touch-action: none; }
 <div class="toast" id="toast"></div>
 
 <div class="topbar">
-  <div class="brand"><h1>Köprüköy</h1><div class="sub">Keskin · Kırıkkale, Türkiye — 3D v0.9.5</div></div>
+  <div class="brand"><h1>Köprüköy</h1><div class="sub">Keskin · Kırıkkale, Türkiye — 3D v0.9.6</div></div>
   <div class="modes" id="modes" role="tablist" aria-label="Navigation mode">
     <button data-mode="orbit" class="on">Orbit</button>
     <!-- walk / fly / Toros: disabled for now, to be re-enabled later -->
     <button data-mode="walk" disabled title="Coming later">Walk</button>
     <button data-mode="fly" disabled title="Coming later">Fly</button>
     <button data-mode="car" disabled title="Coming later">Toros</button>
+    <button data-mode="game" title="Deathmatch against bots in the village">Game</button>
   </div>
   <div class="spacer"></div>
   <button class="gear" id="gearBtn" aria-expanded="false">Settings</button>
@@ -138,6 +153,15 @@ canvas { display: block; touch-action: none; }
       <button class="pbtn" data-view="detay">Village centre</button>
       <button class="pbtn" data-view="tepe">Top-down</button>
     </div>
+  </div>
+  <div id="gameGroup" hidden>
+    <div class="group-title">Game</div>
+    <div class="row" id="botCount">
+      <button class="pbtn" data-bots="4">4 bots</button>
+      <button class="pbtn on" data-bots="8">8 bots</button>
+      <button class="pbtn" data-bots="12">12 bots</button>
+    </div>
+    <p class="note">Deathmatch in the village: the bots patrol the lanes, spot you, chase and shoot. Rifle with 30-round magazines, 5-minute rounds. Score = kills : deaths.</p>
   </div>
   <div id="carGroup" hidden>
     <div class="group-title">Toros</div>
@@ -190,6 +214,7 @@ import { setupRealism } from './src/realism.js';
 import { tagBuildings } from './src/buildings.js';
 import { buildVillageLayout, buildCentreLayout, roadSamples, squareSamples, carsiBoxes, buildingBoxes, inRegion, inCentreZone } from './src/village_layout.js';
 import { pruneOldVillage, pruneRocks, LIFT } from './src/village.js';
+import { createGame } from './src/game.js';
 
 const POIS = [{"id": "kopru", "label": "Çeşnigir Bridge", "kind": "tarihi", "pos": [-377, 16, -277]}, {"id": "viyaduk", "label": "D.260 viaduct", "kind": "yol", "pos": [-539, 22, -105]}, {"id": "d260a", "label": "D.260", "kind": "yon", "pos": [-951, 35, -319]}, {"id": "d260b", "label": "D.260", "kind": "yon", "pos": [154, 36, 568]}, {"id": "karakecili", "label": "To Karakeçili", "kind": "yon", "pos": [-825, 21, -209]}, {"id": "gezi", "label": "Promenade", "kind": "yer", "pos": [-267, 14, -57]}, {"id": "seyir", "label": "Viewpoint rock", "kind": "yer", "pos": [-292, 24, -338]}, {"id": "iskele", "label": "Boat pier", "kind": "yer", "pos": [-305, 9, -367]}, {"id": "kanyon", "label": "Çeşnigir Canyon", "kind": "yer", "pos": [-277, 55, -602]}, {"id": "nehir", "label": "Kızılırmak · Kapulukaya Reservoir", "kind": "su", "pos": [-318, 8, 331]}];
 const isTouch = matchMedia('(pointer: coarse)').matches;
@@ -606,11 +631,11 @@ function walkStep(dt, fly) {
 }
 // mouse look (desktop: pointer lock)
 const dom = renderer.domElement;
-dom.addEventListener('click', () => { if ((mode === 'walk' || mode === 'fly') && !isTouch && document.pointerLockElement !== dom) { try { const r = dom.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (e) {} } });
+dom.addEventListener('click', () => { if ((mode === 'walk' || mode === 'fly' || mode === 'game') && !isTouch && document.pointerLockElement !== dom) { try { const r = dom.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (e) {} } });
 document.addEventListener('mousemove', e => { if (document.pointerLockElement === dom) { P.yaw -= e.movementX * 0.0022; P.pitch = Math.max(-1.45, Math.min(1.45, P.pitch - e.movementY * 0.0022)); } });
 // touch look: drag on the screen; unlocked dragging also works on desktop
 let lookId = null, lx0 = 0, ly0 = 0;
-dom.addEventListener('pointerdown', e => { if (mode === 'walk' || mode === 'fly' || mode === 'car') { if (document.pointerLockElement === dom) return; lookId = e.pointerId; lx0 = e.clientX; ly0 = e.clientY; } });
+dom.addEventListener('pointerdown', e => { if (mode === 'walk' || mode === 'fly' || mode === 'game' || mode === 'car') { if (document.pointerLockElement === dom) return; lookId = e.pointerId; lx0 = e.clientX; ly0 = e.clientY; } });
 addEventListener('pointermove', e => { if (e.pointerId !== lookId) return; const dx = e.clientX - lx0, dy = e.clientY - ly0; lx0 = e.clientX; ly0 = e.clientY;
   if (mode === 'car') { carYawOff -= dx * 0.006; carPitchOff = Math.max(-0.4, Math.min(0.6, carPitchOff + dy * 0.004)); return; }
   P.yaw -= dx * 0.005; P.pitch = Math.max(-1.45, Math.min(1.45, P.pitch - dy * 0.005)); });
@@ -628,12 +653,13 @@ holdBtn('tLeft', 'left'); holdBtn('tRight', 'right'); holdBtn('tGas', 'gas'); ho
 document.getElementById('tCam').addEventListener('pointerdown', e => { CS.cam = (CS.cam + 1) % 3; e.stopPropagation(); });
 
 // ---------- modlar ----------
-let mode = 'orbit', carYawOff = 0, carPitchOff = 0;
+let mode = 'orbit', carYawOff = 0, carPitchOff = 0, game = null;
 const HINTS = {
   orbit: isTouch ? '1 finger: move · 2 fingers: pinch to zoom, twist to rotate, slide up/down to tilt · Double-tap: zoom in' : 'Drag: move · Wheel: zoom · Right-drag or Ctrl+drag: rotate / tilt · Double-click: zoom in',
   walk: 'Click, then look with the mouse · WASD: walk · Shift: run · Space: jump · Esc: release cursor',
   fly: 'Click, then look with the mouse · WASD: fly · E/Q: up/down · Shift: fast',
   car: '↑/W gas · ↓/S brake/reverse · ←/→ steer · Space handbrake · C camera · L headlights',
+  game: 'Click to aim · WASD: move · Shift: run · Mouse 1: fire · R: reload · Space: jump · Esc: release cursor',
 };
 document.getElementById('hint').textContent = HINTS.orbit;
 function setMode(m) {
@@ -645,17 +671,20 @@ function setMode(m) {
   document.getElementById('hud').classList.toggle('show', m === 'car');
   document.getElementById('carGroup').hidden = m !== 'car';   // Toros settings only appear inside the Toros
   document.getElementById('minimap').classList.toggle('show', m !== 'orbit');
-  document.getElementById('cross').style.display = (m === 'walk' || m === 'fly') && !isTouch ? 'block' : 'none';
+  document.getElementById('cross').style.display = (m === 'walk' || m === 'fly' || m === 'game') && !isTouch ? 'block' : 'none';
+  document.getElementById('gameGroup').hidden = m !== 'game';
   const show = (ids, on) => ids.forEach(id => document.getElementById(id).classList.toggle('show', on && isTouch));
-  show(['joy'], m === 'walk' || m === 'fly'); show(['tUp', 'tDn'], m === 'fly'); show(['tLeft', 'tRight', 'tGas', 'tBrake', 'tCam'], m === 'car');
+  show(['joy'], m === 'walk' || m === 'fly' || m === 'game'); show(['tUp', 'tDn'], m === 'fly'); show(['tLeft', 'tRight', 'tGas', 'tBrake', 'tCam'], m === 'car');
   if (document.pointerLockElement && m !== 'walk' && m !== 'fly') document.exitPointerLock();
-  if (m === 'walk' || m === 'fly') {
+  if (m === 'walk' || m === 'fly' || m === 'game') {
     // start from the current view
     if (prev === 'car') { P.x = CS.x - Math.sin(CS.h) * 3.2; P.z = CS.z - Math.cos(CS.h) * 3.2; P.yaw = CS.h - Math.PI / 2; const q = { x: P.x, z: P.z }; pushOut(q, 0.4); P.x = q.x; P.z = q.z; }
-    else if (prev === 'orbit') { const t = controls.target; if (m === 'walk') { const [wx, wz] = camera.position.distanceTo(t) < 400 ? [t.x, t.z] : D.spawn.walk; P.x = wx; P.z = wz; } else { P.x = camera.position.x; P.z = camera.position.z; } const d = new THREE.Vector3().subVectors(t, camera.position); P.yaw = Math.atan2(-d.x, -d.z); }
+    else if (prev === 'orbit') { const t = controls.target; if (m === 'walk' || m === 'game') { const [wx, wz] = camera.position.distanceTo(t) < 400 ? [t.x, t.z] : D.spawn.walk; P.x = wx; P.z = wz; } else { P.x = camera.position.x; P.z = camera.position.z; } const d = new THREE.Vector3().subVectors(t, camera.position); P.yaw = Math.atan2(-d.x, -d.z); }
     P.pitch = m === 'fly' ? -0.25 : 0; P.y = m === 'fly' ? Math.max(camera.position.y, terrH(P.x, P.z) + 60) : surfaceAt(P.x, P.z).y; P.vy = 0;
-    if (surfaceAt(P.x, P.z).water && m === 'walk') { const [wx, wz] = D.spawn.walk; P.x = wx; P.z = wz; P.y = surfaceAt(wx, wz).y; }
+    if (surfaceAt(P.x, P.z).water && (m === 'walk' || m === 'game')) { const [wx, wz] = D.spawn.walk; P.x = wx; P.z = wz; P.y = surfaceAt(wx, wz).y; }
   }
+  if (m === 'game') { if (!game) game = createGame({ scene, camera, P, D, terrH, surfaceAt, pushOut, kd, isTouch, EYE }); game.start(); }
+  else if (prev === 'game' && game) game.stop();
   if (m === 'car') { initAudio(); if (audio && audio.ac.state === 'suspended') audio.ac.resume(); carYawOff = 0; carPitchOff = 0; }
   if (m === 'orbit' && prev !== 'orbit') { controls.target.set(camera.position.x + (prev === 'car' ? 0 : 0), camera.position.y, camera.position.z); const fwd = new THREE.Vector3(); camera.getWorldDirection(fwd); controls.target.copy(camera.position).addScaledVector(fwd, 60); controls.repin(); }
 }
@@ -681,6 +710,7 @@ function go(name, instant = false) {
   anim = { from, to, t0: performance.now(), dur: 1500 };
 }
 document.querySelectorAll('#views .pbtn').forEach(b => b.addEventListener('click', () => go(b.dataset.view)));
+document.querySelectorAll('#botCount .pbtn').forEach(b => b.addEventListener('click', () => { document.querySelectorAll('#botCount .pbtn').forEach(o => o.classList.toggle('on', o === b)); if (game) game.setBots(+b.dataset.bots); }));
 camera.position.set(...V.genel.p); controls.target.set(...V.genel.t);
 const panel = document.getElementById('panel'), gearBtn = document.getElementById('gearBtn');
 gearBtn.addEventListener('click', () => { const h = panel.classList.toggle('hidden'); gearBtn.setAttribute('aria-expanded', String(!h)); });
@@ -725,6 +755,13 @@ renderer.setAnimationLoop(now => {
     if (anim) { const k = Math.min(1, (now - anim.t0) / anim.dur), e = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2; camera.position.lerpVectors(anim.from.p, anim.to.p, e); controls.target.lerpVectors(anim.from.t, anim.to.t, e); if (k >= 1) anim = null; }
     controls.update(); focus = controls.target;
   } else if (mode === 'walk' || mode === 'fly') { const n = Math.ceil(dt / 0.05); for (let i = 0; i < n; i++) walkStep(dt / n, mode === 'fly'); focus = camera.position; drawMinimap(P.x, P.z, -P.yaw); }
+  else if (mode === 'game') {
+    const n = Math.ceil(dt / 0.05); for (let i = 0; i < n; i++) walkStep(dt / n, false);
+    game.update(dt, now); focus = camera.position; drawMinimap(P.x, P.z, -P.yaw);
+    // bots on the minimap, in the same frame drawMinimap used
+    const W = mm.width, sc = 1.6, h = -P.yaw, c = Math.cos(-h), s = Math.sin(-h);
+    game.drawMinimap(mctx, (bx, bz) => { const u = (bx - P.x) * MMR, v = (bz - P.z) * MMR, px = W / 2 + sc * (u * c - v * s), py = W / 2 + sc * (u * s + v * c); const d = Math.hypot(px - W / 2, py - W / 2), r = W / 2 - 8; return d > r ? [W / 2 + (px - W / 2) * r / d, W / 2 + (py - W / 2) * r / d] : [px, py]; });
+  }
   else if (mode === 'car') {
     // physics sub-steps
     const n = Math.ceil(dt / 0.008); for (let i = 0; i < n; i++) carStep(dt / n);

@@ -5,6 +5,22 @@ Two passes so far: **v0.7 "materials"** (surfaces only, nothing moved) and **v0.
 `model/koprukoy.glb` are still the v0.6 files. Terrain (SRTM 30 m), the reservoir at 724 m, the
 Çeşnigir Bridge body, D.260 and the roads outside the village are unchanged.
 
+## v0.9.6 — Köprüköy Arena (Nov 2026)
+
+The owner asked for a game version "like the walk and fly functions": a Counter-Strike-style fight against bots.
+`src/game.js`, entered with the **Game** button. It reuses the walk controls, collision and the minimap:
+
+- player: rifle view model (bob, recoil, reload animation), 30-round magazine + 90 in reserve, 10 shots/s, spread
+  grows while moving; health 100, red vignette when hit, respawn at the çarşı after 3.5 s;
+- bots (4 / 8 / 12, Settings): low-poly figures with red scarves; patrol between random road points, check line of
+  sight to the player a few times a second (terrain + 5.5 m building boxes), chase, hold at 30 m with a little
+  strafing, fire bursts of three with a hit chance that falls with distance and when the player moves; 100 hp,
+  headshots kill; they fall over and respawn out of sight after 6 s;
+- bullets: nearest bot hit (body / head spheres) unless a wall or the ground is in the way (`trace`), tracer line,
+  dust puff on impact; synthesised sounds (shot, hit, hurt, reload) — no audio files;
+- rounds of 5 minutes, kills : deaths and a kill feed on the HUD, Enter starts a new round; touch: joystick +
+  FIRE / R buttons.
+
 ## v0.9.5 — the village as Street View shows it (Nov 2026)
 
 The owner asked for the model to look like the real place, Street View being the measure: the houses were too
