@@ -216,6 +216,9 @@ export function buildVillage(ctx, layout, M) {
     for (const c of S.cemeteries || []) buildCemetery(c);
     for (const mn of S.minarets || []) buildMinaretAt(mn.x, mn.z);
     for (const gd of S.gardens || []) {   // small fenced greens with pines and benches
+      // v0.9.8: the green by the çarşı is the ÇEŞNİGİR-DER garden terrace; its nine draws are still made so the
+      // rest of the village keeps its random trees and details
+      if (gd.der && S.der) { for (let i = 0; i < 9; i++) rnd(); buildDer(S.der, S.plot); continue; }
       bat.add('lawn', patch(gd.x, gd.z, gd.w, gd.d, 0, yAt, 0.07, 1.5));
       for (let i = 0; i < 3; i++) treeSpots.push({ x: gd.x + (rnd() - 0.5) * (gd.w - 5), z: gd.z + (rnd() - 0.5) * (gd.d - 5), species: i < 2 ? 'pine' : 'mulberry', size: 1.1 + rnd() * 0.4, force: true });
       props.push({ kind: 'bench', x: gd.x + gd.w / 2 - 2, z: gd.z - 3, yaw: Math.PI / 2 }, { kind: 'bench', x: gd.x + gd.w / 2 - 2, z: gd.z + 4, yaw: Math.PI / 2 }, { kind: 'bin', x: gd.x + gd.w / 2 - 1.5, z: gd.z + 7 });
@@ -400,7 +403,7 @@ export function buildVillage(ctx, layout, M) {
     wires.length = nW; bid = id0;
     let i = 0; const own = mulberry32(Math.round(b.x * 100) ^ Math.round(b.z * 100));
     rnd = () => (i < tape.length ? tape[i++] : own());
-    if (b.kind === 'tandir') buildTandir(b); else buildHouse(b);
+    if (b.kind === 'tandir') buildTandir(b); else if (b.kind === 'dernek') buildDernek(b); else buildHouse(b);
     rnd = baseRnd;
   }
   /** Tandır evi: the village bake-house round the clay bread oven sunk in its floor — one low room, a fieldstone base
@@ -868,7 +871,7 @@ export function buildVillage(ctx, layout, M) {
   function buildPlot(S) {
     const P = S.plot, cx = (P.x0 + P.x1) / 2, cz = (P.z0 + P.z1) / 2, W = P.x1 - P.x0, Dp = P.z1 - P.z0;
     const yTopAt = (x, z) => yAt(x, z) + P.h;
-    bat.add('lawn', patch(cx, cz, W - 0.5, Dp - 0.5, 0, yAt, P.h, 1.5));
+    bat.add(P.paved ? 'paving' : 'lawn', patch(cx, cz, W - (P.paved ? 0.2 : 0.5), Dp - (P.paved ? 0.2 : 0.5), 0, yAt, P.h, 1.5));
     const seg = (x0, z0, x1, z1) => {
       const L = Math.hypot(x1 - x0, z1 - z0), n = Math.max(1, Math.round(L / 2));
       for (let i = 0; i < n; i++) {   // stepped with the ground, 2 m at a time
@@ -879,7 +882,7 @@ export function buildVillage(ctx, layout, M) {
         for (let j = 0; j < nb; j++) bat.add(((Math.round(ax * 1.43 + az * 1.43) + i * 3 + j) & 1) ? 'kerbBlue' : 'kerbWhite', box(l / nb - 0.03, 0.18, 0.56, -l / 2 + l * (j + 0.5) / nb, P.h + 0.11, 0), { ...fr });
       }
     };
-    seg(P.x1, P.z0, P.x1, P.z1); seg(P.x0, P.z0, P.x1, P.z0); seg(P.x0, P.z1, P.x1, P.z1); seg(P.x0, P.z0, P.x0, P.z1);
+    seg(P.x1, P.z0, P.x1, P.z1); seg(P.x0, P.z0, P.x1, P.z0); seg(P.x0, P.z1, P.x1, P.z1); if (P.open !== 'w') seg(P.x0, P.z0, P.x0, P.z1);
     // the big wooden çardak: square, eight posts, railing with benches, two-tier green roof with a lantern
     const C = S.cardak, s = C.size, yC = yTopAt(C.x, C.z), id = bid++, frame = { x: C.x, y: yC, z: C.z, yaw: 0 }, bld = { id, base: yC, top: yC + 5, yaw: 0, cx: C.x, cz: C.z };
     const add = (key, geo) => bat.add(key, geo, frame, bld), h = s / 2;
@@ -900,6 +903,141 @@ export function buildVillage(ctx, layout, M) {
     for (const sx of [-0.85, 0.85]) bat.add('metalDark', box(0.08, 1.9, 0.08, sx, 0.95, 0), fb);
     bat.add('trim', box(1.8, 1.2, 0.08, 0, 1.25, 0), fb);
     for (const t of S.plotTrees || []) treeSpots.push({ ...t, force: true });
+  }
+
+  // ---------------------------------------------------------------- ÇEŞNİGİR-DER (v0.9.8) -----
+  // Köprüköy Çeşnigir Kültür Sosyal Yardımlaşma ve Dayanışma Derneği, after the owner's photos of its opening: a single
+  // storey of pale grey render, the long front facing the çardak and the main road — two big white PVC windows, the
+  // glazed door, three more windows — under a flat concrete canopy with a grey fascia; the navy "ÇEŞNİGİR-DER" board
+  // over the door, a string of Turkish flags along the canopy, red tile hip roof with a yellow solar water heater.
+  function buildDernek(b) {
+    const id = bid++, frame = { x: b.x, y: b.yTop, z: b.z, yaw: b.yaw }, w = b.w, d = b.d;
+    const y0 = PLINTH, y1 = y0 + 3.0, CAN = 1.6;   // floor, top of the walls, canopy depth
+    const bld = { id, base: b.yTop, top: b.yTop + y1 + 2.5, yaw: b.yaw, cx: b.x, cz: b.z };
+    const add = (key, geo, m) => { if (m) geo.applyMatrix4(m); bat.add(key, geo, frame, bld); };
+    const front = frontSide(b), wallKey = 'derWall';
+    const world = new THREE.Matrix4().compose(new THREE.Vector3(frame.x, frame.y, frame.z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), frame.yaw), new THREE.Vector3(1, 1, 1));
+    add('plinth', boxY(w + 0.16, d + 0.16, b.yLow - b.yTop - 0.3, y0 + 0.02));
+    // white PVC frame round an opening: outer frame, a mullion, a transom (doors: a solid lower panel)
+    const frameAt = (h, fm) => {
+      const t = 0.07, z = -0.1, ya = h.y - h.h / 2, yb = h.y + h.h / 2;
+      add('pvc', box(h.w, t, 0.08, h.x, yb - t / 2, z), fm); add('pvc', box(h.w, t, 0.08, h.x, ya + t / 2, z), fm);
+      add('pvc', box(t, h.h, 0.08, h.x - h.w / 2 + t / 2, h.y, z), fm); add('pvc', box(t, h.h, 0.08, h.x + h.w / 2 - t / 2, h.y, z), fm);
+      if (h.door) { add('pvc', box(h.w, 0.06, 0.08, h.x, ya + 2.1, z), fm); add('pvc', boxY(h.w - 0.1, 0.05, ya + 0.05, ya + 0.95, h.x, z - 0.02), fm); }
+      else { add('pvc', box(h.w, 0.06, 0.08, h.x, ya + h.h * 0.72, z), fm); add('pvc', box(0.06, h.h * 0.72, 0.08, h.x, ya + h.h * 0.36, z), fm); add('trim', box(h.w + 0.2, 0.06, 0.28, h.x, ya - 0.03, 0.1), fm); }
+    };
+    for (const side of ['+z', '-z', '+x', '-x']) {
+      const L = side === '+z' || side === '-z' ? w : d, fm = faceMatrix(side, w, d), holes = [];
+      if (side === front) {   // seen from outside, left to right: two windows, the door, three windows
+        for (const x of [-6.1, -3.75]) holes.push({ x, y: y0 + 1.6, w: 2.0, h: 1.6 });
+        holes.push({ x: -1.55, y: y0 + 1.37, w: 1.05, h: 2.66, door: true });   // a hair above the floor line: a hole on the wall's edge is lost
+        for (const x of [0.75, 3.25, 5.75]) holes.push({ x, y: y0 + 1.6, w: 2.0, h: 1.6 });
+      } else if (L > 12) { for (const x of [-L / 3, 0, L / 3]) holes.push({ x, y: y0 + 1.75, w: 1.3, h: 1.2 }); }
+      else holes.push({ x: 0, y: y0 + 1.75, w: 1.3, h: 1.2 });
+      add(wallKey, facadeWithHoles(L, y0, y1, 0, 1, holes), fm);
+      for (const h of holes) {
+        const dep = 0.2;
+        add(wallKey, box(h.w, 0.02, dep, h.x, h.y + h.h / 2 - 0.01, -dep / 2), fm); add(wallKey, box(h.w, 0.02, dep, h.x, h.y - h.h / 2 + 0.01, -dep / 2), fm);
+        add(wallKey, box(0.02, h.h, dep, h.x - h.w / 2 + 0.01, h.y, -dep / 2), fm); add(wallKey, box(0.02, h.h, dep, h.x + h.w / 2 - 0.01, h.y, -dep / 2), fm);
+        const g = new THREE.PlaneGeometry(h.w, h.h); g.translate(h.x, h.y, -0.15); g.applyMatrix4(fm); bat.add('glass', g, frame, bld, [h.w, h.h]);
+        frameAt(h, fm);
+        if (h.door) { add('step', box(h.w + 1.2, 0.16, 0.9, h.x, 0.08, 0.45), fm); add('step', box(h.w + 0.8, 0.16, 0.5, h.x, 0.24, 0.25), fm); }
+      }
+      if (side !== front) continue;
+      // flat canopy over the whole front: slab, grey fascia, a lamp by the door
+      add('beton', boxY(L + 0.5, CAN, y1 - 0.02, y1 + 0.2, 0, CAN / 2), fm);
+      add('coping', boxY(L + 0.5, 0.14, y1 - 0.2, y1 + 0.38, 0, CAN + 0.05), fm);
+      add('coping', boxY(0.14, CAN, y1 - 0.2, y1 + 0.38, -L / 2 - 0.25, CAN / 2), fm); add('coping', boxY(0.14, CAN, y1 - 0.2, y1 + 0.38, L / 2 + 0.25, CAN / 2), fm);
+      add('whitePlastic', new THREE.SphereGeometry(0.16, 10, 6).scale(1, 0.55, 1).translate(-1.55, y1 - 0.08, 0.9), fm);
+      // the name board over the door, standing up above the fascia (navy, gold emblem, white lettering)
+      add('navy', boxY(3.1, 0.08, y1 - 0.12, y1 + 1.36, -1.55, CAN + 0.17), fm);
+      const sg = new THREE.PlaneGeometry(3.0, 1.4); sg.translate(-1.55, y1 + 0.62, CAN + 0.215); add('signDer', sg, fm);
+      for (const sx of [-1.0, 1.0]) add('metalDark', box(0.06, 1.0, 0.12, -1.55 + sx, y1 + 0.75, CAN + 0.08), fm);
+      // bunting: a string of small Turkish flags along the front, as at the opening
+      const yS = y1 + 0.62, zS = CAN + 0.3, nF = Math.floor((L + 0.4) / 0.85);
+      for (const [xa, xb] of [[-L / 2 - 0.2, -3.15], [0.05, L / 2 + 0.2]]) {   // tied to the board's edges, not across it
+        const p0 = new THREE.Vector3(xa, yS, zS).applyMatrix4(fm).applyMatrix4(world), p1 = new THREE.Vector3(xb, yS, zS).applyMatrix4(fm).applyMatrix4(world);
+        wires.push(p0.x, p0.y, p0.z, p1.x, p1.y, p1.z);
+      }
+      for (let i = 0; i < nF; i++) {
+        const x = -L / 2 + 0.2 + (i + 0.5) * (L + 0.0) / nF; if (Math.abs(x + 1.55) < 1.7) continue;   // not over the board
+        const fg = new THREE.PlaneGeometry(0.5, 0.34); fg.translate(x, yS - 0.19, zS + 0.01); add('flagTR', fg, fm);
+      }
+    }
+    // red tile hip roof sitting on the canopy line: fascia, soffit, ridge, gutter, a chimney at the back
+    const e = 0.5, pitch = 0.4, ry = y1 + 0.18, roof = roofGeometry(w, d, e, pitch, ry, 'h'), rise = roof.userData.rise, W = w / 2 + e, Dd = d / 2 + e, roofKey = 'Cati_Kiremit';
+    add(roofKey, roof);
+    for (const [bw, bd, cx, cz] of [[2 * W + 0.06, 0.06, 0, Dd], [2 * W + 0.06, 0.06, 0, -Dd], [0.06, 2 * Dd, W, 0], [0.06, 2 * Dd, -W, 0]]) add('trim', box(bw, 0.2, bd, cx, ry - 0.08, cz));
+    const sof = new THREE.PlaneGeometry(2 * W, 2 * Dd); sof.rotateX(Math.PI / 2); sof.translate(0, ry - 0.02, 0); add('trim', sof);
+    add(roofKey, box(Math.max(0.5, 2 * W - 2 * Dd) + 0.1, 0.1, 0.28, 0, ry + rise + 0.02, 0));
+    const fz = front === '-z' ? -1 : front === '+z' ? 1 : 0, sx = front === '-z' ? 1 : -1;   // front slope side, and the viewer's left along the ridge
+    { const cx = -sx * 3.8, cz = -fz * d * 0.22, roofY = ry + (Dd - Math.abs(cz)) * Math.tan(pitch); add('chimney', boxY(0.5, 0.5, roofY - 0.3, roofY + 0.8, cx, cz)); add('beton', box(0.7, 0.07, 0.7, cx, roofY + 0.83, cz)); }
+    // solar water heater on the front slope, left of the board as seen from the road: two dark panels, the yellow tank on a frame
+    if (fz) {
+      const hx = sx * 3.2, zp = fz * Dd * 0.5, yp = ry + (Dd - Math.abs(zp)) * Math.tan(pitch) + 0.12;
+      const sp = box(2.0, 0.07, 1.2, 0, 0, 0); sp.rotateX(fz * pitch); sp.translate(hx, yp, zp); add('metalDark', sp);
+      const zt = fz * 0.5, yt = ry + (Dd - Math.abs(zt)) * Math.tan(pitch);
+      for (const ox of [-0.35, 0.35]) add('metalDark', boxY(0.05, 0.05, yt - 0.1, yt + 0.5, hx + ox, zt));
+      add('yellowTank', cyl(0.3, 0.3, 1.25, hx, yt + 1.1, zt, 14)); add('metalDark', cyl(0.31, 0.31, 0.08, hx, yt + 1.75, zt, 14));
+    }
+  }
+  /** ÇEŞNİGİR-DER grounds (owner's photo from the main road): the walkway with blue-white kerbs, the flag pole and the twin
+   *  street lamp at its mouth, the raised garden terrace behind a blue-white railing, folding tables with white chairs. */
+  function buildDer(G, P) {
+    const Wk = G.walk, T = G.terrace;
+    const inR = (r, x, z) => r && x > r.x0 && x < r.x1 && z > r.z0 && z < r.z1;
+    const lift = (x, z) => (inR(T, x, z) ? T.h : inR(P, x, z) ? P.h : inR(Wk, x, z) ? 0.12 : 0);
+    // walkway: pale red pavers from the road in to the building, kerb stones where it meets the road
+    bat.add('pavingRed', patch((Wk.x0 + Wk.x1) / 2, (Wk.z0 + Wk.z1) / 2, Wk.x1 - Wk.x0, Wk.z1 - Wk.z0 - 0.1, 0, yAt, 0.12, 1.0));
+    for (const z of [Wk.z0 + 0.08, Wk.z1 - 0.08]) for (let x = Math.max(P.x1, T.x1) - 0.4, j = 0; x < Wk.x1 - 0.2; x += 0.7, j++) {
+      const fr = { x: x + 0.35, y: yAt(x + 0.35, z), z, yaw: 0 }; bat.add(j & 1 ? 'kerbBlue' : 'kerbWhite', boxY(0.67, 0.16, -0.3, 0.3), fr);
+    }
+    // raised garden terrace: rubble wall stepping with the ground, kerb stones on top, lawn
+    const cx = (T.x0 + T.x1) / 2, cz = (T.z0 + T.z1) / 2;
+    bat.add('lawn', patch(cx, cz, T.x1 - T.x0 - 0.5, T.z1 - T.z0 - 0.5, 0, yAt, T.h, 1.5));
+    const edge = (x0, z0, x1, z1, rail, gap) => {
+      const L = Math.hypot(x1 - x0, z1 - z0), n = Math.max(1, Math.round(L / 2));
+      for (let i = 0; i < n; i++) {
+        const t0 = i / n, t1 = (i + 1) / n, ax = x0 + (x1 - x0) * t0, az = z0 + (z1 - z0) * t0, bx = x0 + (x1 - x0) * t1, bz = z0 + (z1 - z0) * t1, mx = (ax + bx) / 2, mz = (az + bz) / 2;
+        const fr = { x: mx, y: yAt(mx, mz), z: mz, yaw: Math.atan2(-(bz - az), bx - ax) }, l = L / n + 0.02;
+        bat.add('rubble', boxY(l, 0.5, -0.6, T.h + 0.02), fr);
+        const nb = Math.max(1, Math.round(l / 0.7));
+        for (let j = 0; j < nb; j++) bat.add(((i * 3 + j) & 1) ? 'kerbBlue' : 'kerbWhite', box(l / nb - 0.03, 0.18, 0.56, -l / 2 + l * (j + 0.5) / nb, T.h + 0.11, 0), { ...fr });
+        if (!rail || (gap && mx > gap[0] && mx < gap[1])) continue;
+        // blue railing on the kerb: white posts, blue rails and bars
+        const yb = T.h + 0.2;
+        bat.add('kerbWhite', boxY(0.09, 0.09, yb, yb + 0.95, -l / 2 + 0.05, 0), fr);
+        for (const yy of [yb + 0.12, yb + 0.9]) bat.add('railBlue', box(l, 0.05, 0.05, 0, yy, 0), fr);
+        for (let k = 1; k < Math.round(l / 0.14); k++) bat.add('railBlue', box(0.025, 0.78, 0.025, -l / 2 + k * 0.14, yb + 0.51, 0), fr);
+      }
+    };
+    edge(T.x0, T.z0, T.x1, T.z0, true, [Wk.x0 + 9.0, Wk.x0 + 11.0]);   // along the walkway, an opening with steps
+    edge(T.x1, T.z0, T.x1, T.z1, true);                                 // along the road
+    edge(T.x1, T.z1, T.x0, T.z1, false); edge(T.x0, T.z1, T.x0, T.z0, false);
+    { const sx = Wk.x0 + 10.0, sz = T.z0 - 0.35, fr = { x: sx, y: yAt(sx, sz), z: sz, yaw: 0 };
+      bat.add('step', boxY(1.6, 0.4, -0.3, 0.32, 0, 0), fr); bat.add('step', boxY(1.6, 0.35, -0.3, 0.12, 0, -0.35), fr); }
+    // flag pole: tall, slim, a ball on top and a big Turkish flag
+    { const f = G.flag, y = yAt(f.x, f.z) + lift(f.x, f.z), fr = { x: f.x, y, z: f.z, yaw: Math.PI / 2 };
+      bat.add('beton', boxY(0.5, 0.5, -0.4, 0.15), fr);
+      bat.add('metal', cyl(0.045, 0.07, 9.0, 0, 4.5, 0, 8), fr); bat.add('metal', new THREE.SphereGeometry(0.09, 8, 6).translate(0, 9.05, 0), fr);
+      const g = new THREE.PlaneGeometry(2.1, 1.4, 8, 1); const p = g.attributes.position; for (let i = 0; i < p.count; i++) p.setZ(i, 0.12 * Math.sin((p.getX(i) + 1.05) * 2.6)); g.computeVertexNormals(); g.translate(1.1, 8.15, 0); bat.add('flagTR', g, fr); }
+    // twin-headed street lamp
+    { const l = G.lamp, y = yAt(l.x, l.z) + lift(l.x, l.z), fr = { x: l.x, y, z: l.z, yaw: Math.PI / 2 };
+      bat.add('metalDark', cyl(0.06, 0.1, 4.6, 0, 2.3, 0, 8), fr); bat.add('metalDark', box(1.3, 0.06, 0.06, 0, 4.45, 0), fr);
+      for (const sx of [-0.62, 0.62]) { bat.add('metalDark', cyl(0.14, 0.05, 0.16, sx, 4.38, 0, 10), fr); bat.add('whitePlastic', new THREE.SphereGeometry(0.15, 10, 8).translate(sx, 4.24, 0), fr); } }
+    // grey folding tables with four white plastic chairs each
+    for (const t of G.tables) {
+      const y = yAt(t.x, t.z) + lift(t.x, t.z), fr = { x: t.x, y, z: t.z, yaw: t.yaw };
+      bat.add('tableGrey', box(1.8, 0.04, 0.75, 0, 0.74, 0), fr);
+      for (const [lx, lz] of [[-0.8, -0.3], [0.8, -0.3], [-0.8, 0.3], [0.8, 0.3]]) bat.add('metalDark', boxY(0.03, 0.03, 0, 0.72, lx, lz), fr);
+      for (const [cxp, dz] of [[-0.45, -1], [0.45, -1], [-0.45, 1], [0.45, 1]]) {
+        const czp = dz * 0.68;
+        bat.add('whitePlastic', box(0.44, 0.05, 0.42, cxp, 0.44, czp), fr);
+        const bk = box(0.44, 0.45, 0.04, 0, 0, 0); bk.rotateX(-dz * 0.15); bk.translate(cxp, 0.7, czp + dz * 0.22); bat.add('whitePlastic', bk, fr);
+        for (const [a, c] of [[-0.19, -0.18], [0.19, -0.18], [-0.19, 0.18], [0.19, 0.18]]) bat.add('whitePlastic', boxY(0.04, 0.04, 0, 0.44, cxp + a, czp + c), fr);
+      }
+    }
+    for (const t of G.terraceTrees || []) treeSpots.push({ ...t, force: true });
   }
   // ---------------------------------------------------------------- the mosque ---------------
   function buildMosque(b) {

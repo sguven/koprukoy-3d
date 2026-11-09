@@ -5,6 +5,37 @@ Two passes so far: **v0.7 "materials"** (surfaces only, nothing moved) and **v0.
 `model/koprukoy.glb` are still the v0.6 files. Terrain (SRTM 30 m), the reservoir at 724 m, the
 Çeşnigir Bridge body, D.260 and the roads outside the village are unchanged.
 
+## v0.9.8 — ÇEŞNİGİR-DER (Nov 2026)
+
+The owner's screenshot of the çardak plot south of the çarşı, with two photos taken at the opening of the
+association: the "small office building among the trees" west of the plot is the **ÇEŞNİGİR-DER** building
+(Köprüköy Çeşnigir Kültür Sosyal Yardımlaşma ve Dayanışma Derneği). `OWNER_FIX` / `DER_SITE` / `carsiSites` in
+`src/village_layout.js`, `buildDernek` / `buildDer` / `buildPlot` in `src/village.js`, materials in
+`src/village_materials.js`.
+
+- **The building** (was the generic house at (225.3, 154.6), now (226.2, 150.8), moved 4 m north so the çardak stands
+  in front of its north half and the walkway reaches its south half, as in the photos): single storey, pale grey
+  render, the long front faces east to the çardak and the main road — two big white PVC windows, the glazed door,
+  three more windows, each with transom and mullion — under a flat concrete canopy with a grey fascia and a lamp
+  by the door. Over the door the navy name board (gold emblem, "ÇEŞNİGİR-DER", "KÖPRÜKÖY ÇEŞNİGİR KÜLTÜR SOSYAL /
+  YARDIMLAŞMA VE DAYANIŞMA DERNEĞİ"), a string of small Turkish flags along the front, red tile hip roof with a
+  yellow solar water heater and a chimney.
+- **Forecourt** (the old raised çardak plot, now reaching the building): grey interlocking pavers instead of the
+  lawn, low wall with blue-white kerb stones on the lane and road sides, open to the building; the çardak moved
+  7 m west, close in front of the building; grey folding tables with white plastic chairs; the notice board at the
+  corner by the lane; a big mulberry north of the çardak and a smaller one by the walkway.
+- **Walkway** from the main road to the building between the forecourt and the garden: pale red pavers, blue-white
+  kerbs at the road; the flag pole with a big Turkish flag on its right, a twin-headed street lamp on its left.
+- **Garden terrace** (the small green south of the plot): raised lawn on a rubble wall with blue-white kerb stones,
+  a blue railing with white posts along the walkway and the road (steps at an opening), tables and chairs, two
+  spruces and a mulberry. The green's nine random draws are still made, so the rest of the village is unchanged.
+
+Not modelled (transient in the photos): the opening's flower wreaths and the extra chairs on the street.
+
+![from the main road](screenshots/v0.9.8_cesnigir_der_from_road.jpg)
+![front](screenshots/v0.9.8_cesnigir_der_front.jpg)
+![aerial](screenshots/v0.9.8_cesnigir_der_aerial.jpg)
+
 ## v0.9.7 — the owner's houses by the lake road (Nov 2026)
 
 Corrections from the owner's screenshot of the lane north-west of the big cemetery, above the D.260 lake road
