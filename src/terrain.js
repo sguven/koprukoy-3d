@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import { addWorldVaryings } from './pbr.js';
 
-export function terrainMaterial(lib, macroMap, { quality = 2, waterLevel = 0 } = {}) {
+export function terrainMaterial(lib, macroMap, { quality = 2, waterLevel = 0, village = [-40, -280, 760, 800] } = {}) {
   const soil = lib.set('soil'), grass = lib.set('grass_dry'), gravel = lib.set('gravel'), rock = lib.set('rock'), shore = lib.set('shore');
   const noise = lib.tex('noise.jpg');
   const mat = new THREE.MeshStandardMaterial({ map: macroMap, roughness: 1.0, metalness: 0, color: 0xffffff });
@@ -20,13 +20,15 @@ export function terrainMaterial(lib, macroMap, { quality = 2, waterLevel = 0 } =
       tNoise: { value: noise },
       uSoilS: { value: 1 / soil.size }, uGrassS: { value: 1 / grass.size }, uGravelS: { value: 1 / gravel.size }, uRockS: { value: 1 / rock.size }, uShoreS: { value: 1 / shore.size },
       uWater: { value: waterLevel },
+      uVillage: { value: new THREE.Vector4(...village) },   // v0.9.5: built area (x0, z0, x1, z1) that is green in spring
     });
     shader.defines.KK_QUALITY = quality;
     addWorldVaryings(shader);
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', /* glsl */`#include <common>
         uniform sampler2D tSoilC, tSoilN, tSoilR, tGrassC, tGrassN, tGravelC, tGravelN, tRockC, tRockN, tRockR, tShoreC, tShoreN, tNoise;
-        uniform float uSoilS, uGrassS, uGravelS, uRockS, uShoreS, uWater;`)
+        uniform float uSoilS, uGrassS, uGravelS, uRockS, uShoreS, uWater;
+        uniform vec4 uVillage;`)
       .replace('#include <map_fragment>', /* glsl */`
         vec3 gN = normalize(vWNormal);
         vec4 macroTex = texture2D(map, vMapUv);
@@ -48,6 +50,11 @@ export function terrainMaterial(lib, macroMap, { quality = 2, waterLevel = 0 } =
         float wShore = (1.0 - smoothstep(0.6, 2.6, hAbove)) * (1.0 - wRock * 0.7);
         float wGrass = smoothstep(0.02, 0.14, greenness + (nz2.b - 0.5) * 0.08) * (1.0 - smoothstep(0.25, 0.45, slope));
         wGrass = max(wGrass, smoothstep(0.55, 0.75, nz.g) * 0.35 * (1.0 - smoothstep(0.2, 0.4, slope))); // thin steppe grass tufts
+        // v0.9.5: inside the village the plots, verges and yards are green in spring (Street View, Apr 2026) while
+        // the baked macro texture is a dry late-summer image: weedy grass between the houses, soft 80 m edge
+        float inV = smoothstep(uVillage.x - 80.0, uVillage.x, vWPos.x) * (1.0 - smoothstep(uVillage.z, uVillage.z + 80.0, vWPos.x))
+                  * smoothstep(uVillage.y - 80.0, uVillage.y, vWPos.z) * (1.0 - smoothstep(uVillage.w, uVillage.w + 80.0, vWPos.z));
+        wGrass = max(wGrass, inV * (0.3 + 0.45 * smoothstep(0.3, 0.7, nz2.g)) * (1.0 - smoothstep(0.2, 0.4, slope)));
         float wGravel = smoothstep(0.52, 0.66, lum + (nz2.r - 0.5) * 0.1) * (1.0 - wGrass);
         wGravel = max(wGravel, smoothstep(0.1, 0.22, slope) * 0.35);
         // normalise: rock on top, then shore, then grass/gravel over soil
@@ -65,7 +72,7 @@ export function terrainMaterial(lib, macroMap, { quality = 2, waterLevel = 0 } =
           rough += kk_planar2(tSoilR, pxz * uSoilS, k).r * wSoil;
         }
         if (wGrass > 0.004) {
-          vec4 c = kk_planar2(tGrassC, pxz * uGrassS, k); albedo += c.rgb * wGrass;
+          vec4 c = kk_planar2(tGrassC, pxz * uGrassS, k); albedo += c.rgb * mix(vec3(1.0), vec3(0.82, 1.0, 0.6), inV * 0.65) * wGrass;
           #if KK_QUALITY > 1
           tn += (texture2D(tGrassN, pxz * uGrassS).xyz * 2.0 - 1.0) * wGrass;
           #else

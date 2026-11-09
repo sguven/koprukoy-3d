@@ -5,6 +5,61 @@ Two passes so far: **v0.7 "materials"** (surfaces only, nothing moved) and **v0.
 `model/koprukoy.glb` are still the v0.6 files. Terrain (SRTM 30 m), the reservoir at 724 m, the
 Çeşnigir Bridge body, D.260 and the roads outside the village are unchanged.
 
+## v0.9.5 — the village as Street View shows it (Nov 2026)
+
+The owner asked for the model to look like the real place, Street View being the measure: the houses were too
+big ("2–3 storeys with lots of windows are rare here"), the roads tangled, several structures not real. Checked
+against all 86 panoramas in `docs/reference/streetview/` and the Google Maps building layer
+(`docs/survey/gmap_layer_classes.png`); renders from the same points and headings were compared frame by frame
+(`tools/shoot_pw.mjs`, a Playwright harness that serves the repo with a local three.js).
+
+Causes: the v0.9 roof detector fused neighbouring roofs and yards into 25–50 m rectangles (104 footprints over
+250 m²); the storey rule made a third of the village two storeys; `buildHouse` put a window every 3.1 m, so a 20 m
+wall got six per floor and read as an apartment block; 143 footprints ran into the road ribbons; the v0.6 GLB
+scatters granite boulders over the streets; all 316 lanes were drawn as 4 m concrete with hard edges.
+
+The data corrections are `tools/v095_fix.py` (run once on the v0.9.4 data, like `gmap_fix.py`):
+
+- **Footprints.** Where the Google building layer shows two or more buildings inside one model rectangle, the
+  rectangle is replaced by those footprints (19 cases); where it shows one much smaller building the rectangle
+  shrinks to it (5); the remaining rectangles longer than 24 m become a house of 10–14 m and a lower barn / annex
+  with a gap between (35) — the barns and sheds next to houses in Street View 07, 52, 64. 679 → 734 buildings.
+- **Storeys.** Without a Street View override a house is single storey unless compact (85–210 m², aspect < 1.8,
+  tile roof) and picked by a stable position hash; and since every notable two-storey house seen in the panoramas
+  already has an override, an unconfirmed two-storey house within 55 m of a panorama point becomes single storey
+  (46 cases — the renders of SV02, 16, 17 and 34 showed two-storey blocks where the panorama has one-storey
+  houses). 119 two-storey buildings of 734 (was 225 of 679), the proportion seen along the main road and the
+  mahalle lanes. Long single-storey halls get a sheet roof at times. Street View overrides (110 buildings with
+  wall / fence / kind data) are untouched.
+- **Off the roads.** 134 footprints moved away from the road ribbon (≤ 3.5 m), 48 also shrunk on the road side.
+- **Roads.** Centrelines simplified (Douglas–Peucker 1.0 m) and despiked (turns > 60° between segments < 7 m),
+  five dead-end stubs under 12 m removed. Surfaces follow the panoramas: only the main road and the streets within
+  ~150 m of the çarşı (and the brick-paved lanes by Yeni Cami) stay asphalt / paved; 342 mahalle lanes and the
+  outer secondary roads are compacted earth / gravel with grass verges (Street View 07, 08, 29, 44, 54, 58, 62,
+  66, 70, 96). Village asphalt is pale and dusty (02, 15, 17), not dark.
+
+Rendering (`src/village.js`, `village_layout.js`, `village_materials.js`, `terrain.js`):
+
+- windows: 2–3 on a 10–12 m street front, at most 4 on a long one, 1–2 on side walls, blank stretches on long
+  walls (03, 36, 57, 60); floor-to-floor 2.8 m; barns / annexes 2.6 m high with small openings, no balcony, no
+  garden wall;
+- houses on slopes are cut deeper into the ground, so plinths stay 1–2 m instead of 3 m;
+- `pruneRocks`: the merged GLB rock mesh is split into boulders (connected components); the 144 boulders on a road
+  ribbon, in a yard or within 18 m of a house are dropped (56/57: a plastered house and an ashlar garden wall where
+  the model had a 6 m boulder; 62–69, 83, 96/97: boulders between the houses of the E and N mahalles). The granite
+  ridge beyond the last houses stays (07, 08, 58);
+- rendered garden walls are whitewashed / grey block (06, 09, 31, 44, 88) instead of the GLB's brown;
+- the terrain inside the built area is weedy spring grass between the houses (every April panorama), while the
+  baked macro texture stays a dry late-summer image outside it.
+
+Screenshots: `docs/screenshots/v0.9.5_*` — overview, top-down, the salmon and lilac two-storey houses of the v0.9
+screenshots in their new surroundings, an E lane without boulders, the main road, an E earth road, and three
+model-vs-Street-View comparison sheets (SV38–40, 59–61, 86–88); `docs/survey/v0.9.5_plan_over_google_layer.png` is
+the corrected plan over the Google building / road layer (red two-storey, yellow single, cyan barns, pink overrides).
+
+Not resolved: the Google Maps link the owner sent (maps.app.goo.gl) could not be opened from this environment, so
+its uploaded photos were not used; storey counts away from Street View coverage remain estimates.
+
 ## v0.9.4 — checked against the Google Maps map layer (Nov 2026)
 
 The owner pointed at the area south of Keskin Köprü İlkokulu: in reality it is all cemetery, with only a small

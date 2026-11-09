@@ -10,7 +10,7 @@ import { buildProps } from './props.js';
 const WALLS = ['Duvar_Beyaz', 'Duvar_Beyaz', 'Duvar_Beyaz', 'Duvar_Krem', 'Duvar_Krem', 'Duvar_Okr', 'Duvar_Pembe', 'Duvar_Sari', 'Duvar_Gri'];
 const TILES = ['Cati_Kiremit', 'Cati_Kiremit', 'Cati_Kiremit_Koyu', 'Cati_Kiremit_Turuncu', 'Cati_Kiremit_Acik'];
 export const LIFT = { asphalt: 0.12, concrete: 0.1, dirt: 0.08, square: 0.06 };
-const FLOOR = 2.9, PLINTH = 0.45;
+const FLOOR = 2.8, PLINTH = 0.45;   // village floor-to-floor ~2.8 m (Street View 03/57)
 
 // ---------------------------------------------------------------------------------------------------
 /** Remove the old draft inside the rebuilt region: houses, village roads, the mosque, and the trees. */
@@ -40,6 +40,54 @@ export function pruneOldVillage(model, full = false) {
   }
   console.log('[village] removed old draft:', removed);
   return removed;
+}
+
+/**
+ * v0.9.5: the v0.6 GLB scatters granite boulders over the whole hillside, including the streets and yards of the
+ * rebuilt village (Street View 56/57: a plastered house and an ashlar garden wall where the model had a 6 m boulder).
+ * Boulders are connected components of the merged rock mesh; a boulder on a road ribbon, in a yard or within 18 m of a
+ * house is dropped. Boulders on open ground stay (the granite ridge NE of the village is real: Street View 07/08/58).
+ */
+export function pruneRocks(model, layout) {
+  const m = model.getObjectByName('Granit_Kayalar'); if (!m || !m.isMesh || !layout || layout.centreOnly) return 0;
+  m.updateMatrixWorld(true);
+  const g = m.geometry, pos = g.attributes.position, idx = g.index ? g.index.array : null, nTri = idx ? idx.length / 3 : pos.count / 3, nV = pos.count;
+  const parent = new Int32Array(nV); for (let i = 0; i < nV; i++) parent[i] = i;
+  const find = (i) => { while (parent[i] !== i) { parent[i] = parent[parent[i]]; i = parent[i]; } return i; };
+  const unite = (a, b) => { a = find(a); b = find(b); if (a !== b) parent[a] = b; };
+  // split normals duplicate vertices: merge by position too
+  const seen = new Map();
+  for (let i = 0; i < nV; i++) { const k = `${Math.round(pos.getX(i) * 50)},${Math.round(pos.getY(i) * 50)},${Math.round(pos.getZ(i) * 50)}`; const j = seen.get(k); if (j === undefined) seen.set(k, i); else unite(i, j); }
+  const vi = (t, k) => idx ? idx[t * 3 + k] : t * 3 + k;
+  for (let t = 0; t < nTri; t++) { unite(vi(t, 0), vi(t, 1)); unite(vi(t, 1), vi(t, 2)); }
+  // per component: world-space centroid and radius
+  const comp = new Map(), v = new THREE.Vector3();
+  for (let i = 0; i < nV; i++) {
+    v.fromBufferAttribute(pos, i).applyMatrix4(m.matrixWorld); const r = find(i);
+    let c = comp.get(r); if (!c) { c = { sx: 0, sz: 0, n: 0, minx: 1e9, maxx: -1e9, minz: 1e9, maxz: -1e9 }; comp.set(r, c); }
+    c.sx += v.x; c.sz += v.z; c.n++; c.minx = Math.min(c.minx, v.x); c.maxx = Math.max(c.maxx, v.x); c.minz = Math.min(c.minz, v.z); c.maxz = Math.max(c.maxz, v.z);
+  }
+  const drop = new Set();
+  for (const [r, c] of comp) {
+    const cx = c.sx / c.n, cz = c.sz / c.n, rad = Math.max(c.maxx - c.minx, c.maxz - c.minz) / 2;
+    if (!inRegion(cx, cz)) continue;
+    // a boulder on a road, in a yard or between the houses is gone (the E / SE lanes in Street View 56–69 are
+    // houses, rubble walls and gardens; the outcrops start beyond the last houses)
+    let hit = false;
+    for (const rd of layout.roads) { if (distToPolyline(cx, cz, rd.line).d < rd.w / 2 + rad * 0.7 + 6.0) { hit = true; break; } }
+    if (!hit) for (const b of layout.buildings) {
+      if (Math.abs(b.x - cx) > 60 || Math.abs(b.z - cz) > 60) continue;
+      const co = Math.cos(b.yaw), si = Math.sin(b.yaw), dx = cx - b.x, dz = cz - b.z, lx = dx * co - dz * si, lz = dx * si + dz * co;
+      if (Math.abs(lx) < b.w / 2 + rad * 0.7 + 18 && Math.abs(lz) < b.d / 2 + rad * 0.7 + 18) { hit = true; break; }
+    }
+    if (hit) drop.add(r);
+  }
+  if (!drop.size) return 0;
+  const keep = []; let removed = 0;
+  for (let t = 0; t < nTri; t++) { const i0 = vi(t, 0), i1 = vi(t, 1), i2 = vi(t, 2); if (drop.has(find(i0))) removed++; else keep.push(i0, i1, i2); }
+  g.setIndex(keep); g.computeBoundingSphere(); g.computeBoundingBox();
+  console.log('[village] rocks: boulders', comp.size, 'removed from streets / plots', drop.size, 'triangles', removed);
+  return drop.size;
 }
 
 // ---------------------------------------------------------------------------------------------------
@@ -320,7 +368,7 @@ export function buildVillage(ctx, layout, M) {
     const id = bid++;
     const frame = { x: b.x, y: b.yTop, z: b.z, yaw: b.yaw };
     const n = b.storeys || 1, w = b.w, d = b.d;
-    const y0 = PLINTH, y1 = PLINTH + n * FLOOR + 0.2;
+    const y0 = PLINTH, y1 = PLINTH + (b.barn ? 2.6 : n * FLOOR + 0.2);   // barns / annexes are lower than a house
     const bld = { id, base: b.yTop, top: b.yTop + y1, yaw: b.yaw, cx: b.x, cz: b.z };
     const wallKey = b.wallKey || (b.kind === 'school' ? 'redWall' : b.kind === 'market' || b.kind === 'kahve' ? 'Duvar_Beyaz' : WALLS[Math.floor(rnd() * WALLS.length)]);
     const roofKey = b.roof === 'm' ? (rnd() < 0.7 ? 'Cati_Sac_Gri' : 'Cati_Sac_Mavi') : TILES[Math.floor(rnd() * TILES.length)];
@@ -335,9 +383,11 @@ export function buildVillage(ctx, layout, M) {
     for (const side of ['+z', '-z', '+x', '-x']) {
       const L = side === '+z' || side === '-z' ? w : d, fm = faceMatrix(side, w, d), isFront = side === front;
       const holes = [], panes = [];
-      let nw = isBarn ? (L > 5 ? 1 : 0) : Math.max(L > 2.6 ? 1 : 0, Math.round((L - 0.8) / 3.1));
+      // Köprüköy houses have few windows: 2–3 on a 10–12 m street front, one or two on the sides, blank
+      // stretches on long walls (Street View 03/36/57/60) — never a ribbon of six
+      let nw = isBarn ? (L > 9 ? 2 : L > 5 ? 1 : 0) : Math.max(L > 2.6 ? 1 : 0, Math.min(isFront ? (L > 15 ? 4 : 3) : 2, Math.round((L - 1.0) / 3.8)));
       if (b.kind === 'market' || b.kind === 'kahve') nw = isFront ? Math.max(2, Math.round(L / 2.2)) : Math.round(L / 3.5);
-      if (b.kind === 'school') nw = Math.round(L / 2.0);
+      if (b.kind === 'school') nw = Math.round(L / 3.0);
       const doorIdx = isFront && nw > 0 ? Math.floor(nw / 2) : -1;
       const balIdx = balcony && isFront && nw > 0 ? (nw > 1 ? (doorIdx + 1) % nw : 0) : -1;
       for (let k = 0; k < n; k++) {
