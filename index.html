@@ -39,6 +39,7 @@ canvas { display: block; touch-action: none; }
 .modes { pointer-events: auto; display: flex; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 4px; gap: 4px; }
 .modes button { font: 600 15px/1 var(--display); letter-spacing: 0.03em; text-transform: uppercase; border: 0; background: transparent; color: var(--ink); padding: 9px 12px; border-radius: 7px; cursor: pointer; }
 .modes button.on { background: var(--ink); color: #fff; }
+.modes button:disabled { opacity: 0.35; cursor: not-allowed; }
 .modes button:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .spacer { flex: 1; }
 .gear { pointer-events: auto; font: 600 14px var(--body); border: 1px solid var(--line); background: var(--paper); border-radius: 10px; padding: 10px 12px; cursor: pointer; color: var(--ink); }
@@ -117,9 +118,10 @@ canvas { display: block; touch-action: none; }
   <div class="brand"><h1>Köprüköy</h1><div class="sub">Keskin · Kırıkkale, Türkiye — 3D v0.8</div></div>
   <div class="modes" id="modes" role="tablist" aria-label="Navigation mode">
     <button data-mode="orbit" class="on">Orbit</button>
-    <button data-mode="walk">Walk</button>
-    <button data-mode="fly">Fly</button>
-    <button data-mode="car">Toros</button>
+    <!-- walk / fly / Toros: disabled for now, to be re-enabled later -->
+    <button data-mode="walk" disabled title="Coming later">Walk</button>
+    <button data-mode="fly" disabled title="Coming later">Fly</button>
+    <button data-mode="car" disabled title="Coming later">Toros</button>
   </div>
   <div class="spacer"></div>
   <button class="gear" id="gearBtn" aria-expanded="false">Settings</button>
@@ -133,11 +135,11 @@ canvas { display: block; touch-action: none; }
       <button class="pbtn" data-view="kopru">Bridge</button>
       <button class="pbtn" data-view="gezi">Promenade</button>
       <button class="pbtn" data-view="kanyon">Canyon</button>
-      <button class="pbtn" data-view="detay">Village centre</button><button class="pbtn" data-view="cami">Mosque</button>
+      <button class="pbtn" data-view="detay">Village centre</button>
       <button class="pbtn" data-view="tepe">Top-down</button>
     </div>
   </div>
-  <div>
+  <div id="carGroup" hidden>
     <div class="group-title">Toros</div>
     <div class="row" id="colors"></div>
     <div class="row" style="margin-top:8px">
@@ -155,7 +157,7 @@ canvas { display: block; touch-action: none; }
       <label class="chip"><input type="checkbox" id="lyEtiket" checked> Labels</label>
     </div>
   </div>
-  <div>
+  <div hidden><!-- sun: disabled for now, fixed at 15:00 -->
     <div class="group-title">Sun</div>
     <label class="chip" style="width:100%;justify-content:space-between"><span>Time <b id="sunVal">15:00</b></span>
       <input type="range" id="sun" min="6" max="20" step="0.25" value="15" style="flex:1;margin-left:10px" aria-label="Time of day"></label>
@@ -640,6 +642,7 @@ function setMode(m) {
   controls.enabled = m === 'orbit';
   document.getElementById('hint').textContent = HINTS[m];
   document.getElementById('hud').classList.toggle('show', m === 'car');
+  document.getElementById('carGroup').hidden = m !== 'car';   // Toros settings only appear inside the Toros
   document.getElementById('minimap').classList.toggle('show', m !== 'orbit');
   document.getElementById('cross').style.display = (m === 'walk' || m === 'fly') && !isTouch ? 'block' : 'none';
   const show = (ids, on) => ids.forEach(id => document.getElementById(id).classList.toggle('show', on && isTouch));
@@ -655,7 +658,7 @@ function setMode(m) {
   if (m === 'car') { initAudio(); if (audio && audio.ac.state === 'suspended') audio.ac.resume(); carYawOff = 0; carPitchOff = 0; }
   if (m === 'orbit' && prev !== 'orbit') { controls.target.set(camera.position.x + (prev === 'car' ? 0 : 0), camera.position.y, camera.position.z); const fwd = new THREE.Vector3(); camera.getWorldDirection(fwd); controls.target.copy(camera.position).addScaledVector(fwd, 60); controls.repin(); }
 }
-document.querySelectorAll('#modes button').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
+document.querySelectorAll('#modes button').forEach(b => b.addEventListener('click', () => { if (!b.disabled) setMode(b.dataset.mode); }));
 let toastT = 0; function toast(t) { const el = document.getElementById('toast'); el.textContent = t; el.style.display = t ? 'block' : 'none'; toastT = t ? 2 : 0; }
 
 // ---------- viewpoints ----------
