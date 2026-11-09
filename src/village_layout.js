@@ -281,7 +281,52 @@ export function buildVillageLayout(terrH, existingRoads = []) {
     b.yTop = yTop; b.yLow = hMin - 0.4;
     if (b.floorAtFront && b.face !== undefined) { const fx = b.x + Math.cos(b.face) * (b.w / 2 + 1), fz = b.z + Math.sin(b.face) * (b.w / 2 + 1); b.yTop = terrH(fx, fz) + 0.15; }
   }
-  return { roads, buildings, sites: SITES, rnd };
+
+  // v0.9.7: the owner's corrections. Applied last, so the seeded draws above stay as they were; `orig` keeps the
+  // house as generated so village.js can replay its random draws and leave every other house untouched.
+  for (const f of OWNER_FIX) {
+    let b = null, best = 4;
+    for (const c of buildings) { const dd = Math.hypot(c.x - f.xz[0], c.z - f.xz[1]); if (dd < best) { best = dd; b = c; } }
+    if (!b) { console.warn('[layout] owner fix: no building at', f.xz, f.note); continue; }
+    b.orig = { ...b }; Object.assign(b, f.set);
+    if (b.lowerFloor) {   // a full storey under the floor on the downhill side: the lowest ground sits one storey below
+      const hMin = Math.min(...rectCorners(b).map(([x, z]) => terrH(x, z)), terrH(b.x, b.z));
+      b.yTop = Math.max(b.yTop, hMin + 2.55); b.yLow = hMin - 0.4;
+    }
+  }
+  const stoneWalls = STONE_WALLS.map(sw => stoneWallLine(roads, sw)).filter(Boolean);
+  return { roads, buildings, sites: { ...SITES, stoneWalls }, rnd };
+}
+
+// ---------------------------------------------------------------- owner's corrections (v0.9.7)
+// The houses on the lane north-west of the big cemetery, above the D.260 lake road (owner's screenshot of 9 Nov 2026).
+// xz = the house's position in village_data.js; set = what changes.
+const OWNER_FIX = [
+  { xz: [101.4, 359.6], set: { kind: 'tandir' }, note: 'the small building in front is the tandır house (bread oven), not a dwelling' },
+  { xz: [88.6, 350.0], set: { lowerFloor: true, ownWall: 'Duvar_Gul', porch: { dir: [1, 0], span: [0.3, 1.0], depth: 2.8, vine: 3.2 } },
+    note: 'two storeys on the west, downhill side because of the slope, one storey on the east side behind the trees; soft red-magenta plaster. ' +
+          'On the east side the roof runs on over a sitting terrace with a table and chairs, a grapevine pergola in front of it, then the trees ' +
+          '(span: the part of the side clear of the tandır, from its south end)' },
+  { xz: [60.0, 319.4], set: { storeys: 1 }, note: 'single storey, not two' },
+  { xz: [88.5, 322.8], set: { wall: 'none' }, note: 'its plot is closed by the stone wall along the lane (STONE_WALLS), not a wire fence' },
+];
+// Dry-stone walls along a lane: `road` = road id, the wall runs on the `toward` side of it, `off` metres from the
+// centreline, between the points of the lane nearest to `from` and `to`; `gaps` = openings (x, z, width).
+const STONE_WALLS = [
+  { road: 'local_367', from: [78, 334], to: [99, 286], toward: [88.5, 322.8], off: 3.0, h: 1.15, gaps: [[88.5, 333.5, 3.0]],
+    note: 'stone wall along the lane on the north / west side, in front of the cream house and up the hill (owner)' },
+];
+function stoneWallLine(roads, sw) {
+  const r = roads.find(q => q.id === sw.road); if (!r) return null;
+  const L = r.line, i0 = distToPolyline(sw.from[0], sw.from[1], L).i, i1 = distToPolyline(sw.to[0], sw.to[1], L).i;
+  const a = Math.min(i0, i1), z = Math.max(i0, i1) + 1, pts = [];
+  for (let i = a; i <= z && i < L.length; i++) {
+    const p = L[Math.max(0, i - 1)], q = L[Math.min(L.length - 1, i + 1)], dx = q[0] - p[0], dz = q[1] - p[1], len = Math.hypot(dx, dz) || 1;
+    let nx = -dz / len, nz = dx / len;
+    if ((sw.toward[0] - L[i][0]) * nx + (sw.toward[1] - L[i][1]) * nz < 0) { nx = -nx; nz = -nz; }
+    pts.push([L[i][0] + nx * sw.off, L[i][1] + nz * sw.off]);
+  }
+  return { pts, h: sw.h, gaps: sw.gaps || [] };
 }
 
 // ---------------------------------------------------------------- centre-only mode (default)
@@ -320,6 +365,21 @@ export function carsiBoxes(sites) {
   if (sites.statue) out.push(sites.statue.x, sites.statue.z, sites.statue.yaw, 1.3, 1.3);
   if (sites.kiosk) out.push(sites.kiosk.x, sites.kiosk.z, sites.kiosk.yaw, sites.kiosk.w / 2, sites.kiosk.d / 2);
   if (sites.cardak) out.push(sites.cardak.x, sites.cardak.z, 0, sites.cardak.size / 2, sites.cardak.size / 2);
+  for (const w of sites.stoneWalls || []) for (const [x0, z0, x1, z1] of wallPieces(w)) out.push((x0 + x1) / 2, (z0 + z1) / 2, Math.atan2(-(z1 - z0), x1 - x0), Math.hypot(x1 - x0, z1 - z0) / 2, 0.3);
+  return out;
+}
+/** A stone wall as straight pieces [x0, z0, x1, z1], with its gaps left open. */
+export function wallPieces(w) {
+  const out = [], open = (x, z) => w.gaps.some(([gx, gz, gw]) => Math.hypot(x - gx, z - gz) < gw / 2);
+  for (let i = 0; i + 1 < w.pts.length; i++) {
+    const [ax, az] = w.pts[i], [bx, bz] = w.pts[i + 1], n = Math.max(1, Math.round(Math.hypot(bx - ax, bz - az) / 0.5));
+    let s0 = null;
+    for (let k = 0; k <= n; k++) {
+      const t = k / n, x = ax + (bx - ax) * t, z = az + (bz - az) * t, o = open(x, z);
+      if (!o && s0 === null) s0 = t;
+      if ((o || k === n) && s0 !== null) { const t1 = o ? (k - 1) / n : t; if (t1 > s0) out.push([ax + (bx - ax) * s0, az + (bz - az) * s0, ax + (bx - ax) * t1, az + (bz - az) * t1]); s0 = null; }
+    }
+  }
   return out;
 }
 /** The çarşı square as road samples (so walking / driving use it and no grass grows on it). */

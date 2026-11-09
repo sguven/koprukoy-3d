@@ -4,7 +4,7 @@
 // Layout comes from village_layout.js; materials from village_materials.js; props from props.js.
 import * as THREE from 'three';
 import { GeoBatch, box, boxY, cyl, facadeWithHoles, roofGeometry, gableEnds, ribbon, patch } from './geo.js';
-import { inRegion, inCentreZone, rectCorners, distToPolyline, inCarsi } from './village_layout.js';
+import { inRegion, inCentreZone, rectCorners, distToPolyline, inCarsi, mulberry32, wallPieces } from './village_layout.js';
 import { buildProps } from './props.js';
 
 const WALLS = ['Duvar_Beyaz', 'Duvar_Beyaz', 'Duvar_Beyaz', 'Duvar_Krem', 'Duvar_Krem', 'Duvar_Okr', 'Duvar_Pembe', 'Duvar_Sari', 'Duvar_Gri'];
@@ -94,9 +94,10 @@ export function pruneRocks(model, layout) {
 /** Build the whole village. Returns { group, update } ; adds nothing to the scene itself. */
 export function buildVillage(ctx, layout, M) {
   const { terrH, D } = ctx;
-  const rnd = layout.rnd;
+  const baseRnd = layout.rnd;
+  let rnd = baseRnd;
   const group = new THREE.Group(); group.name = 'Koy';
-  const bat = new GeoBatch();
+  let bat = new GeoBatch();
   const wires = [];                       // line segments for fence wires and overhead cables
   const treeSpots = [], props = [];       // handed to props.js
   const roads = layout.roads, centreOnly = !!layout.centreOnly;
@@ -206,8 +207,10 @@ export function buildVillage(ctx, layout, M) {
     if (b.kind === 'minaret') continue; // built with the mosque
     if (b.kind === 'municipality') { buildMunicipality(b); continue; }
     if (b.kind === 'stone_ruin') { buildStoneRuin(b); continue; }
+    if (b.orig) { buildCorrected(b); continue; }
     buildHouse(b);
   }
+  for (const w of S.stoneWalls || []) buildStoneWall(w);
   buildCarsi(S);
   if (!centreOnly) {
     for (const c of S.cemeteries || []) buildCemetery(c);
@@ -385,6 +388,82 @@ export function buildVillage(ctx, layout, M) {
     }
   }
 
+  // ---------------------------------------------------------------- owner's corrections (v0.9.7)
+  // A corrected house is built in two passes so that every other house keeps its random colours and details: the
+  // house as generated (b.orig) is run dry on the main stream, recording its draws, then the corrected one replays
+  // the same draws (same wall / roof colour, chimney, trees) and continues on a stream of its own.
+  function buildCorrected(b) {
+    const tape = [], saved = bat, nT = treeSpots.length, nW = wires.length, id0 = bid;
+    rnd = () => { const v = baseRnd(); tape.push(v); return v; };
+    bat = { add() {} }; buildHouse(b.orig); bat = saved;
+    if (b.kind !== 'tandir') treeSpots.length = nT;   // the tandır keeps the plot trees of the house it replaces
+    wires.length = nW; bid = id0;
+    let i = 0; const own = mulberry32(Math.round(b.x * 100) ^ Math.round(b.z * 100));
+    rnd = () => (i < tape.length ? tape[i++] : own());
+    if (b.kind === 'tandir') buildTandir(b); else buildHouse(b);
+    rnd = baseRnd;
+  }
+  /** Tandır evi: the village bake-house round the clay bread oven sunk in its floor — one low room, a fieldstone base
+   *  course under mud-plastered walls, a plank door and a small window, a wide soot-stained smoke chimney, a low tile
+   *  roof on wooden eaves and firewood stacked against a side wall (owner: the front building is the tandır). */
+  function buildTandir(b) {
+    const id = bid++, frame = { x: b.x, y: b.yTop, z: b.z, yaw: b.yaw };
+    const w = b.w, d = b.d, H = 2.5, STONE = 0.85;
+    const bld = { id, base: b.yTop, top: b.yTop + H + 1.8, yaw: b.yaw, cx: b.x, cz: b.z };
+    const add = (key, geo, m) => { if (m) geo.applyMatrix4(m); bat.add(key, geo, frame, bld); };
+    rnd(); const roofKey = TILES[Math.floor(rnd() * TILES.length)];   // the house's first two draws: keep its roof colour
+    const front = frontSide(b);
+    add('rubble', boxY(w + 0.2, d + 0.2, b.yLow - b.yTop - 0.3, 0.06));
+    for (const side of ['+z', '-z', '+x', '-x']) {
+      const L = side === '+z' || side === '-z' ? w : d, fm = faceMatrix(side, w, d), holes = [];
+      if (side === front) holes.push({ x: -L * 0.2, y: 1.03, w: 1.0, h: 1.9, door: true }, { x: L * 0.22, y: 1.55, w: 0.7, h: 0.6 });
+      else if (L > 8) holes.push({ x: L * 0.15, y: 1.75, w: 0.6, h: 0.45 });   // a small high vent on the long back wall
+      add('adobe', facadeWithHoles(L, 0.0, H, 0, 1, holes), fm);
+      for (const h of holes) {
+        const dep = 0.3;   // thick adobe walls: deep reveals
+        add('adobe', box(h.w, 0.02, dep, h.x, h.y + h.h / 2 - 0.01, -dep / 2), fm); if (!h.door) add('adobe', box(h.w, 0.02, dep, h.x, h.y - h.h / 2 + 0.01, -dep / 2), fm);
+        add('adobe', box(0.02, h.h, dep, h.x - h.w / 2 + 0.01, h.y, -dep / 2), fm); add('adobe', box(0.02, h.h, dep, h.x + h.w / 2 - 0.01, h.y, -dep / 2), fm);
+        add('wood', box(h.w + 0.3, 0.12, 0.2, h.x, h.y + h.h / 2 + 0.06, 0.02), fm);   // timber lintel
+        const g = new THREE.PlaneGeometry(h.w, h.h); g.translate(h.x, h.y, -dep + 0.02); g.applyMatrix4(fm);
+        if (h.door) bat.add('wood', g, frame, bld); else bat.add('glass', g, frame, bld, [h.w, h.h]);
+        if (h.door) add('step', box(h.w + 0.5, 0.14, 0.45, h.x, 0.07, 0.22), fm);
+      }
+      // fieldstone base course, a hand proud of the plaster, open at the door
+      const door = holes.find(h => h.door), cuts = door ? [[-L / 2, door.x - door.w / 2], [door.x + door.w / 2, L / 2]] : [[-L / 2, L / 2]];
+      for (const [a0, a1] of cuts) if (a1 - a0 > 0.05) add('fieldstone', box(a1 - a0, STONE, 0.08, (a0 + a1) / 2, STONE / 2 + 0.03, 0.04), fm);
+    }
+    // low hip roof on plain wooden eaves
+    const e = 0.4, pitch = 0.3, ry = H - 0.05, roof = roofGeometry(w, d, e, pitch, ry, 'h'), W = w / 2 + e, Dd = d / 2 + e;
+    add(roofKey, roof);
+    const sof = new THREE.PlaneGeometry(2 * W, 2 * Dd); sof.rotateX(Math.PI / 2); sof.translate(0, ry - 0.02, 0); add('wood', sof);
+    add('wood', box(2 * W + 0.05, 0.16, 0.05, 0, ry - 0.06, Dd)); add('wood', box(2 * W + 0.05, 0.16, 0.05, 0, ry - 0.06, -Dd));
+    add('wood', box(0.05, 0.16, 2 * Dd, W, ry - 0.06, 0)); add('wood', box(0.05, 0.16, 2 * Dd, -W, ry - 0.06, 0));
+    // the oven's smoke chimney: wide, squat, stone, blackened at the top
+    const cx = Math.min(w / 2 - 1.4, Math.max(0, W - Dd)), cz = 0.5, roofY = ry + Math.min(Dd - cz, W - cx) * Math.tan(pitch);
+    add('chimney', boxY(0.95, 0.75, roofY - 0.5, roofY + 0.85, cx, cz));
+    add('metalDark', boxY(1.0, 0.8, roofY + 0.55, roofY + 0.9, cx, cz));
+    add('beton', box(1.15, 0.08, 0.95, cx, roofY + 0.94, cz));
+    // firewood stacked against a side wall
+    const side = front === '+z' || front === '-z' ? '+x' : '+z', fm = faceMatrix(side, w, d);
+    for (let row = 0; row < 4; row++) for (let k = 0; k < 9 - row; k++) {
+      const lg = new THREE.CylinderGeometry(0.075, 0.075, 0.9, 7); lg.rotateX(Math.PI / 2);
+      lg.translate(-1.2 + k * 0.16 + row * 0.08, 0.08 + row * 0.14, 0.55); add('wood', lg, fm);
+    }
+  }
+  /** Dry-stone wall along a lane (owner), stepping with the ground in pieces of at most 2.5 m. */
+  function buildStoneWall(sw) {
+    const [x0, z0] = sw.pts[0], yG = yAt(x0, z0), id = bid++, frame = { x: x0, y: yG, z: z0, yaw: 0 }, bld = { id, base: yG - 3, top: yG + 3, yaw: 0, cx: x0, cz: z0 };
+    for (const [ax, az, bx, bz] of wallPieces(sw)) {
+      const L = Math.hypot(bx - ax, bz - az), k = Math.max(1, Math.ceil(L / 2.5));
+      for (let i = 0; i < k; i++) {
+        const px = ax + (bx - ax) * (i + 0.5) / k, pz = az + (bz - az) * (i + 0.5) / k, dy = yAt(px, pz) - yG;
+        const h = sw.h + 0.08 * Math.sin(px * 1.7 + pz * 2.3);
+        const g = boxY(L / k + 0.12, 0.55, dy - 0.8, dy + h); g.rotateY(Math.atan2(-(bz - az), bx - ax)); g.translate(px - x0, 0, pz - z0); bat.add('rubble', g, frame, bld);
+        const cap = boxY(L / k + 0.16, 0.62, dy + h - 0.02, dy + h + 0.1); cap.rotateY(Math.atan2(-(bz - az), bx - ax)); cap.translate(px - x0, 0, pz - z0); bat.add('fieldstone', cap, frame, bld);
+      }
+    }
+  }
+
   // ---------------------------------------------------------------- generic house -------------
   function faceMatrix(side, w, d) {
     const m = new THREE.Matrix4(), r = new THREE.Matrix4();
@@ -400,18 +479,61 @@ export function buildVillage(ctx, layout, M) {
     const lx = X * c - Z * s, lz = X * s + Z * c;
     return Math.abs(lz) > Math.abs(lx) ? (lz > 0 ? '+z' : '-z') : (lx > 0 ? '+x' : '-x');
   }
+  /** The side of a house whose outward normal points closest to the world direction b.porch.dir ([x, z]). */
+  function porchSide(b) {
+    const c = Math.cos(b.yaw), s = Math.sin(b.yaw), [dx, dz] = b.porch.dir;
+    const n = { '+x': [c, -s], '-x': [-c, s], '+z': [s, c], '-z': [-s, -c] };
+    return Object.keys(n).reduce((a, k) => (n[k][0] * dx + n[k][1] * dz > n[a][0] * dx + n[a][1] * dz ? k : a), '+x');
+  }
   function buildHouse(b) {
     const id = bid++;
     const frame = { x: b.x, y: b.yTop, z: b.z, yaw: b.yaw };
     const n = b.storeys || 1, w = b.w, d = b.d;
     const y0 = PLINTH, y1 = PLINTH + (b.barn ? 2.6 : n * FLOOR + 0.2);   // barns / annexes are lower than a house
     const bld = { id, base: b.yTop, top: b.yTop + y1, yaw: b.yaw, cx: b.x, cz: b.z };
-    const wallKey = b.wallKey || (b.kind === 'school' ? 'redWall' : b.kind === 'market' || b.kind === 'kahve' ? 'Duvar_Beyaz' : WALLS[Math.floor(rnd() * WALLS.length)]);
+    const wallKey0 = b.wallKey || (b.kind === 'school' ? 'redWall' : b.kind === 'market' || b.kind === 'kahve' ? 'Duvar_Beyaz' : WALLS[Math.floor(rnd() * WALLS.length)]);
+    const wallKey = b.ownWall || wallKey0;   // v0.9.7: an owner's colour replaces the draw but the draw is still made
     const roofKey = b.roof === 'm' ? (rnd() < 0.7 ? 'Cati_Sac_Gri' : 'Cati_Sac_Mavi') : TILES[Math.floor(rnd() * TILES.length)];
     const add = (key, geo, m) => { if (m) geo.applyMatrix4(m); bat.add(key, geo, frame, bld); };
     const front = frontSide(b), isBarn = !!b.barn;
     // plinth
-    add(b.yTop - b.yLow > 1.9 ? 'rubble' : 'plinth', boxY(w + 0.16, d + 0.16, b.yLow - b.yTop - 0.3, y0 + 0.02));   // tall drops read as rubble retaining walls (Street View 78/86)
+    if (b.lowerFloor) lowerFloor();
+    else add(b.yTop - b.yLow > 1.9 ? 'rubble' : 'plinth', boxY(w + 0.16, d + 0.16, b.yLow - b.yTop - 0.3, y0 + 0.02));   // tall drops read as rubble retaining walls (Street View 78/86)
+    // v0.9.7: a full storey under the floor on the downhill side of a steep plot (owner: two storeys on the slope side,
+    // one on the street side). Windows wherever the ground falls away far enough, a door on the lowest side; the
+    // walls run on underground on the uphill side. No random draws, so the rest of the village is unchanged.
+    function lowerFloor() {
+      const yb = b.yLow - b.yTop - 0.3, fL = Math.max(yb + 0.3, y0 - FLOOR), c = Math.cos(b.yaw), s = Math.sin(b.yaw), v = new THREE.Vector3();
+      const groundAt = (fm, x, out) => { v.set(x, 0, out).applyMatrix4(fm); return terrH(b.x + v.x * c + v.z * s, b.z - v.x * s + v.z * c) - b.yTop; };
+      const sides = ['+z', '-z', '+x', '-x'].map(side => ({ side, L: side === '+z' || side === '-z' ? w : d, fm: faceMatrix(side, w, d) }));
+      let doorSide = null, low = Infinity;
+      for (const S of sides) { const g = groundAt(S.fm, 0, 1.0); if (g < low) { low = g; doorSide = S.side; } }
+      add('rubble', boxY(w + 0.2, d + 0.2, yb, fL + 0.15));              // footing course of rubble
+      add('plinth', boxY(w + 0.16, d + 0.16, -0.05, y0 + 0.02));         // floor band between the two storeys
+      for (const { side, L, fm } of sides) {
+        const holes = [], panes = [];
+        // a side where the ground stays high reads as a single storey: rubble plinth, no openings
+        if (groundAt(fm, 0, 0.8) > fL + 0.9) { add('rubble', facadeWithHoles(L, fL + 0.15, -0.05, 0.08, 1, []), fm); continue; }
+        const nw = Math.max(L > 2.6 ? 1 : 0, Math.min(side === front ? (L > 15 ? 4 : 3) : 2, Math.round((L - 1.0) / 3.8)));
+        for (let i = 0; i < nw; i++) {
+          const x = -L / 2 + L * (i + 0.5) / nw, g = groundAt(fm, x, 0.8);
+          if (side === doorSide && i === Math.floor(nw / 2) && g < fL + 0.3) {
+            holes.push({ x, y: fL + 1.2, w: 1.0, h: 2.0 }); panes.push({ x, y: fL + 1.2, w: 1.0, h: 2.0, door: true });
+            add('step', box(1.6, 0.16, 0.6, x, fL + 0.08, 0.3).applyMatrix4(fm));
+          } else if (g < fL + 0.6) {
+            const wy = fL + 1.45; holes.push({ x, y: wy, w: 1.2, h: 1.2 }); panes.push({ x, y: wy, w: 1.2, h: 1.2 });
+            add('trim', box(1.4, 0.06, 0.26, x, wy - 0.63, 0.1), fm);
+          }
+        }
+        add(wallKey, facadeWithHoles(L, fL + 0.15, -0.05, 0, 1, holes), fm);
+        for (const h of holes) {
+          const dep = 0.16;
+          add(wallKey, box(h.w, 0.02, dep, h.x, h.y + h.h / 2 - 0.01, -dep / 2), fm); add(wallKey, box(h.w, 0.02, dep, h.x, h.y - h.h / 2 + 0.01, -dep / 2), fm);
+          add(wallKey, box(0.02, h.h, dep, h.x - h.w / 2 + 0.01, h.y, -dep / 2), fm); add(wallKey, box(0.02, h.h, dep, h.x + h.w / 2 - 0.01, h.y, -dep / 2), fm);
+        }
+        for (const p of panes) { const g = new THREE.PlaneGeometry(p.w, p.h); g.translate(p.x, p.y, -0.15); g.applyMatrix4(fm); bat.add(p.door ? 'door' : 'glass', g, frame, bld, p.door ? null : [p.w, p.h]); }
+      }
+    }
     // façades with window / door holes
     const balcony = n === 2 && !isBarn && rnd() < 0.5, stair = n === 2 && !isBarn && rnd() < 0.3;
     const stairSide = stair ? (front === '+z' || front === '-z' ? (rnd() < 0.5 ? '+x' : '-x') : (rnd() < 0.5 ? '+z' : '-z')) : null;
@@ -434,6 +556,7 @@ export function buildVillage(ctx, layout, M) {
             const dw = b.kind === 'market' ? 1.6 : 1.0; holes.push({ x, y: fy + 1.05, w: dw, h: 2.1 }); panes.push({ x, y: fy + 1.05, w: dw, h: 2.1, door: true });
             // two concrete steps and a small threshold slab
             add('step', box(dw + 0.8, 0.16, 0.5, x, 0.08, 0.25).applyMatrix4(fm)); add('step', box(dw + 0.5, 0.16, 0.3, x, 0.24, 0.15).applyMatrix4(fm));
+            if (b.lowerFloor) add('step', boxY(dw + 0.8, 0.5, -0.9, 0.0, x, 0.25).applyMatrix4(fm));   // the raised floor: a solid block under the steps
             if (b.kind === 'market') { // shop: awning over the door and the windows
               const aw = box(L - 0.6, 0.06, 1.6, 0, fy + 2.5, 0.8); aw.rotateX(0.18); add('canvas', aw.translate(0, 0.2, 0), fm);
               for (const px of [-L / 2 + 0.5, L / 2 - 0.5]) add('metalDark', cyl(0.03, 0.03, 2.5, px, fy + 1.25, 1.55), fm);
@@ -519,6 +642,55 @@ export function buildVillage(ctx, layout, M) {
         add('metalDark', box(w + 2 * e, 0.06, 0.06, 0, ry - 0.03, -d / 2 - e));
       }
     }
+    if (b.porch) buildPorch();
+    // v0.9.7 (owner): on one side the roof runs on over a sitting terrace — wooden posts, a concrete floor, a table
+    // with white plastic chairs — and in front of it a grapevine (asma) on a timber pergola. No random draws.
+    function buildPorch() {
+      const P = b.porch, side = porchSide(b), L = side === '+z' || side === '-z' ? w : d, fm = faceMatrix(side, w, d);
+      const xa = -L / 2 + L * P.span[0], xb = -L / 2 + L * P.span[1], xm = (xa + xb) / 2, len = xb - xa, D = P.depth, V = P.vine || 0;
+      const ry = y1 - 0.08, e = 0.55, th = 0.2, fy = y0 - 0.15, hash = (u, v) => { const t = Math.sin(u * 127.1 + v * 311.7 + b.x) * 43758.5453; return t - Math.floor(t); };
+      const yRoof = (z) => ry - 0.02 - (z - e) * Math.tan(th);
+      // the roof: one tiled slope from the eaves out past the posts, a fascia board along its edge
+      const rl = (D + 0.35 - e) / Math.cos(th), sh = box(len + 0.3, 0.07, rl, 0, 0, 0); sh.rotateX(th);
+      sh.translate(xm, ry - 0.02 - rl / 2 * Math.sin(th), e + rl / 2 * Math.cos(th)); add(roofKey, sh, fm);
+      add('woodRaw', box(len + 0.3, 0.18, 0.05, xm, yRoof(D + 0.35) - 0.08, D + 0.36), fm);
+      // terrace slab, posts and the beam
+      add('rubble', boxY(len, D + 0.2, b.yLow - b.yTop - 0.3, fy - 0.12, xm, (D + 0.2) / 2), fm);   // stone-faced terrace
+      add('beton', boxY(len + 0.06, D + 0.26, fy - 0.12, fy, xm, (D + 0.2) / 2), fm);
+      const nP = Math.max(2, Math.round(len / 3.2) + 1);
+      for (let i = 0; i < nP; i++) { const x = xa + 0.15 + (len - 0.3) * i / (nP - 1); add('woodRaw', boxY(0.14, 0.14, fy, yRoof(D) - 0.1, x, D), fm); }
+      add('woodRaw', box(len, 0.16, 0.14, xm, yRoof(D) - 0.15, D), fm);
+      // table with a cloth, four white plastic chairs
+      const tx = xm, tz = D * 0.5, ty = fy + 0.75;
+      add('woodRaw', box(1.5, 0.05, 0.85, tx, ty, tz), fm); add('canvas', box(1.56, 0.012, 0.91, tx, ty + 0.03, tz), fm);
+      for (const [lx, lz] of [[-0.68, -0.36], [0.68, -0.36], [-0.68, 0.36], [0.68, 0.36]]) add('woodRaw', boxY(0.06, 0.06, fy, ty, tx + lx, tz + lz), fm);
+      for (const [cx, dz] of [[-0.4, -1], [0.4, -1], [-0.4, 1], [0.4, 1]]) {
+        const cz = tz + dz * 0.72;
+        add('trim', box(0.44, 0.05, 0.42, tx + cx, fy + 0.44, cz), fm);
+        const back = box(0.44, 0.42, 0.04, tx + cx, fy + 0.68, cz + dz * 0.21); back.rotateX(0); add('trim', back, fm);
+        for (const [a, c] of [[-0.19, -0.18], [0.19, -0.18], [-0.19, 0.18], [0.19, 0.18]]) add('trim', boxY(0.04, 0.04, fy, fy + 0.44, tx + cx + a, cz + c), fm);
+      }
+      if (!V) return;
+      // the pergola: posts on the outer line, rails out from the terrace beam, wires across, two old vine stems
+      const top = yRoof(D) - 0.2, zo = D + V;
+      for (let i = 0; i < nP; i++) {
+        const x = xa + 0.15 + (len - 0.3) * i / (nP - 1);
+        add('woodRaw', boxY(0.12, 0.12, b.yLow - b.yTop - 0.2, top, x, zo), fm);
+        add('woodRaw', box(0.08, 0.1, V + 0.4, x, top + 0.05, D + V / 2), fm);
+      }
+      for (let z = D + 0.6; z < zo; z += 0.7) add('metalDark', box(len - 0.2, 0.015, 0.015, xm, top + 0.12, z), fm);
+      for (const sx of [xa + 0.4, xb - 0.4]) {
+        const st = cyl(0.06, 0.09, top - (b.yLow - b.yTop), 0, 0, 0, 7); st.rotateZ(sx < xm ? -0.12 : 0.12); st.translate(sx, (top + (b.yLow - b.yTop)) / 2, zo - 0.25); add('woodRaw', st, fm);
+      }
+      // leaf canopy: flattened clumps over the frame, a few hanging down at the front, bunches of grapes
+      for (let x = xa + 0.25; x < xb - 0.1; x += 0.6) for (let z = D + 0.2; z < zo + 0.25; z += 0.6) {
+        const u = hash(x, z), v = hash(z, x); if (u < 0.1) continue;   // gaps let the light through
+        const r = 0.42 + 0.3 * v, c = new THREE.IcosahedronGeometry(r, 0); c.scale(1.2, 0.45, 1.2);
+        c.translate(x + (u - 0.5) * 0.35, top + 0.25 + (v - 0.5) * 0.18, z + (v - 0.5) * 0.35); add('vine', c, fm);
+        if (z > zo - 0.6 && u > 0.55) { const hng = new THREE.IcosahedronGeometry(0.3, 0); hng.scale(0.8, 1.4, 0.6); hng.translate(x, top - 0.25, zo + 0.15); add('vine', hng, fm); }
+        if (u > 0.8) { const gr = new THREE.ConeGeometry(0.08, 0.22, 6); gr.rotateX(Math.PI); gr.translate(x, top - 0.08, z); add('grape', gr, fm); }
+      }
+    }
     function addTank(x, y, z) { add('metal', cyl(0.55, 0.55, 1.15, x, y + 0.9, z, 16)); add('metalDark', box(1.3, 0.3, 1.3, x, y + 0.2, z)); }
 
     // garden: wall or wire fence on the street side with a gate, and the plot trees
@@ -547,7 +719,8 @@ export function buildVillage(ctx, layout, M) {
     if (b.tree && !isBarn) {
       const nTrees = 1 + (rnd() < 0.4 ? 1 : 0);
       for (let i = 0; i < nTrees; i++) {
-        const sx = (rnd() < 0.5 ? -1 : 1) * (w / 2 + 2.2 + rnd() * 2), sz = (rnd() - 0.5) * (d + 3);
+        let sx = (rnd() < 0.5 ? -1 : 1) * (w / 2 + 2.2 + rnd() * 2); const sz = (rnd() - 0.5) * (d + 3);
+        if (b.porch && porchSide(b) === (sx > 0 ? '+x' : '-x')) sx += Math.sign(sx) * (b.porch.depth + (b.porch.vine || 0));   // the trees stand beyond the terrace and the vine
         const c = Math.cos(b.yaw), s = Math.sin(b.yaw), x = b.x + sx * c + sz * s, z = b.z - sx * s + sz * c;
         treeSpots.push({ x, z, species: rnd() < 0.5 ? 'mulberry' : rnd() < 0.6 ? 'fruit' : 'poplar', size: 0.8 + rnd() * 0.5 });
       }
