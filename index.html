@@ -82,6 +82,11 @@ canvas { display: block; touch-action: none; }
 #tUp { right: 18px; bottom: 112px; width: 64px; height: 64px; }
 #tFire { right: 18px; bottom: 26px; width: 110px; height: 110px; border-radius: 50%; background: rgba(162,72,47,0.6); }
 #tReload { right: 140px; bottom: 26px; width: 64px; height: 64px; }
+#tSwap { right: 140px; bottom: 100px; width: 64px; height: 64px; }
+#gameHud .gh-ammo { flex-direction: column; align-items: flex-end; gap: 0; } #gameHud .gh-ammo small { font: 700 13px var(--display); letter-spacing: 0.1em; opacity: 0.85; } #gameHud .gh-ammo div { display: flex; align-items: baseline; gap: 8px; }
+#gameHud .gh-slots { position: absolute; right: 24px; bottom: 96px; display: flex; gap: 6px; font: 600 12px var(--display); } #gameHud .gh-slots span { background: rgba(30,27,23,0.5); padding: 3px 8px; border-radius: 6px; opacity: 0.6; } #gameHud .gh-slots span.on { opacity: 1; background: rgba(162,72,47,0.8); }
+#gameHud .gh-scope { position: absolute; inset: 0; display: none; background: radial-gradient(circle at center, rgba(0,0,0,0) 0, rgba(0,0,0,0) 38vmin, rgba(0,0,0,0.97) 39vmin); }
+#gameHud .gh-scope i { position: absolute; left: 50%; top: 50%; width: 76vmin; height: 76vmin; transform: translate(-50%, -50%); background: linear-gradient(#000, #000) center / 100% 1px no-repeat, linear-gradient(#000, #000) center / 1px 100% no-repeat; }
 #gameHud { position: fixed; inset: 0; pointer-events: none; display: none; font-family: var(--display); color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.7); }
 #gameHud .gh-top { position: absolute; top: 70px; left: 50%; transform: translateX(-50%); display: flex; gap: 22px; font: 800 24px var(--display); background: rgba(30,27,23,0.55); padding: 6px 18px; border-radius: 10px; letter-spacing: 0.04em; }
 #gameHud .gh-feed { position: absolute; top: 120px; left: 50%; transform: translateX(-50%); font: 600 14px var(--display); text-align: center; }
@@ -161,7 +166,18 @@ canvas { display: block; touch-action: none; }
       <button class="pbtn on" data-bots="8">8 bots</button>
       <button class="pbtn" data-bots="12">12 bots</button>
     </div>
-    <p class="note">Deathmatch in the village: the bots patrol the lanes, spot you, chase and shoot. Rifle with 30-round magazines, 5-minute rounds. Score = kills : deaths.</p>
+    <div class="row" id="primaryWpn" style="margin-top:8px">
+      <button class="pbtn on" data-wpn="ak47">AK-47</button>
+      <button class="pbtn" data-wpn="m4a1">M4A1</button>
+      <button class="pbtn" data-wpn="mp5">MP5</button>
+      <button class="pbtn" data-wpn="awp">AWP</button>
+    </div>
+    <div class="row" id="difficulty" style="margin-top:8px">
+      <button class="pbtn" data-diff="0.6">Easy</button>
+      <button class="pbtn on" data-diff="1">Normal</button>
+      <button class="pbtn" data-diff="1.5">Hard</button>
+    </div>
+    <p class="note">Deathmatch in the village: the bots roam the real lanes, spot you, chase, strafe, fall back to reload and shoot with the same rifles. Primary + Desert Eagle + knife (1 / 2 / 3, Q, wheel), R reload, right mouse = AWP scope. 5-minute rounds, score = kills : deaths.</p>
   </div>
   <div id="carGroup" hidden>
     <div class="group-title">Toros</div>
@@ -659,7 +675,7 @@ const HINTS = {
   walk: 'Click, then look with the mouse · WASD: walk · Shift: run · Space: jump · Esc: release cursor',
   fly: 'Click, then look with the mouse · WASD: fly · E/Q: up/down · Shift: fast',
   car: '↑/W gas · ↓/S brake/reverse · ←/→ steer · Space handbrake · C camera · L headlights',
-  game: 'Click to aim · WASD: move · Shift: run · Mouse 1: fire · R: reload · Space: jump · Esc: release cursor',
+  game: 'Click to aim · WASD move · Shift run · Mouse 1 fire · Mouse 2 scope (AWP) · 1/2/3, Q, wheel: weapons · R reload · Esc: cursor',
 };
 document.getElementById('hint').textContent = HINTS.orbit;
 function setMode(m) {
@@ -683,7 +699,7 @@ function setMode(m) {
     P.pitch = m === 'fly' ? -0.25 : 0; P.y = m === 'fly' ? Math.max(camera.position.y, terrH(P.x, P.z) + 60) : surfaceAt(P.x, P.z).y; P.vy = 0;
     if (surfaceAt(P.x, P.z).water && (m === 'walk' || m === 'game')) { const [wx, wz] = D.spawn.walk; P.x = wx; P.z = wz; P.y = surfaceAt(wx, wz).y; }
   }
-  if (m === 'game') { if (!game) game = createGame({ scene, camera, P, D, terrH, surfaceAt, pushOut, kd, isTouch, EYE }); game.start(); }
+  if (m === 'game') { if (!game) game = createGame({ scene, camera, P, D, terrH, surfaceAt, pushOut, kd, isTouch, EYE, village: VILLAGE }); game.start(); }
   else if (prev === 'game' && game) game.stop();
   if (m === 'car') { initAudio(); if (audio && audio.ac.state === 'suspended') audio.ac.resume(); carYawOff = 0; carPitchOff = 0; }
   if (m === 'orbit' && prev !== 'orbit') { controls.target.set(camera.position.x + (prev === 'car' ? 0 : 0), camera.position.y, camera.position.z); const fwd = new THREE.Vector3(); camera.getWorldDirection(fwd); controls.target.copy(camera.position).addScaledVector(fwd, 60); controls.repin(); }
@@ -710,6 +726,8 @@ function go(name, instant = false) {
   anim = { from, to, t0: performance.now(), dur: 1500 };
 }
 document.querySelectorAll('#views .pbtn').forEach(b => b.addEventListener('click', () => go(b.dataset.view)));
+document.querySelectorAll('#primaryWpn .pbtn').forEach(b => b.addEventListener('click', () => { document.querySelectorAll('#primaryWpn .pbtn').forEach(o => o.classList.toggle('on', o === b)); if (game) game.setPrimary(b.dataset.wpn); }));
+document.querySelectorAll('#difficulty .pbtn').forEach(b => b.addEventListener('click', () => { document.querySelectorAll('#difficulty .pbtn').forEach(o => o.classList.toggle('on', o === b)); if (game) game.setDifficulty(+b.dataset.diff); }));
 document.querySelectorAll('#botCount .pbtn').forEach(b => b.addEventListener('click', () => { document.querySelectorAll('#botCount .pbtn').forEach(o => o.classList.toggle('on', o === b)); if (game) game.setBots(+b.dataset.bots); }));
 camera.position.set(...V.genel.p); controls.target.set(...V.genel.t);
 const panel = document.getElementById('panel'), gearBtn = document.getElementById('gearBtn');

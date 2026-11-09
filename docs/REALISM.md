@@ -7,19 +7,30 @@ Two passes so far: **v0.7 "materials"** (surfaces only, nothing moved) and **v0.
 
 ## v0.9.6 — Köprüköy Arena (Nov 2026)
 
-The owner asked for a game version "like the walk and fly functions": a Counter-Strike-style fight against bots.
-`src/game.js`, entered with the **Game** button. It reuses the walk controls, collision and the minimap:
+The owner asked for a game version "like the walk and fly functions": a Counter-Strike-style fight against bots,
+then for CS 1.5-quality weapons and livelier, armed, realistically roaming bots. `src/game.js`, entered with the
+**Game** button; it reuses the walk controls, the collision data and the minimap.
 
-- player: rifle view model (bob, recoil, reload animation), 30-round magazine + 90 in reserve, 10 shots/s, spread
-  grows while moving; health 100, red vignette when hit, respawn at the çarşı after 3.5 s;
-- bots (4 / 8 / 12, Settings): low-poly figures with red scarves; patrol between random road points, check line of
-  sight to the player a few times a second (terrain + 5.5 m building boxes), chase, hold at 30 m with a little
-  strafing, fire bursts of three with a hit chance that falls with distance and when the player moves; 100 hp,
-  headshots kill; they fall over and respawn out of sight after 6 s;
-- bullets: nearest bot hit (body / head spheres) unless a wall or the ground is in the way (`trace`), tracer line,
-  dust puff on impact; synthesised sounds (shot, hit, hurt, reload) — no audio files;
-- rounds of 5 minutes, kills : deaths and a kill feed on the HUD, Enter starts a new round; touch: joystick +
-  FIRE / R buttons.
+- **Weapons** (CS 1.5 numbers, roughly): AK-47 (36 dmg, 10/s, climbing spread), M4A1 (33, 11/s), MP5 Navy (26,
+  13.3/s), AWP (115, bolt action, right-mouse scope with 14° FOV, hopeless unscoped), Desert Eagle (54, 7 rounds,
+  semi-automatic), knife. Primary chosen in Settings; 1 / 2 / 3, Q, wheel switch with a lower-and-raise animation,
+  R reloads, magazines and reserve per weapon, camera recoil (the AK climbs), spread that grows while firing and
+  while moving, headshots × 4, damage falloff with distance. Low-poly view models (receiver, handguard, curved or
+  straight magazine, stock, sights, scope tube, muzzle brake), muzzle flash sprite, tracers, dust on walls, blood
+  puffs on hits, synthesised per-weapon sounds.
+- **Bots**: figures with vest, scarf, mask, boots and the same rifle models held in both hands (lowered on patrol,
+  levelled when aiming; crouch pose at mid range sometimes). Each has its own speed, reaction time (0.3–0.7 s) and
+  weapon (AK / M4 / MP5 / Deagle). They **roam the real road network**: `village_layout` lanes are turned into a graph
+  of lanes and junctions; a bot walks a lane a little off the centreline, at a junction picks another lane at random
+  (dead ends turn it round), stops now and then to look around. Perception: line of sight checked 4–5 times a second
+  (terrain + 5.5 m building boxes, 120 m); they also hear gunfire (90 m, AWP 160 m) and turn towards shots that hit
+  them. Combat: chase with run-and-gun sprints and aiming stops, strafe and crouch at 12–32 m, back off under 12 m,
+  bursts whose length depends on the weapon, magazines that run out → fall back and reload, flee for cover under
+  40 hp, hit chance from weapon accuracy × difficulty × distance, lower when either side moves, tracers and
+  near-miss whizzes. 100 hp, headshots kill; they fall over and respawn out of sight after 6 s.
+- Settings: 4 / 8 / 12 bots, primary weapon, Easy / Normal / Hard (bot accuracy × 0.6 / 1 / 1.5). Rounds of 5
+  minutes, kills : deaths and a kill feed, Enter starts a new round; touch: joystick + FIRE / R / WPN buttons.
+  Minimap shows bots only within 60 m.
 
 ## v0.9.5 — the village as Street View shows it (Nov 2026)
 

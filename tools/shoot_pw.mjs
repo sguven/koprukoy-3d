@@ -53,10 +53,11 @@ for (const v of views) {
     const parts = v.slice(5).split(','); const [x, z, hd] = parts.slice(0, 3).map(Number); const pitch = parts[3] !== undefined && parts[3] !== '' ? +parts[3] : 0.0; if (parts[4]) name = parts[4];
     await page.evaluate(([x, z, hd, pitch]) => { const k = window.__kk; k.setMode('walk'); k.P.x = x; k.P.z = z; k.P.yaw = -hd * Math.PI / 180; k.P.pitch = pitch; k.P.y = k.surfaceAt(x, z).y + 0.8; k.P.vy = 0; }, [x, z, hd, pitch]);
   } else if (v.startsWith('game:')) { // game:x,z,headingDeg[,label] — enter the arena, let the bots move for a moment
-    const parts = v.slice(5).split(','); const [x, z, hd] = parts.slice(0, 3).map(Number); if (parts[3]) name = parts[3];
+    const parts = v.slice(5).split(','); const [x, z, hd] = parts.slice(0, 3).map(Number); if (parts[3]) name = parts[3]; const wpn = parts[4] || null;
     await page.evaluate(([x, z, hd]) => { const k = window.__kk; k.setMode('game'); k.P.x = x; k.P.z = z; k.P.yaw = -hd * Math.PI / 180; k.P.pitch = 0; k.P.y = k.surfaceAt(x, z).y; k.P.vy = 0; }, [x, z, hd]);
-    await settle(6);
-    await page.evaluate(() => { const g = window.__kk.game(); const b = g.state.bots[0]; const p = window.__kk.P; const d = 14, a = -p.yaw; b.x = p.x - Math.sin(a) * d + 2; b.z = p.z - Math.cos(a) * d; b.y = window.__kk.surfaceAt(b.x, b.z).y; b.dead = 0; g.fire(); });
+    await settle(8);
+    const info = await page.evaluate((wpn) => { const g = window.__kk.game(); const p = window.__kk.P; if (wpn) { g.setWeapon(wpn); g.state.swapT = 0; } const b = g.state.bots[0]; const d = 14, a = -p.yaw; b.x = p.x - Math.sin(a) * d + 1.5; b.z = p.z - Math.cos(a) * d; b.y = window.__kk.surfaceAt(b.x, b.z).y; b.dead = 0; b.hasLos = true; b.aimT = 5; b.flashT = 0.2; g.fire(); return g.state.bots.map(b => `${b.name}:${b.state}:${b.weapon}:${b.x.toFixed(0)},${b.z.toFixed(0)}`).join(' | '); }, wpn);
+    console.log('bots', info);
     await settle(2);
   } else await page.evaluate(v => window.__kk.go(v, true), v);
   await settle(4);
