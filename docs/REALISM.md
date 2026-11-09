@@ -28,7 +28,8 @@ then for CS 1.5-quality weapons and livelier, armed, realistically roaming bots.
   bursts whose length depends on the weapon, magazines that run out → fall back and reload, flee for cover under
   40 hp, hit chance from weapon accuracy × difficulty × distance, lower when either side moves, tracers and
   near-miss whizzes. 100 hp, headshots kill; they fall over and respawn out of sight after 6 s.
-- Settings: 4 / 8 / 12 bots, primary weapon, Easy / Normal / Hard (bot accuracy × 0.6 / 1 / 1.5). Rounds of 5
+- Settings: 4 / 8 / 12 / 25 / 50 / 100 bots (every rigid part of a bot is baked into one vertex-coloured mesh, 7 draw
+  calls per bot; bots farther than 180 m think ten times a second; shadows only up to 12 bots), primary weapon, Easy / Normal / Hard (bot accuracy × 0.6 / 1 / 1.5). Rounds of 5
   minutes, kills : deaths and a kill feed, Enter starts a new round; touch: joystick + FIRE / R / WPN buttons.
   Minimap shows bots only within 60 m.
 
@@ -88,7 +89,9 @@ Rendering (`src/village.js`, `village_layout.js`, `village_materials.js`, `terra
 - roads lie on the ground: the per-road stagger that separates overlapping ribbons at junctions was index × 3 mm and
   had grown to 1.4 m over 467 roads, so the lanes ran on raised causeways; it is now at most 3 cm on a 6–12 cm lift,
   and a lane is told from the ground by its paler surface alone (owner's request);
-- houses on slopes are cut deeper into the ground, so plinths stay 1–2 m instead of 3 m;
+- houses on slopes: the floor is level with the ground on the street side and the plinth takes the drop on the
+  downhill side; only a plinth over 2.6 m cuts the house into the slope (the earlier mid-slope floor left houses
+  on the uphill side of a lane looking buried in the road);
 - `pruneRocks`: the merged GLB rock mesh is split into boulders (connected components); the 144 boulders on a road
   ribbon, in a yard or within 18 m of a house are dropped (56/57: a plastered house and an ashlar garden wall where
   the model had a 6 m boulder; 62–69, 83, 96/97: boulders between the houses of the E and N mahalles). The granite
