@@ -25,6 +25,10 @@ export const WEAPONS = {
 
 export function createGame(ctx) {
   const { scene, camera, P, D, terrH, surfaceAt, pushOut, kd, isTouch, EYE, village } = ctx;
+  const touchIn = ctx.touchIn || { jx: 0, jy: 0 };
+  const joyLen = () => Math.hypot(touchIn.jx, touchIn.jy);
+  const isMoving = () => kd('KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight') || joyLen() > 0.2;
+  const isRunning = () => kd('ShiftLeft', 'ShiftRight') || joyLen() > 0.92;
   const rnd = Math.random;
   const G = {
     on: false, bots: [], botCount: 50, difficulty: 1.0, primary: 'ak47',
@@ -389,7 +393,7 @@ export function createGame(ctx) {
   }
   function setScope(on) {
     if (on === G.scoped) return;
-    G.scoped = on; camera.fov = on ? 14 : 55; camera.updateProjectionMatrix(); el('ghScope').style.display = on ? 'block' : 'none'; vm.visible = !on;
+    G.scoped = on; camera.fov = on ? 14 : 55; camera.updateProjectionMatrix(); el('ghScope').style.display = on ? 'block' : 'none'; vm.visible = !on; scopeBtn.classList.toggle('on', on);
   }
   const fx = [];
   function tracer(a, b) { const g = new THREE.BufferGeometry().setFromPoints([a, b]); const l = new THREE.Line(g, tracerMat.clone()); group.add(l); fx.push({ obj: l, t: 0.05 }); }
@@ -406,7 +410,7 @@ export function createGame(ctx) {
     P.pitch += W.kick * Math.PI / 180 * (0.7 + rnd() * 0.5); P.yaw += (rnd() - 0.5) * W.kick * Math.PI / 180 * 0.5;
     // direction with spread: standing / moving / scoped, plus heat from holding the trigger
     const dir = new THREE.Vector3(); camera.getWorldDirection(dir);
-    const moving = kd('KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight');
+    const moving = isMoving();
     let spread = (moving ? W.moveSpread : W.spread) + G.heat; if (W.scope && !G.scoped) spread = 0.08;
     const right = new THREE.Vector3().crossVectors(dir, camera.up).normalize(), up = new THREE.Vector3().crossVectors(right, dir).normalize();
     const r = Math.sqrt(rnd()) * spread, a = rnd() * Math.PI * 2;
@@ -461,15 +465,28 @@ export function createGame(ctx) {
     <div class="gh-scope" id="ghScope"><i></i></div>
     <div class="gh-hurt" id="ghHurt"></div>
     <div class="gh-dead" id="ghDead"><div><b>BAŞARAMADIN ABİ</b><span id="ghDeadTxt">yeniden doğuyorsun…</span></div></div>
-    <div class="gh-end" id="ghEnd"><div><b>TUR BİTTİ</b><span id="ghEndTxt"></span><small>Enter: yeni tur</small></div></div>`;
+    <div class="gh-end" id="ghEnd"><div><b>TUR BİTTİ</b><span id="ghEndTxt"></span><small>${isTouch ? 'Dokun: yeni tur' : 'Enter: yeni tur'}</small></div></div>`;
   document.body.appendChild(hud);
   const el = (id) => document.getElementById(id);
   const mkBtn = (id, label, cls) => { const d = document.createElement('div'); d.className = 'tc pad ' + cls; d.id = id; d.textContent = label; document.body.appendChild(d); return d; };
-  const fireBtn = mkBtn('tFire', 'FIRE', ''), reloadBtn = mkBtn('tReload', 'R', ''), swapBtn = mkBtn('tSwap', 'WPN', '');
-  fireBtn.addEventListener('pointerdown', e => { G.firing = true; G.fired = false; e.stopPropagation(); e.preventDefault(); });
-  for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) fireBtn.addEventListener(ev, () => { G.firing = false; G.fired = false; });
-  reloadBtn.addEventListener('pointerdown', e => { reload(); e.stopPropagation(); });
-  swapBtn.addEventListener('pointerdown', e => { cycleWeapon(1); e.stopPropagation(); });
+  const fireBtn = mkBtn('tFire', 'FIRE', ''), reloadBtn = mkBtn('tReload', 'RELOAD', 'gbtn'), jumpBtn = mkBtn('tJump', 'JUMP', 'gbtn'), scopeBtn = mkBtn('tScope', 'SCOPE', 'gbtn');
+  const touchBtns = [fireBtn, reloadBtn, jumpBtn, scopeBtn];
+  // FIRE: hold to shoot, and drag the thumb on it to aim at the same time (like mobile shooters)
+  let fireId = null, fx0 = 0, fy0 = 0;
+  const fireUp = e => { if (e.pointerId !== fireId) return; fireId = null; G.firing = false; G.fired = false; fireBtn.classList.remove('down'); };
+  fireBtn.addEventListener('pointerdown', e => { e.stopPropagation(); e.preventDefault(); if (fireId !== null) return; fireId = e.pointerId; fx0 = e.clientX; fy0 = e.clientY; try { fireBtn.setPointerCapture(e.pointerId); } catch (_) {} G.firing = true; G.fired = false; fireBtn.classList.add('down'); });
+  fireBtn.addEventListener('pointermove', e => { if (e.pointerId !== fireId) return; const dx = e.clientX - fx0, dy = e.clientY - fy0; fx0 = e.clientX; fy0 = e.clientY; const k = 0.005 * camera.fov / 55; P.yaw -= dx * k; P.pitch = Math.max(-1.45, Math.min(1.45, P.pitch - dy * k)); });
+  for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) fireBtn.addEventListener(ev, fireUp);
+  const tap = (b, fn) => b.addEventListener('pointerdown', e => { e.stopPropagation(); e.preventDefault(); fn(); b.classList.add('down'); setTimeout(() => b.classList.remove('down'), 140); });
+  tap(reloadBtn, () => reload());
+  tap(scopeBtn, () => { if (WEAPONS[G.weapon].scope && G.reloading <= 0 && G.dead <= 0) setScope(!G.scoped); });
+  jumpBtn.addEventListener('pointerdown', e => { e.stopPropagation(); e.preventDefault(); touchIn.jump = true; jumpBtn.classList.add('down'); });
+  for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) jumpBtn.addEventListener(ev, () => { touchIn.jump = false; jumpBtn.classList.remove('down'); });
+  // tap a weapon in the slot list to switch to it; tap the round-over screen for a new round
+  el('ghSlots').addEventListener('pointerdown', e => { const t = e.target.closest('[data-w]'); if (!t || !G.on) return; e.stopPropagation(); e.preventDefault(); setWeapon(t.dataset.w); });
+  el('ghEnd').addEventListener('click', () => { if (G.on && G.roundOver) newRound(); });
+  const cross = document.getElementById('cross');
+  let slotsHtml = '';
   function updateHud() {
     const W = WEAPONS[G.weapon], A = G.ammo[G.weapon];
     el('ghScore').textContent = `${G.kills} : ${G.deaths}`;
@@ -477,7 +494,16 @@ export function createGame(ctx) {
     el('ghHp').style.width = `${G.health}%`; el('ghHp').style.background = G.health > 50 ? '#7cc26b' : G.health > 25 ? '#e0b24a' : '#d14b3a'; el('ghHpTxt').textContent = G.health;
     el('ghWpn').textContent = W.name; el('ghMag').textContent = W.melee ? '—' : A.mag; el('ghRes').textContent = W.melee ? '' : `/ ${A.reserve}`;
     el('ghRel').textContent = G.reloading > 0 ? 'reloading' : (!W.melee && A.mag === 0 ? 'R: reload' : '');
-    el('ghSlots').innerHTML = [G.primary, 'deagle', 'knife'].map((k, i) => `<span class="${k === G.weapon ? 'on' : ''}">${i + 1} ${WEAPONS[k].name}</span>`).join('');
+    const sh = [G.primary, 'deagle', 'knife'].map((k, i) => `<span data-w="${k}" class="${k === G.weapon ? 'on' : ''}">${isTouch ? '' : (i + 1) + ' '}${WEAPONS[k].name}</span>`).join('');
+    if (sh !== slotsHtml) { el('ghSlots').innerHTML = sh; slotsHtml = sh; }
+    if (isTouch) scopeBtn.classList.toggle('show', !!W.scope);
+    // crosshair: hidden behind the scope or while dead; the gap opens with the real spread (moving, holding the trigger)
+    if (cross) {
+      cross.classList.toggle('off', G.scoped || G.dead > 0 || G.roundOver);
+      const sp = W.melee ? 0 : (W.scope && !G.scoped ? 0.08 : (isMoving() ? W.moveSpread : W.spread) + G.heat);
+      const gap = 3 + Math.min(60, Math.tan(sp) / Math.tan(camera.fov * Math.PI / 360) * innerHeight / 2);
+      cross.style.setProperty('--gap', gap.toFixed(1) + 'px');
+    }
     el('ghFeed').innerHTML = G.feed.map(f => `<div style="opacity:${Math.min(1, f.t / 1.5).toFixed(2)}">${f.msg}</div>`).join('');
     el('ghHurt').style.opacity = (G.hurt * 0.55).toFixed(2);
     el('ghDead').style.display = G.dead > 0 ? 'grid' : 'none'; if (G.dead > 0) el('ghDeadTxt').textContent = `yeniden doğuyorsun… ${Math.ceil(G.dead)}`;
@@ -487,7 +513,7 @@ export function createGame(ctx) {
   // ------------------------------------------------------------------ lifecycle
   function start() {
     G.on = true; group.visible = true; hud.style.display = 'block';
-    if (isTouch) { fireBtn.classList.add('show'); reloadBtn.classList.add('show'); swapBtn.classList.add('show'); }
+    if (isTouch) for (const b of [fireBtn, reloadBtn, jumpBtn]) b.classList.add('show');
     if (!camera.parent) scene.add(camera);
     camera.add(vm);
     if (!G.bots.length) for (let i = 0; i < G.botCount; i++) G.bots.push(spawnBot(i));
@@ -498,7 +524,7 @@ export function createGame(ctx) {
     for (const b of G.bots) respawnBot(b);
   }
   function stop() {
-    G.on = false; group.visible = false; hud.style.display = 'none'; for (const b of [fireBtn, reloadBtn, swapBtn]) b.classList.remove('show'); setScope(false); camera.remove(vm); G.firing = false;
+    G.on = false; group.visible = false; hud.style.display = 'none'; for (const b of touchBtns) b.classList.remove('show'); setScope(false); camera.remove(vm); G.firing = false; fireId = null; touchIn.jump = false; if (cross) { cross.classList.remove('off'); cross.style.removeProperty('--gap'); }
   }
   function setBots(n) { G.botCount = n; while (G.bots.length > n) { const b = G.bots.pop(); group.remove(b.mesh); } while (G.bots.length < n) G.bots.push(spawnBot(G.bots.length)); group.traverse(o => { if (o.isMesh) o.castShadow = n <= 12; }); }
   function setPrimary(k) { if (!WEAPONS[k] || WEAPONS[k].slot !== 1) return; G.primary = k; if (G.on) { G.ammo[k] = { mag: WEAPONS[k].mag, reserve: WEAPONS[k].reserve }; setWeapon(k); } }
@@ -516,8 +542,8 @@ export function createGame(ctx) {
     for (const f of G.feed) f.t -= dt; G.feed = G.feed.filter(f => f.t > 0);
     for (const b of G.bots) botStep(b, dt);
     // view model: bob while walking, kick on firing, lowered while reloading / swapping
-    const moving = kd('KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight');
-    G.bob += dt * (moving ? (kd('ShiftLeft', 'ShiftRight') ? 11 : 7) : 2);
+    const moving = isMoving();
+    G.bob += dt * (moving ? (isRunning() ? 11 : 7) : 2);
     G.kick = Math.max(0, G.kick - dt * 9);
     const rel = G.reloading > 0 ? Math.sin(Math.min(Math.PI, (W.reload - G.reloading) / W.reload * Math.PI)) : 0, swap = G.swapT / 0.45;
     const [rx, ry, rz] = REST[G.weapon];
