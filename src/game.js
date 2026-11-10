@@ -134,10 +134,17 @@ export function createGame(ctx) {
 
   // ------------------------------------------------------------------ sound (synthesised)
   let ac = null;
+  // death voice clip ("başaramadın abi") — fetched up front, decoded once the AudioContext exists
+  const deathFetch = fetch(new URL('../audio/basaramadin.mp3', import.meta.url)).then(r => r.ok ? r.arrayBuffer() : null).catch(() => null);
+  let deathDec = null;
+  const getDeath = () => deathDec || (deathDec = deathFetch.then(a => a ? new Promise(res => ac.decodeAudioData(a, res, () => res(null))) : null));
+  const playDeath = (buf) => { if (!buf || G.dead <= 0) return; const s = ac.createBufferSource(), g = ac.createGain(); s.buffer = buf; g.gain.value = 1; s.connect(g); g.connect(ac.destination); s.start(); };
   const sound = (kind, dist = 0, weapon = 'ak47') => {
     try {
       if (!ac) ac = new (window.AudioContext || window.webkitAudioContext)();
       if (ac.state === 'suspended') ac.resume();
+      if (kind === 'death') { getDeath().then(playDeath); return; }
+      getDeath();
       const t = ac.currentTime, att = 1 / (1 + dist / 30);
       const noise = (dur, cutoff, gain, decay = 2.5) => {
         const n = ac.createBufferSource(), len = Math.floor(ac.sampleRate * dur), buf = ac.createBuffer(1, len, ac.sampleRate), d = buf.getChannelData(0);
@@ -434,8 +441,9 @@ export function createGame(ctx) {
   }
   function hurtPlayer(dmg, from) {
     if (G.dead > 0) return;
-    G.health -= dmg; G.hurt = 1; sound('hurt');
-    if (G.health <= 0) { G.health = 0; G.dead = 3.5; G.deaths++; setScope(false); feed(`${from.name} seni vurdu — ${WEAPONS[from.weapon].name}`); }
+    G.health -= dmg; G.hurt = 1;
+    if (G.health > 0) sound('hurt');
+    else { G.health = 0; G.dead = 3.5; G.deaths++; setScope(false); sound('death'); feed(`${from.name} seni vurdu — ${WEAPONS[from.weapon].name}`); }
   }
   function respawnPlayer() {
     const [sx, sz] = D.spawn.walk; P.x = sx; P.z = sz; P.y = surfaceAt(sx, sz).y; P.vy = 0; G.health = 100; resetAmmo(); G.reloading = 0; G.heat = 0;
@@ -452,7 +460,7 @@ export function createGame(ctx) {
     <div class="gh-slots" id="ghSlots"></div>
     <div class="gh-scope" id="ghScope"><i></i></div>
     <div class="gh-hurt" id="ghHurt"></div>
-    <div class="gh-dead" id="ghDead"><div><b>VURULDUN</b><span id="ghDeadTxt">yeniden doğuyorsun…</span></div></div>
+    <div class="gh-dead" id="ghDead"><div><b>BAŞARAMADIN ABİ</b><span id="ghDeadTxt">yeniden doğuyorsun…</span></div></div>
     <div class="gh-end" id="ghEnd"><div><b>TUR BİTTİ</b><span id="ghEndTxt"></span><small>Enter: yeni tur</small></div></div>`;
   document.body.appendChild(hud);
   const el = (id) => document.getElementById(id);
