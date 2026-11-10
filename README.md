@@ -23,3 +23,5 @@ A 3D model of Köprüköy (Keskin, Kırıkkale, Türkiye) and the area around th
 Blender model: [`model/koprukoy.glb`](model/koprukoy.glb) (1 unit = 1 m, Y up, −Z north).
 
 This is a draft. Storey counts and façade details are estimates.
+
+_Last updated: 9 November 2026_
