@@ -123,7 +123,7 @@ export function createGame(ctx) {
   const flashSprite = (size) => { const s = new THREE.Sprite(M.flash); s.scale.setScalar(size); s.visible = false; return s; };
   // bots are many (up to 100): every rigid part becomes ONE mesh with vertex colours, so a bot costs 7 draw calls
   const vcMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, metalness: 0.15 });
-  function bake(root) {
+  function bakeGeo(root) {
     root.updateMatrixWorld(true); const inv = new THREE.Matrix4().copy(root.matrixWorld).invert(); const gs = [];
     root.traverse(o => {
       if (!o.isMesh) return;
@@ -133,7 +133,7 @@ export function createGame(ctx) {
       for (let i = 0; i < n; i++) { col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b; }
       g.setAttribute('color', new THREE.BufferAttribute(col, 3)); if (g.index) gs.push(g.toNonIndexed()); else gs.push(g);
     });
-    const m = new THREE.Mesh(mergeGeometries(gs, false), vcMat); m.frustumCulled = true; return m;
+    return mergeGeometries(gs, false);
   }
 
   // ------------------------------------------------------------------ sound (synthesised)
@@ -143,6 +143,7 @@ export function createGame(ctx) {
   let deathDec = null;
   const getDeath = () => deathDec || (deathDec = deathFetch.then(a => a ? new Promise(res => ac.decodeAudioData(a, res, () => res(null))) : null));
   const playDeath = (buf) => { if (!buf || G.dead <= 0) return; const s = ac.createBufferSource(), g = ac.createGain(); s.buffer = buf; g.gain.value = 1; s.connect(g); g.connect(ac.destination); s.start(); };
+  const noiseBufs = new Map();
   const sound = (kind, dist = 0, weapon = 'ak47') => {
     try {
       if (!ac) ac = new (window.AudioContext || window.webkitAudioContext)();
@@ -151,8 +152,10 @@ export function createGame(ctx) {
       getDeath();
       const t = ac.currentTime, att = 1 / (1 + dist / 30);
       const noise = (dur, cutoff, gain, decay = 2.5) => {
-        const n = ac.createBufferSource(), len = Math.floor(ac.sampleRate * dur), buf = ac.createBuffer(1, len, ac.sampleRate), d = buf.getChannelData(0);
-        for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay);
+        // v1.0: one noise buffer per shape, made once (a 50-bot fight made a new buffer for every shot heard)
+        const nk = dur + '|' + decay; let buf = noiseBufs.get(nk);
+        if (!buf) { const len = Math.floor(ac.sampleRate * dur); buf = ac.createBuffer(1, len, ac.sampleRate); const d = buf.getChannelData(0); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay); noiseBufs.set(nk, buf); }
+        const n = ac.createBufferSource();
         n.buffer = buf; const f = ac.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = cutoff; const g = ac.createGain(); g.gain.value = gain;
         n.connect(f); f.connect(g); g.connect(ac.destination); n.start(t);
       };
@@ -175,9 +178,18 @@ export function createGame(ctx) {
 
   // ------------------------------------------------------------------ world queries
   const B = D.buildings, WALL_H = 5.5;
+  // v1.0: building boxes in a 20 m grid (a bullet trace tested every one of the 773 boxes at every step)
+  const GC = 20, grid = new Map(), gkey = (i, j) => i * 65536 + j;
+  for (let k = 0; k < B.length; k += 5) {
+    const r = Math.hypot(B[k + 3], B[k + 4]);
+    for (let i = Math.floor((B[k] - r) / GC); i <= Math.floor((B[k] + r) / GC); i++) for (let j = Math.floor((B[k + 1] - r) / GC); j <= Math.floor((B[k + 1] + r) / GC); j++) {
+      const kk = gkey(i, j); let L = grid.get(kk); if (!L) grid.set(kk, L = []); L.push(k);
+    }
+  }
   const inBuilding = (x, y, z) => {
-    for (let k = 0; k < B.length; k += 5) {
-      const dx = x - B[k], dz = z - B[k + 1]; if (Math.abs(dx) > 40 || Math.abs(dz) > 40) continue;
+    const L = grid.get(gkey(Math.floor(x / GC), Math.floor(z / GC))); if (!L) return false;
+    for (const k of L) {
+      const dx = x - B[k], dz = z - B[k + 1];
       const c = Math.cos(B[k + 2]), s = Math.sin(B[k + 2]), lx = dx * c - dz * s, lz = dx * s + dz * c;
       if (Math.abs(lx) < B[k + 3] && Math.abs(lz) < B[k + 4] && y < terrH(x, z) + WALL_H) return true;
     }
@@ -220,8 +232,11 @@ export function createGame(ctx) {
   };
 
   // ------------------------------------------------------------------ bots
-  function botMesh(weapon) {
-    const g = new THREE.Group();
+  // v1.0: every bot part is an instance of one shared mesh (body, legs, arms, one gun model per weapon), so the
+  // whole crowd costs ~7 draw calls instead of 6 per bot (50 bots: 300 → 7). Each bot keeps a light Object3D
+  // skeleton that the pose code moves as before; after the update its world matrices are copied into the instances.
+  const MAX_BOTS = 100, BOT_GUNS = ['ak47', 'm4a1', 'mp5', 'deagle'];
+  const IM = (() => {
     const body = new THREE.Group();
     body.add(box(0.22, 0.1, 0.3, -0.13, 0.05, 0.02, M.boot), box(0.22, 0.1, 0.3, 0.13, 0.05, 0.02, M.boot));
     body.add(box(0.5, 0.6, 0.28, 0, 1.16, 0, M.cloth));                                   // torso
@@ -229,17 +244,45 @@ export function createGame(ctx) {
     body.add(box(0.54, 0.16, 0.34, 0, 1.5, 0, M.team));                                    // red scarf: the other team
     const head = new THREE.Mesh(new THREE.SphereGeometry(0.15, 10, 8), M.skin); head.position.y = 1.72; body.add(head);
     const mask = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 8, 0, Math.PI * 2, 0, Math.PI * 0.6), M.cloth); mask.position.y = 1.735; body.add(mask);
-    g.add(bake(body));
-    const leg = (x) => { const m = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.84, 0.24), vcMat); const n = m.geometry.attributes.position.count, col = new Float32Array(n * 3); for (let i = 0; i < n; i++) { col[i * 3] = M.cloth2.color.r; col[i * 3 + 1] = M.cloth2.color.g; col[i * 3 + 2] = M.cloth2.color.b; } m.geometry.setAttribute('color', new THREE.BufferAttribute(col, 3)); m.geometry.translate(0, -0.42, 0); m.position.set(x, 0.84, 0); return m; };   // pivot at the hip
-    const l1 = leg(-0.13), l2 = leg(0.13); g.add(l1, l2);
+    const leg = new THREE.Group(); const lm = box(0.2, 0.84, 0.24, 0, -0.42, 0, M.cloth2); leg.add(lm);   // pivot at the hip
+    const arm = new THREE.Group(); arm.add(box(0.13, 0.56, 0.15, 0, -0.28, 0, M.cloth), box(0.11, 0.11, 0.11, 0, -0.58, 0, M.skin));
+    const out = {};
+    const mk = (name, geo, perBot) => {
+      const im = new THREE.InstancedMesh(geo, vcMat, MAX_BOTS * perBot); im.count = 0; im.name = 'Bot_' + name;
+      im.frustumCulled = false; im.castShadow = false; im.receiveShadow = true;   // bots don't cast: the shadow map is static (v1.0)
+      im.instanceMatrix.setUsage(THREE.DynamicDrawUsage); group.add(im); out[name] = im;
+    };
+    mk('body', bakeGeo(body), 1); mk('leg', bakeGeo(leg), 2); mk('arm', bakeGeo(arm), 2);
+    for (const k of BOT_GUNS) mk(k, bakeGeo(weaponModel(k)), 1);
+    return out;
+  })();
+  const MUZZLE = {}; for (const k of BOT_GUNS) MUZZLE[k] = weaponModel(k).userData.muzzle;
+  const slot = (im) => { const o = new THREE.Object3D(); o.userData.im = im; return o; };
+  function botMesh(weapon) {
+    const g = new THREE.Group();
+    const body = slot('body'); g.add(body);
+    const l1 = slot('leg'), l2 = slot('leg'); l1.position.set(-0.13, 0.84, 0); l2.position.set(0.13, 0.84, 0); g.add(l1, l2);
     // arms pivot at the shoulder, hold the rifle in front
-    const arm = (x) => { const a = new THREE.Group(); a.position.set(x, 1.42, 0); const parts = new THREE.Group(); parts.add(box(0.13, 0.56, 0.15, 0, -0.28, 0, M.cloth), box(0.11, 0.11, 0.11, 0, -0.58, 0, M.skin)); a.add(bake(parts)); return a; };
+    const arm = (x) => { const a = new THREE.Group(); a.position.set(x, 1.42, 0); a.add(slot('arm')); return a; };
     const a1 = arm(-0.32), a2 = arm(0.32); g.add(a1, a2);
-    const gunModel = weaponModel(weapon), gun = new THREE.Group(); gun.add(bake(gunModel)); gun.rotation.y = Math.PI; gun.scale.setScalar(0.95); gun.position.set(0.1, 1.28, 0.3); g.add(gun);
-    const flash = flashSprite(0.5); gun.add(flash); flash.position.copy(gunModel.userData.muzzle); g.userData.flash = flash;
-    g.traverse(o => { if (o.isMesh) o.castShadow = G.botCount <= 12; });
-    Object.assign(g.userData, { l1, l2, a1, a2, gun });
+    const gun = new THREE.Group(); gun.add(slot(weapon)); gun.rotation.y = Math.PI; gun.scale.setScalar(0.95); gun.position.set(0.1, 1.28, 0.3); g.add(gun);
+    const flash = flashSprite(0.5); gun.add(flash); flash.position.copy(MUZZLE[weapon]); g.userData.flash = flash;
+    const parts = []; g.traverse(o => { if (o.userData.im) parts.push(o); });
+    Object.assign(g.userData, { l1, l2, a1, a2, gun, parts });
     return g;
+  }
+  // copy the bots' part matrices into the instanced meshes (after the bots moved, before the frame is drawn)
+  const _sph = new THREE.Sphere(), _frus = new THREE.Frustum(), _pv = new THREE.Matrix4();
+  function syncBotInstances() {
+    for (const k in IM) IM[k].count = 0;
+    camera.updateMatrixWorld(); _pv.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); _frus.setFromProjectionMatrix(_pv);
+    for (const b of G.bots) {
+      _sph.center.set(b.x, b.y + 1, b.z); _sph.radius = 1.6;
+      if (!_frus.intersectsSphere(_sph)) continue;   // off screen: not drawn at all
+      b.mesh.updateMatrixWorld(true);
+      for (const o of b.mesh.userData.parts) { const im = IM[o.userData.im]; im.setMatrixAt(im.count++, o.matrixWorld); }
+    }
+    for (const k in IM) { const im = IM[k]; im.visible = im.count > 0; if (im.count) im.instanceMatrix.needsUpdate = true; }
   }
   function spawnBot(i) {
     const kinds = ['ak47', 'ak47', 'm4a1', 'mp5', 'mp5', 'ak47', 'deagle', 'm4a1'];
@@ -396,8 +439,19 @@ export function createGame(ctx) {
     G.scoped = on; camera.fov = on ? 14 : 55; camera.updateProjectionMatrix(); el('ghScope').style.display = on ? 'block' : 'none'; vm.visible = !on; scopeBtn.classList.toggle('on', on);
   }
   const fx = [];
-  function tracer(a, b) { const g = new THREE.BufferGeometry().setFromPoints([a, b]); const l = new THREE.Line(g, tracerMat.clone()); group.add(l); fx.push({ obj: l, t: 0.05 }); }
-  function puff(x, y, z, size = 0.6, m = puffMat) { const s = new THREE.Sprite(m.clone()); s.position.set(x, y, z); s.scale.setScalar(size); group.add(s); fx.push({ obj: s, t: 0.35, grow: true }); }
+  // v1.0: tracers and puffs come from small pools (they used to allocate a geometry and clone a material per shot)
+  const tracerPool = [], puffPool = [];
+  function tracer(a, b) {
+    let l = tracerPool.pop();
+    if (!l) { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3)); l = new THREE.Line(g, tracerMat); l.frustumCulled = false; l.userData.pool = tracerPool; }
+    const p = l.geometry.attributes.position; p.setXYZ(0, a.x, a.y, a.z); p.setXYZ(1, b.x, b.y, b.z); p.needsUpdate = true;
+    group.add(l); fx.push({ obj: l, t: 0.05 });
+  }
+  function puff(x, y, z, size = 0.6, m = puffMat) {
+    let s = puffPool.pop(); if (!s) { s = new THREE.Sprite(m.clone()); s.userData.pool = puffPool; }
+    s.material.color.copy(m.color); s.material.opacity = m.opacity;
+    s.position.set(x, y, z); s.scale.setScalar(size); group.add(s); fx.push({ obj: s, t: 0.35, grow: true });
+  }
   function fire() {
     const W = WEAPONS[G.weapon], A = G.ammo[G.weapon];
     if (G.dead > 0 || G.roundOver || G.reloading > 0 || G.fireCd > 0 || G.swapT > 0) return;
@@ -487,27 +541,32 @@ export function createGame(ctx) {
   el('ghEnd').addEventListener('click', () => { if (G.on && G.roundOver) newRound(); });
   const cross = document.getElementById('cross');
   let slotsHtml = '';
+  // v1.0: the HUD is written only where a value changed (it rewrote ~15 DOM properties and the kill feed every frame)
+  const hudCache = new Map();
+  const setText = (id, v) => { const k = id + ':t'; if (hudCache.get(k) !== v) { hudCache.set(k, v); el(id).textContent = v; } };
+  const setStyle = (id, prop, v) => { const k = id + ':' + prop; if (hudCache.get(k) !== v) { hudCache.set(k, v); el(id).style[prop] = v; } };
   function updateHud() {
     const W = WEAPONS[G.weapon], A = G.ammo[G.weapon];
-    el('ghScore').textContent = `${G.kills} : ${G.deaths}`;
-    const t = Math.max(0, Math.ceil(G.roundT)); el('ghTime').textContent = `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
-    el('ghHp').style.width = `${G.health}%`; el('ghHp').style.background = G.health > 50 ? '#7cc26b' : G.health > 25 ? '#e0b24a' : '#d14b3a'; el('ghHpTxt').textContent = G.health;
-    el('ghWpn').textContent = W.name; el('ghMag').textContent = W.melee ? '—' : A.mag; el('ghRes').textContent = W.melee ? '' : `/ ${A.reserve}`;
-    el('ghRel').textContent = G.reloading > 0 ? 'reloading' : (!W.melee && A.mag === 0 ? 'R: reload' : '');
+    setText('ghScore', `${G.kills} : ${G.deaths}`);
+    const t = Math.max(0, Math.ceil(G.roundT)); setText('ghTime', `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`);
+    setStyle('ghHp', 'width', `${G.health}%`); setStyle('ghHp', 'background', G.health > 50 ? '#7cc26b' : G.health > 25 ? '#e0b24a' : '#d14b3a'); setText('ghHpTxt', String(G.health));
+    setText('ghWpn', W.name); setText('ghMag', W.melee ? '—' : String(A.mag)); setText('ghRes', W.melee ? '' : `/ ${A.reserve}`);
+    setText('ghRel', G.reloading > 0 ? 'reloading' : (!W.melee && A.mag === 0 ? 'R: reload' : ''));
     const sh = [G.primary, 'deagle', 'knife'].map((k, i) => `<span data-w="${k}" class="${k === G.weapon ? 'on' : ''}">${isTouch ? '' : (i + 1) + ' '}${WEAPONS[k].name}</span>`).join('');
     if (sh !== slotsHtml) { el('ghSlots').innerHTML = sh; slotsHtml = sh; }
-    if (isTouch) scopeBtn.classList.toggle('show', !!W.scope);
+    if (isTouch && hudCache.get('scope') !== !!W.scope) { hudCache.set('scope', !!W.scope); scopeBtn.classList.toggle('show', !!W.scope); }
     // crosshair: hidden behind the scope or while dead; the gap opens with the real spread (moving, holding the trigger)
     if (cross) {
-      cross.classList.toggle('off', G.scoped || G.dead > 0 || G.roundOver);
+      const off = G.scoped || G.dead > 0 || G.roundOver; if (hudCache.get('crossOff') !== off) { hudCache.set('crossOff', off); cross.classList.toggle('off', off); }
       const sp = W.melee ? 0 : (W.scope && !G.scoped ? 0.08 : (isMoving() ? W.moveSpread : W.spread) + G.heat);
       const gap = 3 + Math.min(60, Math.tan(sp) / Math.tan(camera.fov * Math.PI / 360) * innerHeight / 2);
-      cross.style.setProperty('--gap', gap.toFixed(1) + 'px');
+      const gs = gap.toFixed(1) + 'px'; if (hudCache.get('gap') !== gs) { hudCache.set('gap', gs); cross.style.setProperty('--gap', gs); }
     }
-    el('ghFeed').innerHTML = G.feed.map(f => `<div style="opacity:${Math.min(1, f.t / 1.5).toFixed(2)}">${f.msg}</div>`).join('');
-    el('ghHurt').style.opacity = (G.hurt * 0.55).toFixed(2);
-    el('ghDead').style.display = G.dead > 0 ? 'grid' : 'none'; if (G.dead > 0) el('ghDeadTxt').textContent = `yeniden doğuyorsun… ${Math.ceil(G.dead)}`;
-    el('ghEnd').style.display = G.roundOver ? 'grid' : 'none';
+    const fh = G.feed.map(f => `<div style="opacity:${Math.min(1, f.t / 1.5).toFixed(1)}">${f.msg}</div>`).join('');
+    if (hudCache.get('feed') !== fh) { hudCache.set('feed', fh); el('ghFeed').innerHTML = fh; }
+    setStyle('ghHurt', 'opacity', (G.hurt * 0.55).toFixed(2));
+    setStyle('ghDead', 'display', G.dead > 0 ? 'grid' : 'none'); if (G.dead > 0) setText('ghDeadTxt', `yeniden doğuyorsun… ${Math.ceil(G.dead)}`);
+    setStyle('ghEnd', 'display', G.roundOver ? 'grid' : 'none');
   }
 
   // ------------------------------------------------------------------ lifecycle
@@ -524,9 +583,9 @@ export function createGame(ctx) {
     for (const b of G.bots) respawnBot(b);
   }
   function stop() {
-    G.on = false; group.visible = false; hud.style.display = 'none'; for (const b of touchBtns) b.classList.remove('show'); setScope(false); camera.remove(vm); G.firing = false; fireId = null; touchIn.jump = false; if (cross) { cross.classList.remove('off'); cross.style.removeProperty('--gap'); }
+    G.on = false; group.visible = false; hud.style.display = 'none'; for (const b of touchBtns) b.classList.remove('show'); setScope(false); camera.remove(vm); G.firing = false; fireId = null; touchIn.jump = false; if (cross) { cross.classList.remove('off'); cross.style.removeProperty('--gap'); } hudCache.clear();
   }
-  function setBots(n) { G.botCount = n; while (G.bots.length > n) { const b = G.bots.pop(); group.remove(b.mesh); } while (G.bots.length < n) G.bots.push(spawnBot(G.bots.length)); group.traverse(o => { if (o.isMesh) o.castShadow = n <= 12; }); }
+  function setBots(n) { G.botCount = n; while (G.bots.length > n) { const b = G.bots.pop(); group.remove(b.mesh); } while (G.bots.length < n) G.bots.push(spawnBot(G.bots.length)); }
   function setPrimary(k) { if (!WEAPONS[k] || WEAPONS[k].slot !== 1) return; G.primary = k; if (G.on) { G.ammo[k] = { mag: WEAPONS[k].mag, reserve: WEAPONS[k].reserve }; setWeapon(k); } }
   function setDifficulty(d) { G.difficulty = d; }
   function cycleWeapon(dir) { const order = [G.primary, 'deagle', 'knife'], i = order.indexOf(G.weapon); setWeapon(order[(i + dir + 3) % 3]); }
@@ -550,7 +609,8 @@ export function createGame(ctx) {
     vm.position.set(rx + Math.sin(G.bob) * 0.007 * (moving ? 1 : 0.3), ry + Math.abs(Math.cos(G.bob)) * 0.009 * (moving ? 1 : 0.3) - rel * 0.14 - swap * 0.35, rz + G.kick * 0.07 * W.kick);
     vm.rotation.set(0.02 - G.kick * 0.1 * W.kick + rel * 0.55 + swap * 0.6, 0.06 + (G.weapon === 'knife' ? -0.5 : 0) + G.kick * (G.weapon === 'knife' ? -0.8 : 0), rel * 0.2);
     vmFlash.visible = G.time - G.lastShot < 0.035 && !W.melee;
-    for (let i = fx.length - 1; i >= 0; i--) { const f = fx[i]; f.t -= dt; if (f.grow) { f.obj.scale.multiplyScalar(1 + dt * 4); f.obj.material.opacity = Math.max(0, f.t * 2); } if (f.t <= 0) { group.remove(f.obj); f.obj.geometry && f.obj.geometry.dispose(); f.obj.material.dispose(); fx.splice(i, 1); } }
+    for (let i = fx.length - 1; i >= 0; i--) { const f = fx[i]; f.t -= dt; if (f.grow) { f.obj.scale.multiplyScalar(1 + dt * 4); f.obj.material.opacity = Math.max(0, f.t * 2); } if (f.t <= 0) { group.remove(f.obj); f.obj.userData.pool.push(f.obj); fx.splice(i, 1); } }
+    syncBotInstances();
     updateHud();
   }
   /** bots on the minimap: red dots, only within 60 m (no wallhack radar) */

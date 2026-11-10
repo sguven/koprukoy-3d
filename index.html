@@ -72,6 +72,10 @@ canvas { display: block; touch-action: none; }
 .toast { position: fixed; z-index: 35; top: 40%; left: 50%; transform: translate(-50%, -50%); max-width: 86vw; text-align: center; background: rgba(30, 27, 23, 0.86); color: #fff; font: 700 22px var(--display); padding: 12px 20px; border-radius: 10px; display: none; letter-spacing: 0.03em; }
 #minimap { position: fixed; right: 16px; top: 74px; width: 170px; height: 170px; border-radius: 50%; border: 3px solid var(--paper); box-shadow: 0 4px 16px rgba(0,0,0,0.2); display: none; }
 #minimap.show { display: block; }
+/* v1.0: frame-time meter (Settings › Show FPS) */
+#perf { position: fixed; z-index: 30; left: 12px; bottom: 12px; font: 600 12px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; background: rgba(30, 27, 23, 0.72); color: #fff; padding: 4px 8px; border-radius: 6px; pointer-events: none; white-space: nowrap; }
+body:not(.is-touch)[data-mode="game"] #perf { bottom: auto; top: 64px; }
+body.is-touch #perf { left: 50%; transform: translateX(-50%); bottom: calc(4px + var(--sb, 0px)); font-size: 10px; padding: 2px 6px; }
 /* nişangah: CS tarzı yeşil artı, koyu kenarlı — gökyüzünde de açık zeminde de görünür; --gap ateş dağılımıyla açılır */
 .crosshair { position: fixed; z-index: 20; left: 50%; top: 50%; width: 0; height: 0; display: none; pointer-events: none; --gap: 4px; --len: 9px; --th: 2px; }
 .crosshair.off { visibility: hidden; }
@@ -190,9 +194,10 @@ body:not(.is-touch)[data-mode="game"] .hint { right: auto; left: 50%; transform:
 <div class="crosshair" id="cross" aria-hidden="true"><i class="ct"></i><i class="cb"></i><i class="cl"></i><i class="cr"></i><i class="cd"></i></div>
 <canvas id="minimap" width="340" height="340"></canvas>
 <div class="toast" id="toast"></div>
+<div id="perf" aria-live="off">– FPS</div>
 
 <div class="topbar">
-  <div class="brand"><h1>Köprüköy</h1><div class="sub">Keskin · Kırıkkale, Türkiye — 3D v0.9.9</div></div>
+  <div class="brand"><h1>Köprüköy</h1><div class="sub">Keskin · Kırıkkale, Türkiye — 3D v1.0</div></div>
   <div class="modes" id="modes" role="tablist" aria-label="Navigation mode">
     <button data-mode="orbit" class="on">Orbit</button>
     <!-- walk / fly / Toros: disabled for now, to be re-enabled later -->
@@ -259,6 +264,13 @@ body:not(.is-touch)[data-mode="game"] .hint { right: auto; left: 50%; transform:
       <label class="chip"><input type="checkbox" id="lyEtiket" checked> Labels</label>
     </div>
   </div>
+  <div>
+    <div class="group-title">Performance</div>
+    <div class="row">
+      <label class="chip"><input type="checkbox" id="optFps" checked> Show FPS</label>
+      <label class="chip"><input type="checkbox" id="optAutoRes" checked> Auto resolution</label>
+    </div>
+  </div>
   <div hidden><!-- sun: disabled for now, fixed at 15:00 -->
     <div class="group-title">Sun</div>
     <label class="chip" style="width:100%;justify-content:space-between"><span>Time <b id="sunVal">15:00</b></span>
@@ -293,6 +305,7 @@ import { tagBuildings } from './src/buildings.js';
 import { buildVillageLayout, buildCentreLayout, roadSamples, squareSamples, carsiBoxes, buildingBoxes, inRegion, inCentreZone } from './src/village_layout.js';
 import { pruneOldVillage, pruneRocks, LIFT } from './src/village.js';
 import { createGame } from './src/game.js';
+import { PERF, DistanceCuller, createPerfMeter } from './src/perf.js';
 
 const POIS = [{"id": "kopru", "label": "Çeşnigir Bridge", "kind": "tarihi", "pos": [-377, 16, -277]}, {"id": "viyaduk", "label": "D.260 viaduct", "kind": "yol", "pos": [-539, 22, -105]}, {"id": "d260a", "label": "D.260", "kind": "yon", "pos": [-951, 35, -319]}, {"id": "d260b", "label": "D.260", "kind": "yon", "pos": [154, 36, 568]}, {"id": "karakecili", "label": "To Karakeçili", "kind": "yon", "pos": [-825, 21, -209]}, {"id": "gezi", "label": "Promenade", "kind": "yer", "pos": [-267, 14, -57]}, {"id": "seyir", "label": "Viewpoint rock", "kind": "yer", "pos": [-292, 24, -338]}, {"id": "iskele", "label": "Boat pier", "kind": "yer", "pos": [-305, 9, -367]}, {"id": "kanyon", "label": "Çeşnigir Canyon", "kind": "yer", "pos": [-277, 55, -602]}, {"id": "nehir", "label": "Kızılırmak · Kapulukaya Reservoir", "kind": "su", "pos": [-318, 8, 331]}];
 const isTouch = matchMedia('(pointer: coarse)').matches;
@@ -303,11 +316,16 @@ if (isTouch) for (const ev of ['gesturestart', 'gesturechange']) document.addEve
 const FULL_VILLAGE = !/\bcentre-only\b/.test(location.hash);   // v0.9: the whole village is rebuilt from Google Maps; #centre-only restores v0.8
 // render quality tier: 0 = lite, 1 = mobile, 2 = desktop
 const QUALITY = LITE ? 0 : isTouch ? 1 : 2;
+PERF.quality = QUALITY;
 
 // ---------- sahne ----------
 const host = document.getElementById('scene');
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-renderer.setPixelRatio(LITE ? 1 : Math.min(devicePixelRatio, isTouch ? 1.6 : 2));
+// v1.0: the pixel ratio comes from basePixelRatio() and the auto-resolution meter (set up below, before the first frame).
+// Desktop is capped at 1.5 (was 2): on a high-DPI screen that is 44 % fewer pixels to shade, hardly visible in a 3D scene.
+let mode = 'orbit';
+const basePixelRatio = () => LITE ? 1 : Math.min(devicePixelRatio, isTouch ? (mode === 'game' ? 1.25 : 1.6) : 1.5);
+renderer.setPixelRatio(basePixelRatio());
 renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.AgXToneMapping; renderer.toneMappingExposure = 0.85;
@@ -324,6 +342,9 @@ const sunDir = new THREE.Vector3();
 const hemi = new THREE.HemisphereLight(0xe6e2d6, 0x7a6248, 0.9); scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xfff1dc, 3.0); sun.castShadow = true;
 sun.shadow.mapSize.set(LITE ? 1024 : isTouch ? 2048 : 4096, LITE ? 1024 : isTouch ? 2048 : 4096); sun.shadow.bias = -0.0003; sun.shadow.normalBias = 0.5;
+// v1.0: the shadow map is redrawn only when something that casts a shadow or the shadow camera moved (see the loop),
+// not every frame: it was a second full render of ~1.1 M triangles at 4096² each frame.
+sun.shadow.autoUpdate = false; sun.shadow.needsUpdate = true;
 scene.add(sun, sun.target);
 scene.fog = new THREE.FogExp2(0xcfd9df, 0.00007);
 const pmrem = new THREE.PMREMGenerator(renderer);
@@ -344,6 +365,7 @@ function setSun(h) {
   if (envRT) envRT.dispose(); envRT = pmrem.fromScene(envScene); scene.environment = envRT.texture;
   document.getElementById('sunVal').textContent = `${String(Math.floor(h)).padStart(2, '0')}:${String(Math.round((h % 1) * 60)).padStart(2, '0')}`;
   if (h < 7.6 || h > 18.6) setLights(true);
+  sun.shadow.needsUpdate = true;
 }
 document.getElementById('sun').addEventListener('input', e => setSun(+e.target.value));
 
@@ -397,6 +419,7 @@ function pushOut(p, r) {
 
 // ---------- model ----------
 const layers = { bina: [], agac: [], yol: [] };
+const culler = new DistanceCuller();   // v1.0: hides small village details and far grass patches (src/perf.js)
 let waterMat = null, terrainMesh = null, realism = null, VILLAGE = null;
 function mergeByMaterial(group) {
   group.updateMatrixWorld(true);
@@ -485,14 +508,18 @@ loadAll().then(gltf => {
   scene.add(m);
   buildMinimapBase();
   placeCarAtSpawn();
-  return setupRealism({ renderer, scene, model: m, merged, D, terrH, surfaceAt, quality: QUALITY, isTouch, layers, sun, hemi, sky: su, camera, controls, village: VILLAGE })
-    .then(r => { realism = r; waterMat = null; })
+  return setupRealism({ renderer, scene, model: m, merged, D, terrH, surfaceAt, quality: QUALITY, isTouch, layers, sun, hemi, sky: su, camera, controls, village: VILLAGE, culler })
+    .then(r => { realism = r; waterMat = null; culler.update(camera.position, true); sun.shadow.needsUpdate = true; })
     .catch(err => console.error('realism layer failed, falling back to base materials', err));
 }).then(() => {
   document.getElementById('loading').remove();
 }).catch(err => { document.getElementById('loading').textContent = 'The model could not be loaded. Please reload the page.'; console.error(err); });
 
-const bind = (id, k) => document.getElementById(id).addEventListener('change', e => layers[k].forEach(o => o && (o.visible = e.target.checked)));
+// layer toggles: userData.layerOff keeps the distance culler from showing a mesh whose layer is switched off
+const bind = (id, k) => document.getElementById(id).addEventListener('change', e => {
+  layers[k].forEach(o => { if (!o) return; o.userData.layerOff = !e.target.checked; o.visible = e.target.checked; });
+  culler.update(camera.position, true); sun.shadow.needsUpdate = true;
+});
 bind('lyBina', 'bina'); bind('lyAgac', 'agac'); bind('lyYol', 'yol');
 const labelsEl = document.getElementById('labels');
 document.getElementById('lyEtiket').addEventListener('change', e => labelsEl.style.display = e.target.checked ? '' : 'none');
@@ -586,8 +613,8 @@ for (const [x, z] of [[WB / 2, -TRACK / 2], [WB / 2, TRACK / 2], [-WB / 2, -TRAC
 car.traverse(o => { if (o.isMesh) { o.castShadow = true; } });
 // farlar
 const lights = [];
-for (const z of [-0.6, 0.6]) { const sl = new THREE.SpotLight(0xfff0d0, 0, 90, 0.45, 0.6, 1.4); sl.position.set(2.2, 0.65, z); sl.target.position.set(12, -0.6, z * 2); car.add(sl, sl.target); lights.push(sl); }
-function setLights(on) { document.getElementById('optLights').checked = on; lights.forEach(l => l.intensity = on ? 60 : 0); headM.emissive.setHex(on ? 0xfff0c0 : 0x000000); tailM.emissive.setHex(on ? 0x600000 : 0x200000); }
+for (const z of [-0.6, 0.6]) { const sl = new THREE.SpotLight(0xfff0d0, 0, 90, 0.45, 0.6, 1.4); sl.visible = false; /* v1.0: an off spot light still costs every lit pixel; hidden = left out of the shaders */ sl.position.set(2.2, 0.65, z); sl.target.position.set(12, -0.6, z * 2); car.add(sl, sl.target); lights.push(sl); }
+function setLights(on) { document.getElementById('optLights').checked = on; lights.forEach(l => { l.intensity = on ? 60 : 0; l.visible = on; }); headM.emissive.setHex(on ? 0xfff0c0 : 0x000000); tailM.emissive.setHex(on ? 0x600000 : 0x200000); }
 document.getElementById('optLights').addEventListener('change', e => setLights(e.target.checked));
 document.getElementById('optRack').addEventListener('change', e => rack.visible = e.target.checked);
 scene.add(car);
@@ -743,7 +770,7 @@ holdBtn('tLeft', 'left'); holdBtn('tRight', 'right'); holdBtn('tGas', 'gas'); ho
 document.getElementById('tCam').addEventListener('pointerdown', e => { CS.cam = (CS.cam + 1) % 3; e.stopPropagation(); });
 
 // ---------- modlar ----------
-let mode = 'orbit', carYawOff = 0, carPitchOff = 0, game = null, rotateTold = false;
+let carYawOff = 0, carPitchOff = 0, game = null, rotateTold = false;
 const HINTS = {
   orbit: isTouch ? '1 finger: move · 2 fingers: pinch to zoom, twist to rotate, slide up/down to tilt · Double-tap: zoom in' : 'Drag: move · Wheel: zoom · Right-drag or Ctrl+drag: rotate / tilt · Double-click: zoom in',
   walk: 'Click, then look with the mouse · WASD: walk · Shift: run · Space: jump · Esc: release cursor',
@@ -775,7 +802,8 @@ function setMode(m) {
     if (surfaceAt(P.x, P.z).water && (m === 'walk' || m === 'game')) { const [wx, wz] = D.spawn.walk; P.x = wx; P.z = wz; P.y = surfaceAt(wx, wz).y; }
   }
   // phones: render the game at a lower resolution so it stays smooth with many bots
-  if (isTouch && !LITE && (m === 'game') !== (prev === 'game')) { renderer.setPixelRatio(Math.min(devicePixelRatio, m === 'game' ? 1.25 : 1.6)); renderer.setSize(innerWidth, innerHeight); }
+  if (isTouch && !LITE && (m === 'game') !== (prev === 'game')) perf.reset();   // basePixelRatio() depends on the mode
+  sun.shadow.needsUpdate = true;
   if (m === 'game') { if (!game) game = createGame({ scene, camera, P, D, terrH, surfaceAt, pushOut, kd, isTouch, touchIn, EYE, village: VILLAGE }); game.start();
     if (isTouch && innerHeight > innerWidth && !rotateTold) { rotateTold = true; toast('Turn your phone sideways for the best view'); toastT = 3.5; } }
   else if (prev === 'game' && game) game.stop();
@@ -844,13 +872,25 @@ function drawMinimap(x, z, heading) {
 
 // ---------- loop ----------
 addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+// v1.0: FPS meter + automatic resolution (src/perf.js); both can be switched off under Settings › Performance
+const perf = createPerfMeter(renderer, document.getElementById('perf'), basePixelRatio);
+const loadPref = (k, d) => { try { const v = localStorage.getItem(k); return v === null ? d : v === '1'; } catch (_) { return d; } };
+const savePref = (k, v) => { try { localStorage.setItem(k, v ? '1' : '0'); } catch (_) {} };
+for (const [id, k, set] of [['optFps', 'kk_fps', v => { perf.visible = v; }], ['optAutoRes', 'kk_autores', v => { perf.auto = v; }]]) {
+  const el = document.getElementById(id); el.checked = loadPref(k, el.checked); set(el.checked);
+  el.addEventListener('change', e => { set(e.target.checked); savePref(k, e.target.checked); });
+}
+const shadowFocus = new THREE.Vector3(1e9, 0, 0); let shadowExt = 0, mmT = 0;
 setSun(15);
 const camTarget = new THREE.Vector3(), camPos = new THREE.Vector3();
-let last = performance.now();
+let last = performance.now(), last0 = last;
 if (LITE) window.__dbg = { CS, carStep, keys, touchIn, P, walkStep, surfaceAt, get mode() { return mode; } };
 renderer.setAnimationLoop(now => {
   // real elapsed time (capped at 0.25 s): on slow devices a 0.05 s cap made walking crawl at low frame rates
   const dt = Math.min(0.25, (now - last) / 1000); last = now;
+  perf.frame(now, (now - last0) / 1000); last0 = now;
+  // the minimap is redrawn ~30 times a second, not every frame (a 340 px canvas rotate + clip + drawImage)
+  mmT -= dt; const mmDue = mmT <= 0; if (mmDue) mmT = 1 / 30;
   if (waterMat) { waterMat.normalMap.offset.x = now * 0.000006; waterMat.normalMap.offset.y = now * 0.000004; }
   if (realism) realism.update(now);
   if (toastT > 0) { toastT -= dt; if (toastT <= 0 && CS.dead <= 0) toast(''); }
@@ -859,13 +899,14 @@ renderer.setAnimationLoop(now => {
   if (mode === 'orbit') {
     if (anim) { const k = Math.min(1, (now - anim.t0) / anim.dur), e = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2; camera.position.lerpVectors(anim.from.p, anim.to.p, e); controls.target.lerpVectors(anim.from.t, anim.to.t, e); if (k >= 1) anim = null; }
     controls.update(); focus = controls.target;
-  } else if (mode === 'walk' || mode === 'fly') { const n = Math.ceil(dt / 0.05); for (let i = 0; i < n; i++) walkStep(dt / n, mode === 'fly'); focus = camera.position; drawMinimap(P.x, P.z, -P.yaw); }
+  } else if (mode === 'walk' || mode === 'fly') { const n = Math.ceil(dt / 0.05); for (let i = 0; i < n; i++) walkStep(dt / n, mode === 'fly'); focus = camera.position; if (mmDue) drawMinimap(P.x, P.z, -P.yaw); }
   else if (mode === 'game') {
     const n = Math.ceil(dt / 0.05); for (let i = 0; i < n; i++) walkStep(dt / n, false);
-    game.update(dt, now); focus = camera.position; drawMinimap(P.x, P.z, -P.yaw);
+    game.update(dt, now); focus = camera.position;
+    if (mmDue) { drawMinimap(P.x, P.z, -P.yaw);
     // bots on the minimap, in the same frame drawMinimap used
     const W = mm.width, sc = 1.6, h = -P.yaw, c = Math.cos(-h), s = Math.sin(-h);
-    game.drawMinimap(mctx, (bx, bz) => { const u = (bx - P.x) * MMR, v = (bz - P.z) * MMR, px = W / 2 + sc * (u * c - v * s), py = W / 2 + sc * (u * s + v * c); const d = Math.hypot(px - W / 2, py - W / 2), r = W / 2 - 8; return d > r ? [W / 2 + (px - W / 2) * r / d, W / 2 + (py - W / 2) * r / d] : [px, py]; });
+    game.drawMinimap(mctx, (bx, bz) => { const u = (bx - P.x) * MMR, v = (bz - P.z) * MMR, px = W / 2 + sc * (u * c - v * s), py = W / 2 + sc * (u * s + v * c); const d = Math.hypot(px - W / 2, py - W / 2), r = W / 2 - 8; return d > r ? [W / 2 + (px - W / 2) * r / d, W / 2 + (py - W / 2) * r / d] : [px, py]; }); }
   }
   else if (mode === 'car') {
     // physics sub-steps
@@ -873,13 +914,21 @@ renderer.setAnimationLoop(now => {
     const c = Math.cos(CS.h + carYawOff), s = Math.sin(CS.h + carYawOff);
     if (CS.cam === 0) { camPos.set(CS.x - c * 7.2, CS.y + 2.6 + carPitchOff * 6, CS.z + s * 7.2); const minY = terrH(camPos.x, camPos.z) + 1; camPos.y = Math.max(camPos.y, minY); if (camera.position.distanceTo(camPos) > 40) camera.position.copy(camPos); else camera.position.lerp(camPos, 1 - Math.exp(-dt * 6)); camTarget.set(CS.x + Math.cos(CS.h) * 3, CS.y + 1.1, CS.z - Math.sin(CS.h) * 3); camera.lookAt(camTarget); }
     else { const local = CS.cam === 1 ? new THREE.Vector3(-0.42, 1.25, -0.35) : new THREE.Vector3(0.75, 1.5, 0); car.updateMatrixWorld(); camera.position.copy(local.applyMatrix4(car.matrixWorld)); const fwd = new THREE.Vector3(Math.cos(carYawOff) * 10, -0.6 - carPitchOff * 6, -Math.sin(carYawOff) * 10).applyMatrix4(car.matrixWorld); camera.lookAt(fwd); }
-    focus = car.position; drawMinimap(CS.x, CS.z, Math.PI / 2 - CS.h);
+    focus = car.position; if (mmDue) drawMinimap(CS.x, CS.z, Math.PI / 2 - CS.h);
     carYawOff *= Math.exp(-dt * (lookId === null ? 2 : 0)); carPitchOff *= Math.exp(-dt * (lookId === null ? 2 : 0));
   }
-  // shadow camera follows the focus
+  // small village details and far grass patches: shown / hidden by distance (re-checked every 4 m of camera movement)
+  if (culler.update(camera.position)) sun.shadow.needsUpdate = true;
+  // shadow camera follows the focus. v1.0: the shadow map is static and redrawn only when the focus has moved a few
+  // metres (6 m on foot, 4 % of the view size in orbit), the view size changed, the Toros drives (it casts a shadow),
+  // or something else asked for it (time of day, layers, culling). Light, camera and map always change together.
   const ext = mode === 'orbit' ? Math.min(900, Math.max(150, camera.position.distanceTo(focus) * 1.2)) : 140;
-  const sc = sun.shadow.camera; if (sc.right !== ext) { sc.left = -ext; sc.right = ext; sc.top = ext; sc.bottom = -ext; sc.near = 1; sc.far = 4000; sc.updateProjectionMatrix(); }
-  sun.target.position.copy(focus); sun.position.copy(focus).addScaledVector(sunDir, 1500);
+  const step = mode === 'orbit' ? ext * 0.04 : 6;
+  if (sun.shadow.needsUpdate || mode === 'car' || shadowFocus.distanceToSquared(focus) > step * step || Math.abs(ext - shadowExt) > shadowExt * 0.08) {
+    const sc = sun.shadow.camera; if (sc.right !== ext) { sc.left = -ext; sc.right = ext; sc.top = ext; sc.bottom = -ext; sc.near = 1; sc.far = 4000; sc.updateProjectionMatrix(); }
+    sun.target.position.copy(focus); sun.position.copy(focus).addScaledVector(sunDir, 1500);
+    shadowFocus.copy(focus); shadowExt = ext; sun.shadow.needsUpdate = true;
+  }
   renderer.render(scene, camera); placeLabels();
 });
 </script>

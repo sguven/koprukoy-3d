@@ -1,6 +1,7 @@
 // Trees, trunks and instanced steppe ground cover (dry grass tufts and low shrubs).
 import * as THREE from 'three';
 import { addWorldVaryings, triplanarMaterial } from './pbr.js';
+import { splitInstancedByCell } from './perf.js';
 
 // ------------------------------------------------------------------ tree canopies
 // The canopies are smooth low-poly volumes with per-vertex colour. A world-space triplanar leaf-cluster
@@ -179,5 +180,12 @@ export function groundCover(lib, { D, terrH, surfaceAt, macroImage, macroMap, qu
   };
   const grass = place(nGrass, false), shrubs = place(nShrub, true);
   const mats = [grass.material, shrubs.material];
-  return { meshes: [grass, shrubs], update(now) { for (const m of mats) if (m.userData.shader) m.userData.shader.uniforms.uTime.value = now * 0.001; } };
+  // v1.0: one InstancedMesh per patch of ground instead of one for the whole map, so patches outside the view are
+  // skipped and patches beyond the fade distance (where every card has shrunk to nothing) are not drawn at all.
+  const meshes = [];
+  for (const [m, cell, far] of [[grass, 110, 190], [shrubs, 200, 420]]) {
+    for (const part of splitInstancedByCell(m, cell)) { part.userData.maxDist = far; meshes.push(part); }
+    m.dispose();
+  }
+  return { meshes, update(now) { for (const m of mats) if (m.userData.shader) m.userData.shader.uniforms.uTime.value = now * 0.001; } };
 }
