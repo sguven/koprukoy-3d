@@ -153,6 +153,9 @@ body.is-touch #gameHud .gh-end { pointer-events: auto; }
   body.is-touch #gameHud .gh-slots span { padding: 9px 8px; font-size: 13px; }
 }
 .fsbtn { display: inline-flex; align-items: center; justify-content: center; padding: 8px 10px; }
+.fsbtn[hidden] { display: none; }
+/* desktop game: keep the key hint clear of the ammo counter */
+body:not(.is-touch)[data-mode="game"] .hint { right: auto; left: 50%; transform: translateX(-50%); bottom: 12px; max-width: 620px; text-align: center; }
 .fsbtn svg { width: 18px; height: 18px; }
 #tDn { right: 18px; bottom: 30px; width: 64px; height: 64px; }
 #tCam { right: 18px; top: 256px; width: 64px; height: 44px; font-size: 14px; }
