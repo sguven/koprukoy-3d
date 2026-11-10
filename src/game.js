@@ -31,7 +31,7 @@ export function createGame(ctx) {
   const isRunning = () => kd('ShiftLeft', 'ShiftRight') || joyLen() > 0.92;
   const rnd = Math.random;
   const G = {
-    on: false, bots: [], botCount: 50, difficulty: 1.0, primary: 'ak47',
+    on: false, bots: [], botCount: 8, difficulty: 1.0, primary: 'ak47',
     health: 100, weapon: 'ak47', lastWeapon: 'deagle', ammo: {}, reloading: 0, fireCd: 0, swapT: 0, heat: 0, scoped: false,
     kills: 0, deaths: 0, dead: 0, roundT: 300, roundOver: false, kick: 0, bob: 0, lastShot: -1, feed: [], hurt: 0, firing: false, fired: false, time: 0,
   };
