@@ -3,6 +3,7 @@
 // plus box / ribbon / façade-with-holes builders.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { mergeByCell, cellSizeFor, viewDistance } from './perf.js';
 
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(1, 1, 1), _p = new THREE.Vector3();
 
@@ -29,15 +30,22 @@ export class GeoBatch {
     if (!this.buckets.has(key)) this.buckets.set(key, []);
     this.buckets.get(key).push(geo);
   }
-  /** Merge every bucket into one mesh with the material from `materials[key]` (or materials.get(key)). */
-  build(materials, group, { shadows = true } = {}) {
+  /**
+   * Merge every bucket into meshes with the material from `materials[key]` (or materials.get(key)).
+   * v1.0: a material with many triangles is merged per map cell (cellSizeFor), so its meshes can be frustum- and
+   * distance-culled; a material with few triangles stays one mesh, so it costs a single draw call.
+   */
+  build(materials, group, { shadows = true, culler = null } = {}) {
     for (const [key, gs] of this.buckets) {
       const mat = typeof materials === 'function' ? materials(key) : materials[key];
       if (!mat) { console.warn('[village] no material for', key); continue; }
-      const g = mergeGeometries(gs, false); if (!g) continue;
-      g.computeBoundingSphere();
-      const mesh = new THREE.Mesh(g, mat); mesh.name = 'V_' + key; mesh.castShadow = shadows && !/^(road|pave|kerb|square|lawn|lines)/.test(key); mesh.receiveShadow = true;
-      group.add(mesh);
+      let tris = 0; for (const g of gs) tris += g.index.count / 3;
+      for (const [, g] of mergeByCell(gs, cellSizeFor(tris))) {
+        const mesh = new THREE.Mesh(g, mat); mesh.name = 'V_' + key; mesh.castShadow = shadows && !/^(road|pave|kerb|square|lawn|lines)/.test(key); mesh.receiveShadow = true;
+        mesh.userData.vkey = key;
+        group.add(mesh);
+        if (culler) culler.add(mesh, viewDistance(key));
+      }
     }
     this.buckets.clear();
     return group;

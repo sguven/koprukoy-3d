@@ -10,6 +10,7 @@ import { canopyMaterials, trunkMaterial, groundCover } from './vegetation.js';
 import { villageMaterials } from './village_materials.js';
 import { buildVillage } from './village.js';
 import { detailBridge } from './bridge.js';
+import { splitMeshByCell, cellSizeFor } from './perf.js';
 
 export async function setupRealism(ctx) {
   const { renderer, model, quality } = ctx;
@@ -76,7 +77,7 @@ export async function setupRealism(ctx) {
   let cover = null;
   if (!off.has('no-cover')) {
     cover = groundCover(lib, { D: ctx.D, terrH: ctx.terrH, surfaceAt: ctx.surfaceAt, macroImage: ctx.macroMap && ctx.macroMap.image, macroMap: ctx.macroMap, quality });
-    if (cover) { for (const m of cover.meshes) { ctx.scene.add(m); ctx.layers.agac.push(m); } }
+    if (cover) { for (const m of cover.meshes) { ctx.scene.add(m); ctx.layers.agac.push(m); if (ctx.culler) ctx.culler.add(m, m.userData.maxDist); } }
   }
   log('vegetation');
 
@@ -95,6 +96,20 @@ export async function setupRealism(ctx) {
   }
   // ---- bridge detail: voussoirs, cutwater caps, parapet stones ------------------------------
   if (off.has('bridge-detail')) { const br = detailBridge(model, lib, pick); if (br) { ctx.scene.add(br); ctx.layers.bina.push(br); } log('bridge'); }   // opt-in: #bridge-detail
+
+  // ---- v1.0: split the map-wide meshes into tiles ------------------------------------------------
+  // Terrain, rocks, the old forest and the merged buildings / roads were each one mesh spanning the whole 2.4 km
+  // map, so all of it was drawn (and drawn again into the shadow map) whatever the camera looked at. As tiles,
+  // the renderer skips what is off screen or outside the shadow camera.
+  const replace = (from, to) => { if (from === to) return; for (const k of Object.keys(ctx.layers)) ctx.layers[k] = ctx.layers[k].map(o => (o === from ? to : o)); };
+  for (const [name, size] of [['Arazi', 600], ['Arazi_Detay', 600], ['Granit_Kayalar', 500], ['Agaclar_Yaprak', 500], ['Agaclar_Govde', 500]]) {
+    const o = model.getObjectByName(name); if (o && o.isMesh) replace(o, splitMeshByCell(o, size));
+  }
+  for (const g of Object.values(ctx.merged)) {
+    if (!g) continue; const parts = []; g.traverse(o => { if (o.isMesh) parts.push(o); });
+    for (const o of parts) { const t = (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3; const size = cellSizeFor(t); if (isFinite(size)) splitMeshByCell(o, size); }
+  }
+  log('tiles');
 
   return { lib, swapped, update(now) {
     if (waterMat && waterMat.userData.shader) waterMat.userData.shader.uniforms.uTime.value = now * 0.001;

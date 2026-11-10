@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { box, cyl } from './geo.js';
+import { mergeByCell } from './perf.js';
 
 function hash(x, z) { const s = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453; return s - Math.floor(s); }
 
@@ -80,9 +81,10 @@ export function buildProps(ctx, M, { props, trees, wires }, bat) {
     }
   }
   if (canopies.length) {
-    const g = mergeGeometries(canopies, false); const m = new THREE.Mesh(g, ctx.canopy.material); m.customDepthMaterial = ctx.canopy.depth; m.customDistanceMaterial = ctx.canopy.distance;
-    m.castShadow = m.receiveShadow = true; m.name = 'Koy_Agac_Yaprak'; meshes.push(m);
-    const tg = mergeGeometries(trunks, false); const tm = new THREE.Mesh(tg, ctx.trunkMat); tm.castShadow = tm.receiveShadow = true; tm.name = 'Koy_Agac_Govde'; meshes.push(tm);
+    // v1.0: merged per map cell (not village-wide) so trees behind / beside the camera are culled
+    for (const [, g] of mergeByCell(canopies)) { const m = new THREE.Mesh(g, ctx.canopy.material); m.customDepthMaterial = ctx.canopy.depth; m.customDistanceMaterial = ctx.canopy.distance;
+      m.castShadow = m.receiveShadow = true; m.name = 'Koy_Agac_Yaprak'; meshes.push(m); }
+    for (const [, tg] of mergeByCell(trunks)) { const tm = new THREE.Mesh(tg, ctx.trunkMat); tm.castShadow = tm.receiveShadow = true; tm.name = 'Koy_Agac_Govde'; meshes.push(tm); }
   }
 
   // ---- street furniture into the shared batch ----

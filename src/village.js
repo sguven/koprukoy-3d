@@ -1151,7 +1151,7 @@ export function buildVillage(ctx, layout, M) {
   }
 
   const propsOut = buildProps(ctx, M, { props: props.filter(p => p.kind === 'tree' || p.force || !onRoad(p.x, p.z, 0.4)), trees, wires }, bat);
-  bat.build(M, group);
+  bat.build(M, group, { culler: ctx.culler });
   if (propsOut.wireMesh) group.add(propsOut.wireMesh);
   for (const m of propsOut.meshes) group.add(m);
   group.traverse(o => { if (o.isMesh && o.material && o.material.userData && o.material.userData.isRoad) { o.castShadow = false; o.renderOrder = 1; } });
