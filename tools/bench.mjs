@@ -11,6 +11,7 @@
 //                  This is the default when no GPU is found (GPU=1 or NODRAW=0 to override).
 //   SYNC=1         gl.finish() every frame: frame time includes the drawing (with a software GPU: seconds per frame)
 //   TRACE=1        record a Chrome trace and name the functions that fill the 10 longest frames
+//   ALLOC=1        sample the JS allocations during the run and name the functions that allocate most
 //   HEADED=1, CHROME_ARGS="...", W, H, DPR, REPO, THREE_DIR
 import http from 'node:http';
 import fs from 'node:fs';
@@ -57,12 +58,19 @@ if (TRACE) {
   cdp.on('Tracing.dataCollected', e => { for (const ev of e.value) traceEvents.push(ev); });
   await cdp.send('Tracing.start', { transferMode: 'ReportEvents', traceConfig: { includedCategories: ['blink.user_timing', 'devtools.timeline', 'v8', 'disabled-by-default-v8.cpu_profiler', 'disabled-by-default-devtools.timeline'], excludedCategories: ['*'] } });
 }
+if (env.ALLOC === '1') { await cdp.send('HeapProfiler.enable'); page.on('console', m => { if (/^\[bench\] start/.test(m.text())) cdp.send('HeapProfiler.startSampling', { samplingInterval: 2048, includeObjectsCollectedByMajorGC: true, includeObjectsCollectedByMinorGC: true }); }); }
 const t0 = Date.now();
 await page.goto(`http://localhost:${server.address().port}/${hash}`, { waitUntil: 'domcontentloaded' });
 await page.waitForFunction(() => window.__benchResult, null, { timeout: +(env.TIMEOUT || 3600) * 1000, polling: 1000 });
 const res = await page.evaluate(() => window.__benchResult);
 res.runner = { mobile: MOBILE, cpuThrottle: THROTTLE, noDraw: NODRAW, viewport: [W, H, DPR], totalSeconds: (Date.now() - t0) / 1000 };
 
+if (env.ALLOC === '1') {
+  const { profile } = await cdp.send('HeapProfiler.stopSampling');
+  const tot = new Map(); const walk = (n) => { const c = n.callFrame, k = (c.functionName || '(anonymous)') + ' · ' + (c.url || '').split('/').pop() + ':' + (c.lineNumber + 1); tot.set(k, (tot.get(k) || 0) + n.selfSize); for (const ch of n.children || []) walk(ch); };
+  walk(profile.head);
+  res.alloc = [...tot].sort((a, b) => b[1] - a[1]).slice(0, 30).map(([k, v]) => [k, +(v / 1048576).toFixed(2)]);
+}
 if (TRACE) {
   const end = new Promise(r => cdp.once('Tracing.tracingComplete', r)); await cdp.send('Tracing.end'); await end;
   res.trace = analyseTrace(traceEvents, res);
@@ -79,6 +87,7 @@ if (res.heap) console.log(`heap ${res.heap.startMB} → ${res.heap.endMB} MB · 
 if (res.stuck) console.log(`route: stepped past an obstacle ${res.stuck}×`);
 console.log('longest frames:'); for (const l of res.longest) console.log(`  t=${l.t}s ${l.ms} ms (game ${l.sim}, render ${l.render}) [${l.tags.join(' ')}]` + (l.why ? '  ← ' + l.why : ''));
 if (res.trace) { console.log('main-thread self time over the whole run:'); for (const [n, ms, pc] of res.trace.top) console.log(`  ${String(ms).padStart(8)} ms ${String(pc).padStart(5)} %  ${n}`); console.log(`GC inside frames: ${res.trace.gcMs} ms in ${res.trace.gcCount} collections`); }
+if (res.alloc) { console.log('allocations by function during the run (MB):'); for (const [k, v] of res.alloc) console.log(`  ${String(v).padStart(8)}  ${k}`); }
 if (out) { fs.mkdirSync(path.dirname(path.resolve(out)), { recursive: true }); fs.writeFileSync(out, JSON.stringify(res, null, 1)); console.log('saved', out); }
 
 // ---- trace: which functions fill the longest frames (CPU-profile samples between the per-frame marks)

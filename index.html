@@ -397,26 +397,31 @@ function buildHashes() {
   for (let k = 0; k < B.length; k += 5) { const r = Math.hypot(B[k + 3], B[k + 4]); for (let i = Math.floor((B[k] - r) / BC); i <= Math.floor((B[k] + r) / BC); i++) for (let j = Math.floor((B[k + 1] - r) / BC); j <= Math.floor((B[k + 1] + r) / BC); j++) { const kk = key(i, j); if (!bldHash.has(kk)) bldHash.set(kk, []); bldHash.get(kk).push(k); } }
 }
 // ground: terrain, or a road / bridge deck within step height
-function surfaceAt(x, z, refY = 1e9) {
+function surfaceAt(x, z, refY = 1e9) { return surfaceInto({ y: 0, road: false, water: false }, x, z, refY); }
+// v1.1: the same, written into a result object the caller owns (the player and every bot ask several times a frame)
+function surfaceInto(out, x, z, refY = 1e9) {
   const t = terrH(x, z); let y = t, road = false;
   const ci = Math.floor(x / RC), cj = Math.floor(z / RC), R = D.roads;
   for (let i = ci - 1; i <= ci + 1; i++) for (let j = cj - 1; j <= cj + 1; j++) {
     const L = roadHash.get(key(i, j)); if (!L) continue;
     for (const k of L) { const dx = x - R[k], dz = z - R[k + 1], hw = R[k + 3]; if (dx * dx + dz * dz < hw * hw) { const ry = R[k + 2]; if (ry <= refY + 1.4 && ry >= y - 0.8) { y = Math.max(y, ry); road = true; } } }
   }
-  return { y, road, water: !road && t < 0.15 };
+  out.y = y; out.road = road; out.water = !road && t < 0.15; return out;
 }
+let bldStamp = null, bldStampN = 0;
 function pushOut(p, r) {
   const B = D.buildings, ci = Math.floor(p.x / BC), cj = Math.floor(p.z / BC); let hit = false;
-  const seen = new Set();
+  // a building lies in several grid cells: each is tested once per call (v1.1: a stamp per building, was a new Set per call)
+  if (!bldStamp || bldStamp.length * 5 < B.length) bldStamp = new Int32Array(Math.ceil(B.length / 5));
+  const stamp = ++bldStampN;
   for (let i = ci - 1; i <= ci + 1; i++) for (let j = cj - 1; j <= cj + 1; j++) {
     const L = bldHash.get(key(i, j)); if (!L) continue;
     for (const k of L) {
-      if (seen.has(k)) continue; seen.add(k);
+      if (bldStamp[k / 5] === stamp) continue; bldStamp[k / 5] = stamp;
       const c = Math.cos(B[k + 2]), s = Math.sin(B[k + 2]), dx = p.x - B[k], dz = p.z - B[k + 1];
       const lx = dx * c - dz * s, lz = dx * s + dz * c, hw = B[k + 3], hd = B[k + 4];
       const qx = Math.max(-hw, Math.min(hw, lx)), qz = Math.max(-hd, Math.min(hd, lz));
-      let ex = lx - qx, ez = lz - qz, d = Math.hypot(ex, ez);
+      let ex = lx - qx, ez = lz - qz, d = Math.sqrt(ex * ex + ez * ez);
       if (d >= r) continue;
       let px, pz;
       if (d > 1e-4) { px = ex / d * (r - d); pz = ez / d * (r - d); }
@@ -525,7 +530,7 @@ loadAll().then(gltf => {
   // v1.1: build the Game's bots, weapons and effects now and compile every shader of the scene while "Loading…" is
   // still up, so that nothing compiles in the middle of a round (the first look at a material, the first shot, the
   // first bot used to stall a frame for 20–200 ms). The loop draws nothing until the shaders are ready (8 s at most).
-  try { game = createGame({ scene, camera, P, D, terrH, surfaceAt, pushOut, kd, isTouch, touchIn, EYE, village: VILLAGE }); } catch (e) { console.error(e); }
+  try { game = createGame({ scene, camera, P, D, terrH, surfaceAt, surfaceInto, pushOut, kd, isTouch, touchIn, EYE, village: VILLAGE }); } catch (e) { console.error(e); }
   warming = true;
   return Promise.race([renderer.compileAsync(scene, camera), new Promise(r => setTimeout(r, 8000))]).catch(() => {});
 }).then(() => {
@@ -674,7 +679,8 @@ addEventListener('keydown', e => { if (e.target.tagName === 'INPUT') return; key
 addEventListener('keyup', e => keys.delete(e.code));
 addEventListener('blur', () => keys.clear());
 const touchIn = { left: false, right: false, gas: false, brake: false, up: false, dn: false, jump: false, jx: 0, jy: 0 };
-const kd = (...c) => c.some(k => keys.has(k));
+// is any of these keys down? (v1.1: no rest array and no closure, it is called many times a frame)
+function kd() { for (let i = 0; i < arguments.length; i++) if (keys.has(arguments[i])) return true; return false; }
 const GEARS = [3.8, 2.3, 1.5, 1.05], FINAL = 3.9;
 function carStep(dt) {
   if (CS.dead > 0) { CS.dead -= dt; if (CS.dead <= 0) { CS.x = CS.safe.x; CS.z = CS.safe.z; CS.h = CS.safe.h; CS.v = 0; CS.y = surfaceAt(CS.x, CS.z).y; toast(''); } updateCarTransform(dt); return; }
@@ -750,12 +756,13 @@ function updateEngine(thr) {
 // ---------- walk / fly ----------
 const P = { x: 0, z: 0, y: 0, vy: 0, yaw: 0, pitch: 0 };
 const EYE = 1.7;
+const walkG = { y: 0, road: false, water: false }, walkQ = { x: 0, z: 0 };   // scratch results of walkStep
 function walkStep(dt, fly) {
   // touch: pushing the joystick to its rim runs
-  const run = kd('ShiftLeft', 'ShiftRight') || Math.hypot(touchIn.jx, touchIn.jy) > 0.92;
+  const run = kd('ShiftLeft', 'ShiftRight') || touchIn.jx * touchIn.jx + touchIn.jy * touchIn.jy > 0.92 * 0.92;
   let f = (kd('KeyW', 'ArrowUp') ? 1 : 0) - (kd('KeyS', 'ArrowDown') ? 1 : 0) - touchIn.jy;
   let r = (kd('KeyD', 'ArrowRight') ? 1 : 0) - (kd('KeyA', 'ArrowLeft') ? 1 : 0) + touchIn.jx;
-  const l = Math.hypot(f, r); if (l > 1) { f /= l; r /= l; }
+  const l = Math.sqrt(f * f + r * r); if (l > 1) { f /= l; r /= l; }
   const sp = fly ? (run ? 120 : 40) : (run ? 8 : 3.2);
   const fx = -Math.sin(P.yaw), fz = -Math.cos(P.yaw), rx = Math.cos(P.yaw), rz = -Math.sin(P.yaw);
   if (fly) {
@@ -765,9 +772,9 @@ function walkStep(dt, fly) {
     P.y = Math.max(P.y, terrH(P.x, P.z) + 2);
   } else {
     const nx = P.x + (fx * f + rx * r) * sp * dt, nz = P.z + (fz * f + rz * r) * sp * dt;
-    const g = surfaceAt(nx, nz, P.y + 0.5);
-    if (!g.water && g.y - P.y < 1.0) { const q = { x: nx, z: nz }; pushOut(q, 0.35); P.x = q.x; P.z = q.z; }
-    const g2 = surfaceAt(P.x, P.z, P.y + 0.5);
+    const g = surfaceInto(walkG, nx, nz, P.y + 0.5);
+    if (!g.water && g.y - P.y < 1.0) { const q = walkQ; q.x = nx; q.z = nz; pushOut(q, 0.35); P.x = q.x; P.z = q.z; }
+    const g2 = surfaceInto(walkG, P.x, P.z, P.y + 0.5);
     if ((kd('Space') || touchIn.jump) && P.vy === 0 && P.y <= g2.y + 0.01) P.vy = 4.2;
     P.vy -= 9.81 * dt; P.y += P.vy * dt; if (P.y <= g2.y) { P.y = g2.y; P.vy = 0; }
   }
@@ -841,7 +848,7 @@ function setMode(m) {
   // phones: render the game at a lower resolution so it stays smooth with many bots
   if (isTouch && !LITE && (m === 'game') !== (prev === 'game')) perf.reset();   // basePixelRatio() depends on the mode
   setShadowMapSize(m === 'game' ? SHADOW_SIZE_GAME : SHADOW_SIZE); sun.shadow.needsUpdate = true;
-  if (m === 'game') { if (!game) game = createGame({ scene, camera, P, D, terrH, surfaceAt, pushOut, kd, isTouch, touchIn, EYE, village: VILLAGE }); game.start();
+  if (m === 'game') { if (!game) game = createGame({ scene, camera, P, D, terrH, surfaceAt, surfaceInto, pushOut, kd, isTouch, touchIn, EYE, village: VILLAGE }); game.start();
     if (isTouch && innerHeight > innerWidth && !rotateTold) { rotateTold = true; toast('Turn your phone sideways for the best view'); toastT = 3.5; } }
   else if (prev === 'game' && game) game.stop();
   if (m === 'car') { initAudio(); if (audio && audio.ac.state === 'suspended') audio.ac.resume(); carYawOff = 0; carPitchOff = 0; }
@@ -922,6 +929,14 @@ setSun(15);
 const camTarget = new THREE.Vector3(), camPos = new THREE.Vector3();
 let last = performance.now(), last0 = last;
 if (LITE) window.__dbg = { CS, carStep, keys, touchIn, P, walkStep, surfaceAt, get mode() { return mode; } };
+// bots on the minimap, in the frame drawMinimap uses (heading up, player in the middle); returns a shared [x, y]
+const mmPt = [0, 0];
+function botToMinimap(bx, bz) {
+  const W = mm.width, sc = 1.6, c = Math.cos(P.yaw), s = Math.sin(P.yaw), u = (bx - P.x) * MMR, v = (bz - P.z) * MMR;
+  const px = W / 2 + sc * (u * c - v * s), py = W / 2 + sc * (u * s + v * c), dx = px - W / 2, dy = py - W / 2, d = Math.sqrt(dx * dx + dy * dy), r = W / 2 - 8;
+  if (d > r) { mmPt[0] = W / 2 + dx * r / d; mmPt[1] = W / 2 + dy * r / d; } else { mmPt[0] = px; mmPt[1] = py; }
+  return mmPt;
+}
 // v1.1: #bench / #bench=50 runs the game-mode benchmark once the model is in (src/bench.js)
 const BENCH = parseBench(location.hash);
 const bench = BENCH ? createBench({ cfg: BENCH, renderer, camera, P, touchIn, surfaceAt, setMode, getGame: () => game, perf, shadowMapSize: () => sun.shadow.mapSize.x }) : null;
@@ -949,9 +964,7 @@ renderer.setAnimationLoop(now => {
     const n = Math.ceil(dt / 0.05); for (let i = 0; i < n; i++) walkStep(dt / n, false);
     game.update(dt, now); focus = camera.position;
     if (mmDue) { drawMinimap(P.x, P.z, -P.yaw);
-    // bots on the minimap, in the same frame drawMinimap used
-    const W = mm.width, sc = 1.6, h = -P.yaw, c = Math.cos(-h), s = Math.sin(-h);
-    game.drawMinimap(mctx, (bx, bz) => { const u = (bx - P.x) * MMR, v = (bz - P.z) * MMR, px = W / 2 + sc * (u * c - v * s), py = W / 2 + sc * (u * s + v * c); const d = Math.hypot(px - W / 2, py - W / 2), r = W / 2 - 8; return d > r ? [W / 2 + (px - W / 2) * r / d, W / 2 + (py - W / 2) * r / d] : [px, py]; }); }
+    game.drawMinimap(mctx, botToMinimap); }
   }
   else if (mode === 'car') {
     // physics sub-steps

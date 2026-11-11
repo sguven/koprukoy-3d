@@ -25,8 +25,14 @@ export const WEAPONS = {
 
 export function createGame(ctx) {
   const { scene, camera, P, D, terrH, surfaceAt, pushOut, kd, isTouch, EYE, village } = ctx;
+  // v1.1: no allocations in the per-frame code. Results that used to be new objects (surface samples, wall hits,
+  // push-out points, vectors) are written into these scratch objects; whoever asks uses the result before asking again.
+  const surfaceInto = ctx.surfaceInto || ((out, x, z, refY) => Object.assign(out, surfaceAt(x, z, refY)));
+  const _g = { y: 0, road: false, water: false }, _q = { x: 0, z: 0 }, _hit = { t: 0, x: 0, y: 0, z: 0 };
+  const _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3(), _v3 = new THREE.Vector3(), _v4 = new THREE.Vector3(), _v5 = new THREE.Vector3();
+  const len2 = (x, z) => Math.sqrt(x * x + z * z);   // Math.hypot boxes its result in unoptimised code
   const touchIn = ctx.touchIn || { jx: 0, jy: 0 };
-  const joyLen = () => Math.hypot(touchIn.jx, touchIn.jy);
+  const joyLen = () => len2(touchIn.jx, touchIn.jy);
   const isMoving = () => kd('KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight') || joyLen() > 0.2;
   const isRunning = () => kd('ShiftLeft', 'ShiftRight') || joyLen() > 0.92;
   const rnd = () => Math.random();   // looked up at each call: the benchmark swaps in a seeded generator
@@ -209,10 +215,10 @@ export function createGame(ctx) {
     return false;
   };
   const trace = (ax, ay, az, bx, by, bz, step = 1.5) => {
-    const L = Math.hypot(bx - ax, by - ay, bz - az), n = Math.max(1, Math.ceil(L / step));
+    const L = Math.sqrt((bx - ax) * (bx - ax) + (by - ay) * (by - ay) + (bz - az) * (bz - az)), n = Math.max(1, Math.ceil(L / step));
     for (let i = 1; i <= n; i++) {
-      const t = i / n, x = ax + (bx - ax) * t, y = ay + (by - ay) * t, z = az + (bz - az) * t;
-      if (y < terrH(x, z) || inBuilding(x, y, z)) return { t: t * L, x, y: Math.max(y, terrH(x, z)), z };
+      const t = i / n, x = ax + (bx - ax) * t, y = ay + (by - ay) * t, z = az + (bz - az) * t, h = terrH(x, z);
+      if (y < h || inBuilding(x, y, z)) { _hit.t = t * L; _hit.x = x; _hit.y = Math.max(y, h); _hit.z = z; return _hit; }   // shared result
     }
     return null;
   };
@@ -270,7 +276,8 @@ export function createGame(ctx) {
     return out;
   })();
   const MUZZLE = {}; for (const k of BOT_GUNS) MUZZLE[k] = weaponModel(k).userData.muzzle;
-  const slot = (im) => { const o = new THREE.Object3D(); o.userData.im = im; return o; };
+  const IML = Object.values(IM);
+  const slot = (im) => { const o = new THREE.Object3D(); o.userData.im = im; o.userData.imesh = IM[im]; return o; };
   function botMesh(weapon) {
     const g = new THREE.Group();
     const body = slot('body'); g.add(body);
@@ -287,15 +294,15 @@ export function createGame(ctx) {
   // copy the bots' part matrices into the instanced meshes (after the bots moved, before the frame is drawn)
   const _sph = new THREE.Sphere(), _frus = new THREE.Frustum(), _pv = new THREE.Matrix4();
   function syncBotInstances() {
-    for (const k in IM) IM[k].count = 0;
+    for (let i = 0; i < IML.length; i++) IML[i].count = 0;
     camera.updateMatrixWorld(); _pv.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); _frus.setFromProjectionMatrix(_pv);
     for (const b of G.bots) {
       _sph.center.set(b.x, b.y + 1, b.z); _sph.radius = 1.6;
       if (!_frus.intersectsSphere(_sph)) continue;   // off screen: not drawn at all
       b.mesh.updateMatrixWorld(true);
-      for (const o of b.mesh.userData.parts) { const im = IM[o.userData.im]; im.setMatrixAt(im.count++, o.matrixWorld); }
+      const parts = b.mesh.userData.parts; for (let i = 0; i < parts.length; i++) { const o = parts[i], im = o.userData.imesh; im.setMatrixAt(im.count++, o.matrixWorld); }
     }
-    for (const k in IM) { const im = IM[k]; im.visible = im.count > 0; if (im.count) im.instanceMatrix.needsUpdate = true; }
+    for (let i = 0; i < IML.length; i++) { const im = IML[i]; im.visible = im.count > 0; if (im.count) im.instanceMatrix.needsUpdate = true; }
   }
   function spawnBot(i) {
     const kinds = ['ak47', 'ak47', 'm4a1', 'mp5', 'mp5', 'ak47', 'deagle', 'm4a1'];
@@ -303,7 +310,7 @@ export function createGame(ctx) {
     const p = roadPoint(P, 70, 260);
     const b = { id: i, name: botName(i), weapon, x: p.x, z: p.z, y: surfaceAt(p.x, p.z).y, yaw: rnd() * 6.28, hp: 100,
       state: 'patrol', route: null, pauseT: 0, lookYaw: 0, speedK: 0.85 + rnd() * 0.3, lateral: (rnd() - 0.5) * 2.4,
-      seen: 0, lastSeen: null, hasLos: false, losT: rnd() * 0.3, aimT: 0, reaction: 0.3 + rnd() * 0.4,
+      seen: 0, lastSeen: null, ls: { x: 0, z: 0 }, hasLos: false, losT: rnd() * 0.3, aimT: 0, reaction: 0.3 + rnd() * 0.4,
       mag: W.mag, burst: 0, cd: 1 + rnd(), reloadT: 0, walk: 0, stuck: 0, lastX: p.x, lastZ: p.z, dead: 0, flee: 0, side: 1, sideT: 0, crouch: 0,
       mesh: botMesh(weapon), flashT: 0 };
     b.mesh.position.set(b.x, b.y, b.z); group.add(b.mesh);
@@ -316,13 +323,13 @@ export function createGame(ctx) {
     const p = roadPoint(P, 90, 280); b.x = p.x; b.z = p.z; b.y = surfaceAt(p.x, p.z).y; b.hp = 100; b.state = 'patrol'; b.route = null; b.dead = 0; b.flee = 0; b.crouch = 0; b.mag = WEAPONS[b.weapon].mag; b.reloadT = 0;
     b.mesh.rotation.set(0, b.yaw, 0); b.mesh.position.set(b.x, b.y, b.z); b.cd = 1.5; b.hasLos = false; b.seen = 0;
   }
-  function alertBot(b, x, z) { if (b.dead > 0) return; b.lastSeen = { x, z }; b.seen = Math.max(b.seen, 6); if (b.state === 'patrol') b.state = 'search'; }
+  function alertBot(b, x, z) { if (b.dead > 0) return; b.ls.x = x; b.ls.z = z; b.lastSeen = b.ls; b.seen = Math.max(b.seen, 6); if (b.state === 'patrol') b.state = 'search'; }
   function moveBot(b, tx, tz, speed, dt) {
-    const ddx = tx - b.x, ddz = tz - b.z, L = Math.hypot(ddx, ddz) || 1;
+    const ddx = tx - b.x, ddz = tz - b.z, L = len2(ddx, ddz) || 1;
     if (L < 0.4) return true;
-    const nx = b.x + ddx / L * speed * dt, nz = b.z + ddz / L * speed * dt, q = { x: nx, z: nz };
+    const q = _q; q.x = b.x + ddx / L * speed * dt; q.z = b.z + ddz / L * speed * dt;
     pushOut(q, 0.4);
-    const g = surfaceAt(q.x, q.z, b.y + 0.5);
+    const g = surfaceInto(_g, q.x, q.z, b.y + 0.5);
     if (!g.water && g.y - b.y < 1.2) { b.x = q.x; b.z = q.z; b.y += (g.y - b.y) * Math.min(1, dt * 10); }
     b.walk += speed * dt;
     return L < speed * dt * 1.5;
@@ -336,7 +343,7 @@ export function createGame(ctx) {
       if (b.dead <= 0) respawnBot(b);
       return;
     }
-    const ex = P.x, ez = P.z, dx = ex - b.x, dz = ez - b.z, dist = Math.hypot(dx, dz);
+    const ex = P.x, ez = P.z, dx = ex - b.x, dz = ez - b.z, dist = len2(dx, dz);
     // far bots think ~10 times a second instead of every frame (100 bots)
     if (dist > 180) { b.acc = (b.acc || 0) + dt; if (b.acc < 0.1) return; dt = b.acc; b.acc = 0; }
     // ---- perception: line of sight a few times a second
@@ -345,7 +352,7 @@ export function createGame(ctx) {
       b.losT = 0.22 + rnd() * 0.15;
       const saw = b.hasLos;
       b.hasLos = dist < 120 && G.dead <= 0 && !trace(b.x, b.y + 1.6, b.z, ex, P.y + EYE - 0.2, ez, 2.0);
-      if (b.hasLos) { b.lastSeen = { x: ex, z: ez }; b.seen = 6; if (!saw) b.aimT = 0; }
+      if (b.hasLos) { b.ls.x = ex; b.ls.z = ez; b.lastSeen = b.ls; b.seen = 6; if (!saw) b.aimT = 0; }
     }
     b.seen -= dt; if (b.hasLos) b.aimT += dt;
     // ---- state
@@ -364,9 +371,9 @@ export function createGame(ctx) {
         if (b.route) {
           const r = b.route, line = r.lane.line, p = line[Math.max(0, Math.min(line.length - 1, r.i))];
           // walk a little off the centreline, each bot on its own side
-          const q = line[Math.max(0, Math.min(line.length - 1, r.i + r.dir))], tx = q[0] - p[0], tz = q[1] - p[1], L = Math.hypot(tx, tz) || 1;
+          const q = line[Math.max(0, Math.min(line.length - 1, r.i + r.dir))], tx = q[0] - p[0], tz = q[1] - p[1], L = len2(tx, tz) || 1;
           const gx = p[0] - tz / L * b.lateral, gz = p[1] + tx / L * b.lateral;
-          const arrived = moveBot(b, gx, gz, 2.4 * b.speedK, dt) || Math.hypot(gx - b.x, gz - b.z) < 1.6;
+          const arrived = moveBot(b, gx, gz, 2.4 * b.speedK, dt) || len2(gx - b.x, gz - b.z) < 1.6;
           moving = true; turnTo(b, Math.atan2(gx - b.x, gz - b.z), dt, 4);
           if (arrived) {
             r.i += r.dir;
@@ -393,7 +400,7 @@ export function createGame(ctx) {
       moveBot(b, b.x - dx / dist * 3 + (-dz / dist) * b.side * 2, b.z - dz / dist * 3 + (dx / dist) * b.side * 2, 3.0, dt); moving = true;
     } else if (b.state === 'search') {
       const arrived = moveBot(b, b.lastSeen.x, b.lastSeen.z, 3.8 * b.speedK, dt); moving = true; turnTo(b, Math.atan2(b.lastSeen.x - b.x, b.lastSeen.z - b.z), dt, 5);
-      if (arrived || Math.hypot(b.lastSeen.x - b.x, b.lastSeen.z - b.z) < 2.5) { b.seen = Math.min(b.seen, 1.5); b.lookYaw = b.yaw + (rnd() - 0.5) * 4; turnTo(b, b.lookYaw, dt, 2); }
+      if (arrived || len2(b.lastSeen.x - b.x, b.lastSeen.z - b.z) < 2.5) { b.seen = Math.min(b.seen, 1.5); b.lookYaw = b.yaw + (rnd() - 0.5) * 4; turnTo(b, b.lookYaw, dt, 2); }
     } else if (b.state === 'flee' || b.state === 'reload') {
       // away from the player, towards the nearest spot without line of sight
       const away = Math.atan2(-dx, -dz) + Math.sin(G.time * 0.7 + b.id) * 0.8;
@@ -402,7 +409,7 @@ export function createGame(ctx) {
     if (b.hasLos && b.state !== 'flee' && b.state !== 'reload') turnTo(b, Math.atan2(dx, dz), dt, 10);
     // stuck: no progress for a second → new route / side
     b.stuck += dt;
-    if (b.stuck > 1) { if (moving && Math.hypot(b.x - b.lastX, b.z - b.lastZ) < 0.5) { b.route = null; b.side = -b.side; b.pauseT = 0; } b.lastX = b.x; b.lastZ = b.z; b.stuck = 0; }
+    if (b.stuck > 1) { if (moving && len2(b.x - b.lastX, b.z - b.lastZ) < 0.5) { b.route = null; b.side = -b.side; b.pauseT = 0; } b.lastX = b.x; b.lastZ = b.z; b.stuck = 0; }
     // ---- weapon
     b.cd -= dt; b.flashT -= dt;
     if (b.reloadT > 0) { b.reloadT -= dt; if (b.reloadT <= 0) b.mag = W.mag; }
@@ -411,18 +418,19 @@ export function createGame(ctx) {
       if (b.burst <= 0) b.burst = W.auto ? (b.state === 'chase' ? 2 + Math.floor(rnd() * 3) : 3 + Math.floor(rnd() * 4)) : 1;
       b.burst--; b.mag--; b.cd = b.burst > 0 ? 1 / W.rate : (W.auto ? 0.5 + rnd() * 0.9 : 0.4 + rnd() * 0.5);
       b.flashT = 0.05; sound('shot', dist, b.weapon);
-      const playerMoving = kd('KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight');
+      const playerMoving = kd('KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight');   // (keyboard only, as before)
       let p = W.botAcc * G.difficulty * Math.max(0.25, 1 - dist / 170);
       if (playerMoving) p *= 0.65; if (moving) p *= 0.7; if (b.crouch) p *= 1.2; if (b.aimT < b.reaction + 0.4) p *= 1.15;
-      const muzzle = new THREE.Vector3(); u.flash.getWorldPosition(muzzle);
+      const muzzle = u.flash.getWorldPosition(_v1);
       if (rnd() < Math.min(0.85, p)) {
         const falloff = Math.max(0.6, 1 - dist / 400), dmg = Math.round(W.dmg * falloff * (0.85 + rnd() * 0.3));
-        hurtPlayer(dmg, b); tracer(muzzle, new THREE.Vector3(ex + (rnd() - 0.5) * 0.3, P.y + EYE - 0.3 + (rnd() - 0.5) * 0.4, ez + (rnd() - 0.5) * 0.3));
+        hurtPlayer(dmg, b); tracer(muzzle, _v2.set(ex + (rnd() - 0.5) * 0.3, P.y + EYE - 0.3 + (rnd() - 0.5) * 0.4, ez + (rnd() - 0.5) * 0.3));
       } else {
         // a miss: the round passes close by and hits the ground or a wall behind
-        const dir = new THREE.Vector3(ex - muzzle.x + (rnd() - 0.5) * 3, P.y + EYE - 0.3 - muzzle.y + (rnd() - 0.5) * 2, ez - muzzle.z + (rnd() - 0.5) * 3).normalize();
-        const far = muzzle.clone().addScaledVector(dir, 120), w = trace(muzzle.x, muzzle.y, muzzle.z, far.x, far.y, far.z, 2.0), end = w ? new THREE.Vector3(w.x, w.y, w.z) : far;
-        tracer(muzzle, end); if (w) puff(w.x, w.y, w.z, 0.5); if (dist < 40) sound('whiz');
+        const dir = _v2.set(ex - muzzle.x + (rnd() - 0.5) * 3, P.y + EYE - 0.3 - muzzle.y + (rnd() - 0.5) * 2, ez - muzzle.z + (rnd() - 0.5) * 3).normalize();
+        const end = _v3.copy(muzzle).addScaledVector(dir, 120), w = trace(muzzle.x, muzzle.y, muzzle.z, end.x, end.y, end.z, 2.0);
+        if (w) end.set(w.x, w.y, w.z);
+        tracer(muzzle, end); if (w) puff(end.x, end.y, end.z, 0.5); if (dist < 40) sound('whiz');
       }
     }
     // ---- pose
@@ -486,34 +494,36 @@ export function createGame(ctx) {
     // camera kick (recoil): up and a little sideways, the AK climbs
     P.pitch += W.kick * Math.PI / 180 * (0.7 + rnd() * 0.5); P.yaw += (rnd() - 0.5) * W.kick * Math.PI / 180 * 0.5;
     // direction with spread: standing / moving / scoped, plus heat from holding the trigger
-    const dir = new THREE.Vector3(); camera.getWorldDirection(dir);
+    const dir = camera.getWorldDirection(_v1);
     const moving = isMoving();
     let spread = (moving ? W.moveSpread : W.spread) + G.heat; if (W.scope && !G.scoped) spread = 0.08;
-    const right = new THREE.Vector3().crossVectors(dir, camera.up).normalize(), up = new THREE.Vector3().crossVectors(right, dir).normalize();
+    const right = _v2.crossVectors(dir, camera.up).normalize(), up = _v3.crossVectors(right, dir).normalize();
     const r = Math.sqrt(rnd()) * spread, a = rnd() * Math.PI * 2;
     dir.addScaledVector(right, Math.cos(a) * r).addScaledVector(up, Math.sin(a) * r).normalize();
     G.heat = Math.min(W.climb * 8, G.heat + W.climb);
-    const o = camera.position.clone();
-    let best = null;
-    for (const b of G.bots) {
-      if (b.dead > 0) continue;
-      for (const [cy, rad, head] of [[1.05, 0.4, false], [1.72, 0.22, true]]) {
-        const c = new THREE.Vector3(b.x, b.y + cy * b.mesh.scale.y, b.z), oc = c.clone().sub(o), t = oc.dot(dir);
+    const o = _v4.copy(camera.position);
+    // nearest bot whose body (0.4 m sphere at chest height) or head (0.22 m) the ray passes through
+    let bestT = Infinity, bestB = null, bestHead = false;
+    for (let i = 0; i < G.bots.length; i++) {
+      const b = G.bots[i]; if (b.dead > 0) continue;
+      for (let part = 0; part < 2; part++) {
+        const cy = part ? 1.72 : 1.05, rad = part ? 0.22 : 0.4;
+        const ox = b.x - o.x, oy = b.y + cy * b.mesh.scale.y - o.y, oz = b.z - o.z, t = ox * dir.x + oy * dir.y + oz * dir.z;
         if (t < 0 || t > W.range) continue;
-        if (oc.lengthSq() - t * t < rad * rad && (!best || t < best.t)) best = { t, b, head };
+        if (ox * ox + oy * oy + oz * oz - t * t < rad * rad && t < bestT) { bestT = t; bestB = b; bestHead = part === 1; }
       }
     }
-    const end = o.clone().addScaledVector(dir, best ? best.t : W.range);
+    const end = _v5.copy(o).addScaledVector(dir, bestB ? bestT : W.range);
     const wall = trace(o.x, o.y, o.z, end.x, end.y, end.z, 1.0);
-    if (wall) { end.set(wall.x, wall.y, wall.z); if (!W.melee) puff(wall.x, wall.y, wall.z); best = null; }
-    else if (best) {
-      const falloff = W.melee ? 1 : Math.max(0.5, 1 - best.t / 500), dmg = Math.round(W.dmg * falloff * (best.head ? W.head : 1) * (0.9 + rnd() * 0.2));
-      best.b.hp -= dmg; puff(end.x, end.y, end.z, 0.45, bloodMat); sound(best.head ? 'headshot' : 'hit');
-      if (best.b.hp <= 0) killBot(best.b, best.head); else { alertBot(best.b, P.x, P.z); best.b.hasLos = true; best.b.seen = 6; best.b.aimT = best.b.reaction; }
+    if (wall) { end.set(wall.x, wall.y, wall.z); if (!W.melee) puff(end.x, end.y, end.z); }
+    else if (bestB) {
+      const falloff = W.melee ? 1 : Math.max(0.5, 1 - bestT / 500), dmg = Math.round(W.dmg * falloff * (bestHead ? W.head : 1) * (0.9 + rnd() * 0.2));
+      bestB.hp -= dmg; puff(end.x, end.y, end.z, 0.45, bloodMat); sound(bestHead ? 'headshot' : 'hit');
+      if (bestB.hp <= 0) killBot(bestB, bestHead); else { alertBot(bestB, P.x, P.z); bestB.hasLos = true; bestB.seen = 6; bestB.aimT = bestB.reaction; }
     }
-    if (!W.melee) { const muzzle = new THREE.Vector3().copy(models[G.weapon].userData.muzzle).add(models[G.weapon].position).applyMatrix4(camera.matrixWorld); tracer(muzzle, end); }
+    if (!W.melee) { const muzzle = _v2.copy(models[G.weapon].userData.muzzle).add(models[G.weapon].position).applyMatrix4(camera.matrixWorld); tracer(muzzle, end); }
     // bots within earshot turn towards the gunfire
-    if (!W.melee) for (const b of G.bots) { if (b.dead <= 0 && !b.hasLos && Math.hypot(b.x - P.x, b.z - P.z) < (G.weapon === 'awp' ? 160 : 90) && rnd() < 0.7) alertBot(b, P.x + (rnd() - 0.5) * 8, P.z + (rnd() - 0.5) * 8); }
+    if (!W.melee) for (const b of G.bots) { if (b.dead <= 0 && !b.hasLos && len2(b.x - P.x, b.z - P.z) < (G.weapon === 'awp' ? 160 : 90) && rnd() < 0.7) alertBot(b, P.x + (rnd() - 0.5) * 8, P.z + (rnd() - 0.5) * 8); }
   }
   function reload() {
     const W = WEAPONS[G.weapon], A = G.ammo[G.weapon];
@@ -531,7 +541,7 @@ export function createGame(ctx) {
     const [sx, sz] = D.spawn.walk; P.x = sx; P.z = sz; P.y = surfaceAt(sx, sz).y; P.vy = 0; G.health = 100; resetAmmo(); G.reloading = 0; G.heat = 0;
     G.weapon = G.primary; G.lastWeapon = 'deagle'; for (const m in models) models[m].visible = m === G.weapon; G.swapT = 0.3;
   }
-  function feed(msg) { G.feed.unshift({ msg, t: 5 }); if (G.feed.length > 5) G.feed.pop(); }
+  function feed(msg) { G.feedSeq = (G.feedSeq || 0) + 1; G.feed.unshift({ msg, t: 5 }); if (G.feed.length > 5) G.feed.pop(); }
 
   // ------------------------------------------------------------------ HUD
   const hud = document.createElement('div'); hud.id = 'gameHud'; hud.innerHTML = `
@@ -569,28 +579,37 @@ export function createGame(ctx) {
   const hudCache = new Map();
   const setText = (id, v) => { const k = id + ':t'; if (hudCache.get(k) !== v) { hudCache.set(k, v); el(id).textContent = v; } };
   const setStyle = (id, prop, v) => { const k = id + ':' + prop; if (hudCache.get(k) !== v) { hudCache.set(k, v); el(id).style[prop] = v; } };
+  // v1.1: the strings are built only when the numbers behind them changed (they were built and compared every frame)
+  const hudNum = {};
+  const changed = (k, v) => { if (hudNum[k] === v) return false; hudNum[k] = v; return true; };
   function updateHud() {
     const W = WEAPONS[G.weapon], A = G.ammo[G.weapon];
-    setText('ghScore', `${G.kills} : ${G.deaths}`);
-    const t = Math.max(0, Math.ceil(G.roundT)); setText('ghTime', `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`);
-    setStyle('ghHp', 'width', `${G.health}%`); setStyle('ghHp', 'background', G.health > 50 ? '#7cc26b' : G.health > 25 ? '#e0b24a' : '#d14b3a'); setText('ghHpTxt', String(G.health));
-    setText('ghWpn', W.name); setText('ghMag', W.melee ? '—' : String(A.mag)); setText('ghRes', W.melee ? '' : `/ ${A.reserve}`);
+    if (changed('score', G.kills * 100000 + G.deaths)) setText('ghScore', `${G.kills} : ${G.deaths}`);
+    const t = Math.max(0, Math.ceil(G.roundT)); if (changed('time', t)) setText('ghTime', `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`);
+    if (changed('hp', G.health)) { setStyle('ghHp', 'width', `${G.health}%`); setStyle('ghHp', 'background', G.health > 50 ? '#7cc26b' : G.health > 25 ? '#e0b24a' : '#d14b3a'); setText('ghHpTxt', String(G.health)); }
+    if (changed('wpn', G.weapon)) setText('ghWpn', W.name);
+    if (changed('mag', W.melee ? -1 : A.mag)) setText('ghMag', W.melee ? '—' : String(A.mag));
+    if (changed('res', W.melee ? -1 : A.reserve)) setText('ghRes', W.melee ? '' : `/ ${A.reserve}`);
     setText('ghRel', G.reloading > 0 ? 'reloading' : (!W.melee && A.mag === 0 ? 'R: reload' : ''));
-    const sh = [G.primary, 'deagle', 'knife'].map((k, i) => `<span data-w="${k}" class="${k === G.weapon ? 'on' : ''}">${isTouch ? '' : (i + 1) + ' '}${WEAPONS[k].name}</span>`).join('');
-    if (sh !== slotsHtml) { el('ghSlots').innerHTML = sh; slotsHtml = sh; }
+    if (changed('slots', G.primary + '|' + G.weapon)) {
+      const sh = [G.primary, 'deagle', 'knife'].map((k, i) => `<span data-w="${k}" class="${k === G.weapon ? 'on' : ''}">${isTouch ? '' : (i + 1) + ' '}${WEAPONS[k].name}</span>`).join('');
+      if (sh !== slotsHtml) { el('ghSlots').innerHTML = sh; slotsHtml = sh; }
+    }
     if (isTouch && hudCache.get('scope') !== !!W.scope) { hudCache.set('scope', !!W.scope); scopeBtn.classList.toggle('show', !!W.scope); }
     // crosshair: hidden behind the scope or while dead; the gap opens with the real spread (moving, holding the trigger)
     if (cross) {
-      const off = G.scoped || G.dead > 0 || G.roundOver; if (hudCache.get('crossOff') !== off) { hudCache.set('crossOff', off); cross.classList.toggle('off', off); }
+      const off = G.scoped || G.dead > 0 || G.roundOver; if (changed('crossOff', off)) cross.classList.toggle('off', off);
       const sp = W.melee ? 0 : (W.scope && !G.scoped ? 0.08 : (isMoving() ? W.moveSpread : W.spread) + G.heat);
-      const gap = 3 + Math.min(60, Math.tan(sp) / Math.tan(camera.fov * Math.PI / 360) * innerHeight / 2);
-      const gs = gap.toFixed(1) + 'px'; if (hudCache.get('gap') !== gs) { hudCache.set('gap', gs); cross.style.setProperty('--gap', gs); }
+      const gap = Math.round((3 + Math.min(60, Math.tan(sp) / Math.tan(camera.fov * Math.PI / 360) * innerHeight / 2)) * 10);
+      if (changed('gap', gap)) cross.style.setProperty('--gap', (gap / 10).toFixed(1) + 'px');
     }
-    const fh = G.feed.map(f => `<div style="opacity:${Math.min(1, f.t / 1.5).toFixed(1)}">${f.msg}</div>`).join('');
-    if (hudCache.get('feed') !== fh) { hudCache.set('feed', fh); el('ghFeed').innerHTML = fh; }
-    setStyle('ghHurt', 'opacity', (G.hurt * 0.55).toFixed(2));
-    setStyle('ghDead', 'display', G.dead > 0 ? 'grid' : 'none'); if (G.dead > 0) setText('ghDeadTxt', `yeniden doğuyorsun… ${Math.ceil(G.dead)}`);
-    setStyle('ghEnd', 'display', G.roundOver ? 'grid' : 'none');
+    // kill feed: rebuilt when a line came or went, or a fading line lost another tenth of opacity
+    let fk = (G.feedSeq || 0) * 7 + G.feed.length; for (let i = 0; i < G.feed.length; i++) fk = fk * 11 + Math.round(Math.min(1, G.feed[i].t / 1.5) * 10);
+    if (changed('feed', fk)) el('ghFeed').innerHTML = G.feed.map(f => `<div style="opacity:${Math.min(1, f.t / 1.5).toFixed(1)}">${f.msg}</div>`).join('');
+    const hurt = Math.round(G.hurt * 55); if (changed('hurt', hurt)) el('ghHurt').style.opacity = (hurt / 100).toFixed(2);
+    if (changed('dead', G.dead > 0)) el('ghDead').style.display = G.dead > 0 ? 'grid' : 'none';
+    if (G.dead > 0) { const d = Math.ceil(G.dead); if (changed('deadT', d)) setText('ghDeadTxt', `yeniden doğuyorsun… ${d}`); }
+    if (changed('end', G.roundOver)) el('ghEnd').style.display = G.roundOver ? 'grid' : 'none';
   }
 
   // ------------------------------------------------------------------ lifecycle
@@ -606,7 +625,7 @@ export function createGame(ctx) {
     for (const b of G.bots) respawnBot(b);
   }
   function stop() {
-    G.on = false; group.visible = false; hud.style.display = 'none'; for (const b of touchBtns) b.classList.remove('show'); setScope(false); vm.visible = false; for (const l of tracers) l.visible = false; for (const p of puffs) p.visible = false; G.firing = false; fireId = null; touchIn.jump = false; if (cross) { cross.classList.remove('off'); cross.style.removeProperty('--gap'); } hudCache.clear();
+    G.on = false; group.visible = false; hud.style.display = 'none'; for (const b of touchBtns) b.classList.remove('show'); setScope(false); vm.visible = false; for (const l of tracers) l.visible = false; for (const p of puffs) p.visible = false; G.firing = false; fireId = null; touchIn.jump = false; if (cross) { cross.classList.remove('off'); cross.style.removeProperty('--gap'); } hudCache.clear(); for (const k in hudNum) delete hudNum[k];
   }
   /** Loading: show (then hide again) one of everything the game draws, so a frame rendered in between prepares it all. */
   function warm(on) {
@@ -628,14 +647,15 @@ export function createGame(ctx) {
     const W = WEAPONS[G.weapon], A = G.ammo[G.weapon];
     if (G.reloading > 0) { G.reloading -= dt; if (G.reloading <= 0) { const need = W.mag - A.mag, take = Math.min(need, A.reserve); A.mag += take; A.reserve -= take; G.reloading = 0; } }
     if (G.firing && G.dead <= 0) fire();
-    for (const f of G.feed) f.t -= dt; G.feed = G.feed.filter(f => f.t > 0);
-    for (const b of G.bots) botStep(b, dt);
+    for (let i = 0; i < G.feed.length; i++) G.feed[i].t -= dt;
+    while (G.feed.length && G.feed[G.feed.length - 1].t <= 0) G.feed.pop();   // newest first: the oldest lines expire at the end
+    for (let i = 0; i < G.bots.length; i++) botStep(G.bots[i], dt);
     // view model: bob while walking, kick on firing, lowered while reloading / swapping
     const moving = isMoving();
     G.bob += dt * (moving ? (isRunning() ? 11 : 7) : 2);
     G.kick = Math.max(0, G.kick - dt * 9);
     const rel = G.reloading > 0 ? Math.sin(Math.min(Math.PI, (W.reload - G.reloading) / W.reload * Math.PI)) : 0, swap = G.swapT / 0.45;
-    const [rx, ry, rz] = REST[G.weapon];
+    const rest = REST[G.weapon], rx = rest[0], ry = rest[1], rz = rest[2];
     vm.position.set(rx + Math.sin(G.bob) * 0.007 * (moving ? 1 : 0.3), ry + Math.abs(Math.cos(G.bob)) * 0.009 * (moving ? 1 : 0.3) - rel * 0.14 - swap * 0.35, rz + G.kick * 0.07 * W.kick);
     vm.rotation.set(0.02 - G.kick * 0.1 * W.kick + rel * 0.55 + swap * 0.6, 0.06 + (G.weapon === 'knife' ? -0.5 : 0) + G.kick * (G.weapon === 'knife' ? -0.8 : 0), rel * 0.2);
     vmFlash.visible = G.time - G.lastShot < 0.035 && !W.melee;
@@ -645,7 +665,7 @@ export function createGame(ctx) {
   }
   /** bots on the minimap: red dots, only within 60 m (no wallhack radar) */
   function drawMinimap(mctx, toPx) {
-    for (const b of G.bots) { if (b.dead > 0 || Math.hypot(b.x - P.x, b.z - P.z) > 60) continue; const [u, v] = toPx(b.x, b.z); mctx.fillStyle = '#d13b2a'; mctx.beginPath(); mctx.arc(u, v, 3, 0, 6.283); mctx.fill(); }
+    for (let i = 0; i < G.bots.length; i++) { const b = G.bots[i]; if (b.dead > 0 || len2(b.x - P.x, b.z - P.z) > 60) continue; const pt = toPx(b.x, b.z), u = pt[0], v = pt[1]; mctx.fillStyle = '#d13b2a'; mctx.beginPath(); mctx.arc(u, v, 3, 0, 6.283); mctx.fill(); }
   }
   // ------------------------------------------------------------------ input
   addEventListener('mousedown', e => { if (!G.on || !document.pointerLockElement) return; if (e.button === 0) { G.firing = true; G.fired = false; } if (e.button === 2 && WEAPONS[G.weapon].scope) setScope(!G.scoped); });

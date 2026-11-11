@@ -79,8 +79,8 @@ export function createBench(ctx) {
     if (!active) return;
     const g = getGame(), G = g.state; t += dt; G.health = 100;
     // next waypoint
-    let w = ROUTE[wp], dx = w[0] - P.x, dz = w[1] - P.z, d = Math.hypot(dx, dz);
-    if (d < 2.2) { wp++; bestD = 1e9; bestT = t; if (wp >= ROUTE.length) { finish(); return; } w = ROUTE[wp]; dx = w[0] - P.x; dz = w[1] - P.z; d = Math.hypot(dx, dz); }
+    let w = ROUTE[wp], dx = w[0] - P.x, dz = w[1] - P.z, d = Math.sqrt(dx * dx + dz * dz);
+    if (d < 2.2) { wp++; bestD = 1e9; bestT = t; if (wp >= ROUTE.length) { finish(); return; } w = ROUTE[wp]; dx = w[0] - P.x; dz = w[1] - P.z; d = Math.sqrt(dx * dx + dz * dz); }
     if (d < bestD - 0.5) { bestD = d; bestT = t; }
     else if (t - bestT > 2.5) { stuck++; P.x = w[0]; P.z = w[1]; P.y = surfaceAt(P.x, P.z).y; bestD = 1e9; bestT = t; return; }   // caught on something: step on
     // the body turns towards the lane at most 3.5 rad/s; the eyes sweep ±50° and spin right round twice on the way
