@@ -11,12 +11,14 @@
 //                rate is (a machine without a GPU still walks the same route in the same number of frames);
 //                frame-pacing numbers are then meaningless, the main-thread times and the counters are not
 //   sync         wait for the GPU at the end of every frame (gl.finish), so the frame time includes the drawing
+//   preset=smooth  run with that Performance preset (auto / smooth / quality) instead of the saved one
 //   marks        performance.mark() every frame, to line frames up with a Chrome trace
 
 export function parseBench(hash) {
   const m = /[#&]bench(?:=(\d+))?(?=&|$)/.exec(hash); if (!m) return null;
   const num = (k, d) => { const r = new RegExp('&' + k + '=([\\d.]+)').exec(hash); return r ? +r[1] : d; };
-  return { bots: Math.max(1, Math.min(100, +(m[1] || 50))), step: num('step', 0) / 1000, sync: /&sync\b/.test(hash), marks: /&marks\b/.test(hash) };
+  const preset = /&preset=(auto|smooth|quality)\b/.exec(hash);
+  return { bots: Math.max(1, Math.min(100, +(m[1] || 50))), preset: preset ? preset[1] : '', step: num('step', 0) / 1000, sync: /&sync\b/.test(hash), marks: /&marks\b/.test(hash) };
 }
 
 // The route: lane centre lines of the village layout (model metres, x east, z south).
@@ -134,7 +136,7 @@ export function createBench(ctx) {
     const events = {}; for (const k in firsts) { let m = 0; for (let i = firsts[k]; i < Math.min(n, firsts[k] + 4); i++) m = Math.max(m, main[i]); events[k] = r2(m); }
     const dev = renderer.getContext().getExtension('WEBGL_debug_renderer_info');
     const res = {
-      version: 1, bots: cfg.bots, mode: stepped ? `fixed step ${(cfg.step * 1000).toFixed(2)} ms` : 'real time', gpuSync: cfg.sync,
+      version: 1, bots: cfg.bots, preset: cfg.preset || (ctx.preset ? ctx.preset() : ''), mode: stepped ? `fixed step ${(cfg.step * 1000).toFixed(2)} ms` : 'real time', gpuSync: cfg.sync,
       frames: n, gameSeconds: r2(t), wallSeconds: r2((performance.now() - wall0) / 1000), stuck,
       // frame = time from one frame to the next (what the player feels); js = main-thread time spent inside the frame
       frame: stepped ? null : stats(real, n), js: stats(js, n), sim: stats(simMs, n), render: stats(renMs, n),

@@ -11,6 +11,7 @@
 //                  This is the default when no GPU is found (GPU=1 or NODRAW=0 to override).
 //   SYNC=1         gl.finish() every frame: frame time includes the drawing (with a software GPU: seconds per frame)
 //   TRACE=1        record a Chrome trace and name the functions that fill the 10 longest frames
+//   PRESET=smooth  Game performance preset to run with (auto / smooth / quality)
 //   ALLOC=1        sample the JS allocations during the run and name the functions that allocate most
 //   HEADED=1, CHROME_ARGS="...", W, H, DPR, REPO, THREE_DIR
 import http from 'node:http';
@@ -52,7 +53,7 @@ page.on('pageerror', e => console.log('[pageerror]', e.message));
 const cdp = await context.newCDPSession(page);
 if (THROTTLE > 1) await cdp.send('Emulation.setCPUThrottlingRate', { rate: THROTTLE });
 
-const hash = `#bench=${BOTS}` + (STEP ? `&step=${STEP}` : '') + (env.SYNC === '1' ? '&sync' : '') + (TRACE ? '&marks' : '');
+const hash = `#bench=${BOTS}` + (STEP ? `&step=${STEP}` : '') + (env.SYNC === '1' ? '&sync' : '') + (TRACE ? '&marks' : '') + (env.PRESET ? `&preset=${env.PRESET}` : '');
 const traceEvents = [];
 if (TRACE) {
   cdp.on('Tracing.dataCollected', e => { for (const ev of e.value) traceEvents.push(ev); });

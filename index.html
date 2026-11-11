@@ -244,6 +244,12 @@ body:not(.is-touch)[data-mode="game"] .hint { right: auto; left: 50%; transform:
       <button class="pbtn on" data-diff="1">Normal</button>
       <button class="pbtn" data-diff="1.5">Hard</button>
     </div>
+    <div class="row" id="gameQuality" style="margin-top:8px;align-items:center">
+      <span style="font:600 12px var(--body);opacity:.7">Performance</span>
+      <button class="pbtn on" data-q="auto" title="Balanced shadows, full view distance, automatic resolution">Auto</button>
+      <button class="pbtn" data-q="smooth" title="Low shadows, hazy beyond ~600 m, no far grass or small details, lower resolution">Smooth</button>
+      <button class="pbtn" data-q="quality" title="Full-size shadows and resolution">Quality</button>
+    </div>
     <p class="note">Deathmatch in the village: the bots roam the real lanes, spot you, chase, strafe, fall back to reload and shoot with the same rifles. Primary + Desert Eagle + knife (1 / 2 / 3, Q, wheel), R reload, right mouse = AWP scope. 5-minute rounds, score = kills : deaths.</p>
   </div>
   <div id="carGroup" hidden>
@@ -332,7 +338,7 @@ const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'hi
 // v1.0: the pixel ratio comes from basePixelRatio() and the auto-resolution meter (set up below, before the first frame).
 // Desktop is capped at 1.5 (was 2): on a high-DPI screen that is 44 % fewer pixels to shade, hardly visible in a 3D scene.
 let mode = 'orbit';
-const basePixelRatio = () => LITE ? 1 : Math.min(devicePixelRatio, isTouch ? (mode === 'game' ? 1.25 : 1.6) : 1.5);
+const basePixelRatio = () => LITE ? 1 : Math.min(devicePixelRatio, mode === 'game' ? GAME_PRESETS[gamePreset].pr : isTouch ? 1.6 : 1.5);
 renderer.setPixelRatio(basePixelRatio());
 renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -355,6 +361,27 @@ function setShadowMapSize(n) {
   if (sun.shadow.mapSize.x === n) return;
   sun.shadow.mapSize.set(n, n); if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; } sun.shadow.needsUpdate = true;
 }
+// v1.1: Game mode quality presets (Settings › Game › Performance, kept in localStorage). They set the BASE the game
+// renders at; the automatic resolution (Settings › Performance) still scales down from that base when frames are slow.
+//   auto     smaller shadow map, the whole map in view, phones at 1.25× pixel density (the v1.0 phone setting)
+//   smooth   1024² shadows, the view ends in haze at ~650 m, small details / grass / shrubs only at 60 % of their
+//            usual distance, 1× pixel density; details popping in or out do not force a shadow redraw
+//   quality  the full-size shadow map and up to 2× pixel density (phones 1.6×)
+const FOG_DENSITY = 0.00007, CAMERA_FAR = 9000;
+const GAME_PRESETS = {
+  auto: { shadow: SHADOW_SIZE_GAME, far: CAMERA_FAR, fog: FOG_DENSITY, cull: 1, pr: isTouch ? 1.25 : 1.5, shadowOnCull: true },
+  smooth: { shadow: 1024, far: 700, fog: 0.0026, cull: 0.6, pr: 1, shadowOnCull: false },
+  quality: { shadow: SHADOW_SIZE, far: CAMERA_FAR, fog: FOG_DENSITY, cull: 1, pr: isTouch ? 1.6 : 2, shadowOnCull: true },
+};
+let gamePreset = 'auto'; try { const q = localStorage.getItem('kk_quality'); if (q && GAME_PRESETS[q]) gamePreset = q; } catch (_) {}
+/** View distance, haze, detail distance and shadow-map size for the current mode (the Game's preset, or the defaults). */
+function applyGameView() {
+  const g = mode === 'game' ? GAME_PRESETS[gamePreset] : null;
+  camera.far = g ? g.far : CAMERA_FAR; camera.updateProjectionMatrix();
+  scene.fog.density = g ? g.fog : FOG_DENSITY;
+  culler.scale = g ? g.cull : 1; culler.update(camera.position, true);
+  setShadowMapSize(g ? g.shadow : SHADOW_SIZE); sun.shadow.needsUpdate = true;
+}
 sun.shadow.mapSize.set(SHADOW_SIZE, SHADOW_SIZE); sun.shadow.bias = -0.0003; sun.shadow.normalBias = 0.5;
 // v1.0: the shadow map is redrawn only when something that casts a shadow or the shadow camera moved (see the loop),
 // not every frame: it was a second full render of ~1.1 M triangles at 4096² each frame.
@@ -362,7 +389,7 @@ sun.shadow.autoUpdate = false; sun.shadow.needsUpdate = true;
 // v1.1: count the shadow pass too (three.js resets the counters after it): the loop resets them once per frame
 renderer.info.autoReset = false;
 scene.add(sun, sun.target);
-scene.fog = new THREE.FogExp2(0xcfd9df, 0.00007);
+scene.fog = new THREE.FogExp2(0xcfd9df, FOG_DENSITY);
 const pmrem = new THREE.PMREMGenerator(renderer);
 const envScene = new THREE.Scene(); const envSky = new Sky(); envSky.scale.setScalar(1000); envScene.add(envSky);
 let envRT = null, sunHour = 15;
@@ -848,7 +875,7 @@ const HINTS = {
 document.getElementById('hint').textContent = HINTS.orbit;
 function setMode(m) {
   if (!D) return;
-  const prev = mode; mode = m;
+  const prev = mode, basePRwas = basePixelRatio(); mode = m;
   document.querySelectorAll('#modes button').forEach(b => b.classList.toggle('on', b.dataset.mode === m));
   controls.enabled = m === 'orbit';
   document.getElementById('hint').textContent = HINTS[m];
@@ -868,9 +895,9 @@ function setMode(m) {
     P.pitch = m === 'fly' ? -0.25 : 0; P.y = m === 'fly' ? Math.max(camera.position.y, terrH(P.x, P.z) + 60) : surfaceAt(P.x, P.z).y; P.vy = 0;
     if (surfaceAt(P.x, P.z).water && (m === 'walk' || m === 'game')) { const [wx, wz] = D.spawn.walk; P.x = wx; P.z = wz; P.y = surfaceAt(wx, wz).y; }
   }
-  // phones: render the game at a lower resolution so it stays smooth with many bots
-  if (isTouch && !LITE && (m === 'game') !== (prev === 'game')) perf.reset();   // basePixelRatio() depends on the mode
-  setShadowMapSize(m === 'game' ? SHADOW_SIZE_GAME : SHADOW_SIZE); sun.shadow.needsUpdate = true;
+  // the Game renders at its preset's resolution (phones: lower, so it stays smooth with many bots), view distance and shadows
+  if (basePixelRatio() !== basePRwas) perf.reset();
+  applyGameView();
   if (m === 'game') { if (!game) game = createGame({ scene, camera, P, D, terrH, surfaceAt, surfaceInto, pushOut, look: LOOK, kd, isTouch, touchIn, EYE, village: VILLAGE }); game.start();
     if (isTouch && innerHeight > innerWidth && !rotateTold) { rotateTold = true; toast('Turn your phone sideways for the best view'); toastT = 3.5; } }
   else if (prev === 'game' && game) game.stop();
@@ -903,6 +930,13 @@ function go(name, instant = false) {
 document.querySelectorAll('#views .pbtn').forEach(b => b.addEventListener('click', () => go(b.dataset.view)));
 document.querySelectorAll('#primaryWpn .pbtn').forEach(b => b.addEventListener('click', () => { document.querySelectorAll('#primaryWpn .pbtn').forEach(o => o.classList.toggle('on', o === b)); if (game) game.setPrimary(b.dataset.wpn); }));
 document.querySelectorAll('#difficulty .pbtn').forEach(b => b.addEventListener('click', () => { document.querySelectorAll('#difficulty .pbtn').forEach(o => o.classList.toggle('on', o === b)); if (game) game.setDifficulty(+b.dataset.diff); }));
+function setGamePreset(q) {
+  if (!GAME_PRESETS[q]) return;
+  const pr = basePixelRatio(); gamePreset = q; try { localStorage.setItem('kk_quality', q); } catch (_) {}
+  document.querySelectorAll('#gameQuality .pbtn').forEach(o => o.classList.toggle('on', o.dataset.q === q));
+  if (mode === 'game') { applyGameView(); if (basePixelRatio() !== pr) perf.reset(); }
+}
+document.querySelectorAll('#gameQuality .pbtn').forEach(b => { b.classList.toggle('on', b.dataset.q === gamePreset); b.addEventListener('click', () => setGamePreset(b.dataset.q)); });
 document.querySelectorAll('#botCount .pbtn').forEach(b => b.addEventListener('click', () => { document.querySelectorAll('#botCount .pbtn').forEach(o => o.classList.toggle('on', o === b)); if (game) game.setBots(+b.dataset.bots); }));
 camera.position.set(...V.genel.p); controls.target.set(...V.genel.t);
 const fsBtn = document.getElementById('fsBtn'), docEl = document.documentElement;
@@ -973,11 +1007,11 @@ function botToMinimap(bx, bz) {
 }
 // v1.1: #bench / #bench=50 runs the game-mode benchmark once the model is in (src/bench.js)
 const BENCH = parseBench(location.hash);
-const bench = BENCH ? createBench({ cfg: BENCH, renderer, camera, P, touchIn, surfaceAt, setMode, getGame: () => game, perf, shadowMapSize: () => sun.shadow.mapSize.x }) : null;
+const bench = BENCH ? createBench({ cfg: BENCH, renderer, camera, P, touchIn, surfaceAt, setMode, getGame: () => game, perf, shadowMapSize: () => sun.shadow.mapSize.x, preset: () => gamePreset }) : null;
 let benchWait = 30;   // frames to let the scene settle after loading before the run starts
 renderer.setAnimationLoop(now => {
   if (warming) return;   // shaders are compiling in the background: drawing now would make each one block
-  if (bench && sceneReady && !bench.active && !bench.done && --benchWait <= 0) { bench.begin(); last = now; }
+  if (bench && sceneReady && !bench.active && !bench.done && --benchWait <= 0) { if (BENCH.preset) setGamePreset(BENCH.preset); bench.begin(); last = now; }
   const tFrame = performance.now();
   // real elapsed time (capped at 0.25 s): on slow devices a 0.05 s cap made walking crawl at low frame rates
   const frameMs = now - last0, dt = bench && bench.step ? bench.step : Math.min(0.25, (now - last) / 1000); last = now;
@@ -1020,7 +1054,7 @@ renderer.setAnimationLoop(now => {
   const step = mode === 'orbit' ? ext * 0.04 : inGame ? 24 : 6;
   // small village details and far grass patches: shown / hidden by distance (re-checked every 4 m of camera movement);
   // the shadow map only needs a refresh when something inside it appeared or went
-  const cullChanged = culler.update(camera.position, false, ext); if (cullChanged) sun.shadow.needsUpdate = true;
+  const cullChanged = culler.update(camera.position, false, inGame && !GAME_PRESETS[gamePreset].shadowOnCull ? 0 : ext); if (cullChanged) sun.shadow.needsUpdate = true;
   if (sun.shadow.needsUpdate || mode === 'car' || shadowFocus.distanceToSquared(focus) > step * step || Math.abs(ext - shadowExt) > shadowExt * 0.08) {
     const sc = sun.shadow.camera; if (sc.right !== ext) { sc.left = -ext; sc.right = ext; sc.top = ext; sc.bottom = -ext; sc.near = 1; sc.far = 4000; sc.updateProjectionMatrix(); }
     shadowCentre.copy(focus);
