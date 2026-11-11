@@ -293,12 +293,17 @@ export function createGame(ctx) {
   }
   // copy the bots' part matrices into the instanced meshes (after the bots moved, before the frame is drawn)
   const _sph = new THREE.Sphere(), _frus = new THREE.Frustum(), _pv = new THREE.Matrix4();
+  // which bots are in view this frame (b.vis): asked once, before they move
+  function markVisibleBots() {
+    camera.updateMatrixWorld(); _pv.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); _frus.setFromProjectionMatrix(_pv);
+    for (let k = 0; k < G.bots.length; k++) { const b = G.bots[k]; _sph.center.set(b.x, b.y + 1, b.z); _sph.radius = 2.2; b.vis = _frus.intersectsSphere(_sph); }
+  }
+  const LOS_PER_FRAME = 8; let losLeft = 0;
   function syncBotInstances() {
     for (let i = 0; i < IML.length; i++) IML[i].count = 0;
-    camera.updateMatrixWorld(); _pv.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); _frus.setFromProjectionMatrix(_pv);
-    for (const b of G.bots) {
-      _sph.center.set(b.x, b.y + 1, b.z); _sph.radius = 1.6;
-      if (!_frus.intersectsSphere(_sph)) continue;   // off screen: not drawn at all
+    for (let k = 0; k < G.bots.length; k++) {
+      const b = G.bots[k];
+      if (!b.vis) continue;   // off screen: not drawn at all
       b.mesh.updateMatrixWorld(true);
       const parts = b.mesh.userData.parts; for (let i = 0; i < parts.length; i++) { const o = parts[i], im = o.userData.imesh; im.setMatrixAt(im.count++, o.matrixWorld); }
     }
@@ -312,7 +317,7 @@ export function createGame(ctx) {
       state: 'patrol', route: null, pauseT: 0, lookYaw: 0, speedK: 0.85 + rnd() * 0.3, lateral: (rnd() - 0.5) * 2.4,
       seen: 0, lastSeen: null, ls: { x: 0, z: 0 }, hasLos: false, losT: rnd() * 0.3, aimT: 0, reaction: 0.3 + rnd() * 0.4,
       mag: W.mag, burst: 0, cd: 1 + rnd(), reloadT: 0, walk: 0, stuck: 0, lastX: p.x, lastZ: p.z, dead: 0, flee: 0, side: 1, sideT: 0, crouch: 0,
-      mesh: botMesh(weapon), flashT: 0 };
+      mesh: botMesh(weapon), flashT: 0, acc: rnd() * 0.2, vis: true };
     b.mesh.position.set(b.x, b.y, b.z); group.add(b.mesh);
     return b;
   }
@@ -344,14 +349,17 @@ export function createGame(ctx) {
       return;
     }
     const ex = P.x, ez = P.z, dx = ex - b.x, dz = ez - b.z, dist = len2(dx, dz);
-    // far bots think ~10 times a second instead of every frame (100 bots)
-    if (dist > 180) { b.acc = (b.acc || 0) + dt; if (b.acc < 0.1) return; dt = b.acc; b.acc = 0; }
-    // ---- perception: line of sight a few times a second
+    // v1.1: how often a bot thinks and moves depends on how far it is: every frame within 60 m (and whatever is in
+    // view through the scope), ~20 times a second to 120 m, ~5 times a second beyond (was: 10 a second beyond 180 m)
+    if (dist >= 60 && !(G.scoped && b.vis)) { const every = dist < 120 ? 0.05 : 0.2; b.acc += dt; if (b.acc < every) return; dt = b.acc; b.acc = 0; }
+    // ---- perception: line of sight a few times a second; at most LOS_PER_FRAME traces a frame, the rest wait a frame
     b.losT -= dt;
-    if (b.losT <= 0) {
+    const needTrace = dist < 120 && G.dead <= 0;
+    if (b.losT <= 0 && (!needTrace || losLeft > 0)) {
+      if (needTrace) losLeft--;
       b.losT = 0.22 + rnd() * 0.15;
       const saw = b.hasLos;
-      b.hasLos = dist < 120 && G.dead <= 0 && !trace(b.x, b.y + 1.6, b.z, ex, P.y + EYE - 0.2, ez, 2.0);
+      b.hasLos = needTrace && !trace(b.x, b.y + 1.6, b.z, ex, P.y + EYE - 0.2, ez, 2.0);
       if (b.hasLos) { b.ls.x = ex; b.ls.z = ez; b.lastSeen = b.ls; b.seen = 6; if (!saw) b.aimT = 0; }
     }
     b.seen -= dt; if (b.hasLos) b.aimT += dt;
@@ -433,13 +441,15 @@ export function createGame(ctx) {
         tracer(muzzle, end); if (w) puff(end.x, end.y, end.z, 0.5); if (dist < 40) sound('whiz');
       }
     }
-    // ---- pose
-    const sw = Math.sin(b.walk * 2.4) * (moving ? 0.6 : 0);
-    u.l1.rotation.x = sw; u.l2.rotation.x = -sw;
-    const aim = b.hasLos || b.state === 'search' ? 1 : 0;
-    const armX = -1.25 - aim * 0.25, armSpread = aim ? 0.0 : 0.15;
-    u.a1.rotation.x += (armX - u.a1.rotation.x) * Math.min(1, dt * 8); u.a2.rotation.x += (armX - u.a2.rotation.x) * Math.min(1, dt * 8); u.a1.rotation.z = armSpread; u.a2.rotation.z = -armSpread;
-    u.gun.rotation.x += ((aim ? 0 : 0.35) - u.gun.rotation.x) * Math.min(1, dt * 8); u.gun.position.y = 1.28 - (aim ? 0 : 0.06);
+    // ---- pose (limbs only for bots in view: v1.1)
+    if (b.vis) {
+      const sw = Math.sin(b.walk * 2.4) * (moving ? 0.6 : 0);
+      u.l1.rotation.x = sw; u.l2.rotation.x = -sw;
+      const aim = b.hasLos || b.state === 'search' ? 1 : 0;
+      const armX = -1.25 - aim * 0.25, armSpread = aim ? 0.0 : 0.15;
+      u.a1.rotation.x += (armX - u.a1.rotation.x) * Math.min(1, dt * 8); u.a2.rotation.x += (armX - u.a2.rotation.x) * Math.min(1, dt * 8); u.a1.rotation.z = armSpread; u.a2.rotation.z = -armSpread;
+      u.gun.rotation.x += ((aim ? 0 : 0.35) - u.gun.rotation.x) * Math.min(1, dt * 8); u.gun.position.y = 1.28 - (aim ? 0 : 0.06);
+    }
     const crouchK = b.crouch && b.state === 'hold' ? 0.75 : 1; b.mesh.scale.y += (crouchK - b.mesh.scale.y) * Math.min(1, dt * 6);
     u.flash.visible = b.flashT > 0; if (u.flash.visible) u.flash.scale.setScalar(0.35 + rnd() * 0.3);
     b.mesh.position.set(b.x, b.y + (moving ? Math.abs(Math.sin(b.walk * 2.4)) * 0.03 : 0), b.z); b.mesh.rotation.set(0, b.yaw, 0);
@@ -649,6 +659,7 @@ export function createGame(ctx) {
     if (G.firing && G.dead <= 0) fire();
     for (let i = 0; i < G.feed.length; i++) G.feed[i].t -= dt;
     while (G.feed.length && G.feed[G.feed.length - 1].t <= 0) G.feed.pop();   // newest first: the oldest lines expire at the end
+    markVisibleBots(); losLeft = LOS_PER_FRAME;
     for (let i = 0; i < G.bots.length; i++) botStep(G.bots[i], dt);
     // view model: bob while walking, kick on firing, lowered while reloading / swapping
     const moving = isMoving();
