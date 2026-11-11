@@ -131,13 +131,16 @@ export class DistanceCuller {
     const c = bs.center.clone().applyMatrix4(obj.matrixWorld);
     this.items.push({ obj, c, r: bs.radius, d: maxDist });
   }
-  /** Returns true when visibility changed (the shadow map then needs a refresh). */
-  update(camPos, force = false) {
+  /**
+   * Returns true when visibility changed (the shadow map then needs a refresh). With `within`, only changes closer
+   * than that to the camera count: what pops in or out beyond the shadow map does not need it redrawn.
+   */
+  update(camPos, force = false, within = Infinity) {
     if (!force && camPos.distanceToSquared(this.last) < 16) return false;   // re-check after 4 m of movement
     this.last.copy(camPos); let changed = false;
     for (const it of this.items) {
-      const v = !it.obj.userData.layerOff && camPos.distanceTo(it.c) - it.r < it.d * this.scale;
-      if (it.obj.visible !== v) { it.obj.visible = v; changed = true; }
+      const d = camPos.distanceTo(it.c) - it.r, v = !it.obj.userData.layerOff && d < it.d * this.scale;
+      if (it.obj.visible !== v) { it.obj.visible = v; if (d < within) changed = true; }
     }
     return changed;
   }
@@ -145,12 +148,15 @@ export class DistanceCuller {
 
 // --------------------------------------------------------------------------------------------- FPS meter + auto resolution
 /**
- * Frame-time meter shown in the corner (FPS, draw calls, triangles) and an automatic resolution: when frames take
- * too long for a couple of seconds the render resolution steps down (to 55 % of the base at most) if that helps; when
- * there is headroom it steps back up. `base()` returns the wanted pixel ratio for the current mode.
+ * Frame-time meter shown in the corner (FPS, frame time, draw calls, triangles) and an automatic resolution: when
+ * frames take too long for a couple of seconds the render resolution steps down (to 55 % of the base at most) if that
+ * helps; when there is headroom it steps back up. `base()` returns the wanted pixel ratio for the current mode.
+ * v1.1: the meter also shows the 95th-percentile frame time of the last second (one frame in twenty was slower:
+ * the stutter an average hides) and how many times the shadow map was redrawn in that second (shadowRedrawn()).
  */
 export function createPerfMeter(renderer, el, base) {
-  let frames = 0, acc = 0, t0 = performance.now(), slow = 0, fast = 0, scale = 1, shown = true, auto = true, lastPR = 0, probe = null, hold = 0;
+  let frames = 0, acc = 0, t0 = performance.now(), slow = 0, fast = 0, scale = 1, shown = true, auto = true, lastPR = 0, probe = null, hold = 0, shadows = 0;
+  const times = new Float32Array(512);
   const apply = () => { const pr = Math.max(0.5, base() * scale); if (Math.abs(pr - lastPR) > 0.01) { lastPR = pr; renderer.setPixelRatio(pr); renderer.setSize(innerWidth, innerHeight); } };
   apply();
   return {
@@ -161,10 +167,15 @@ export function createPerfMeter(renderer, el, base) {
     get auto() { return auto; },
     /** Back to full resolution (after a mode change or a resize). */
     reset() { scale = 1; slow = fast = 0; probe = null; hold = 0; lastPR = 0; apply(); },
+    /** Call when the frame about to be drawn redraws the shadow map. */
+    shadowRedrawn() { shadows++; },
     frame(now, dt) {
+      if (frames < times.length) times[frames] = dt;
       frames++; acc += dt;
       if (now - t0 < 1000) return;
-      const fps = frames * 1000 / (now - t0), ms = acc / frames * 1000; frames = 0; acc = 0; t0 = now;
+      const fps = frames * 1000 / (now - t0), ms = acc / frames * 1000, nT = Math.min(frames, times.length), sh = shadows;
+      const p95 = shown ? times.subarray(0, nT).sort()[Math.min(nT - 1, Math.floor(nT * 0.95))] * 1000 : 0;
+      frames = 0; acc = 0; t0 = now; shadows = 0;
       // auto resolution: 2 s under ~40 fps → step down; 4 s over ~57 fps → step back up. If a step down did not
       // raise the frame rate, the limit is not the pixel count (e.g. a browser capped at 30 fps in power-saving
       // mode): undo it and leave the resolution alone for 30 s.
@@ -178,7 +189,7 @@ export function createPerfMeter(renderer, el, base) {
       }
       if (shown) {
         const i = renderer.info.render;
-        el.textContent = `${Math.round(fps)} FPS · ${ms.toFixed(1)} ms · ${i.calls} draws · ${(i.triangles / 1e6).toFixed(2)} M tris · res ${Math.round(scale * 100)}%`;
+        el.textContent = `${Math.round(fps)} FPS · ${ms.toFixed(1)} ms · p95 ${p95.toFixed(1)} ms · ${i.calls} draws · ${(i.triangles / 1e6).toFixed(2)} M tris · shadow ${sh}/s · res ${Math.round(scale * 100)}%`;
       }
     },
   };

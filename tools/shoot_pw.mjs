@@ -3,7 +3,7 @@
 // Usage: node tools/shoot_pw.mjs <outdir> "<view>;<view>;..."
 //   view = named viewpoint (genel, kopru, ...), cam:px,py,pz,tx,ty,tz, walk:x,z,headingDeg[,pitch][,label]
 //   (heading in compass degrees, 0 = north, 90 = east; model frame x east, z south)
-// Env: W, H (viewport), HASH (e.g. '#lite'), REPO, THREE_DIR
+// Env: W, H (viewport), HASH (e.g. '#lite'), REPO, THREE_DIR, PRESET (Game performance preset: auto / smooth / quality)
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -26,7 +26,7 @@ const server = http.createServer((req, res) => {
     let s = body.toString();
     s = s.replace('https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js', '/three/build/three.module.js')
          .replace('https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/', '/three/examples/jsm/');
-    if (!s.includes('window.__kk')) s = s.replace('</script>\n</body>', 'window.__kk = { go, setSun, setMode, camera, controls, renderer, scene, P, CS, surfaceAt, sun, hemi, terrH, D: () => D, V: () => VILLAGE, game: () => game };\n</script>\n</body>');
+    if (!s.includes('window.__kk')) s = s.replace('</script>\n</body>', 'window.__kk = { go, setSun, setMode, camera, controls, renderer, scene, P, CS, surfaceAt, sun, hemi, terrH, D: () => D, V: () => VILLAGE, game: () => game, setGamePreset: typeof setGamePreset === "function" ? setGamePreset : null };\n</script>\n</body>');
     body = Buffer.from(s);
   }
   res.writeHead(200, { 'content-type': mime[path.extname(file)] || 'application/octet-stream', 'cache-control': 'no-store' });
@@ -43,6 +43,7 @@ const t0 = Date.now();
 await page.goto(`http://localhost:${port}/` + (process.env.HASH || ''), { waitUntil: 'domcontentloaded' });
 await page.waitForFunction(() => !document.getElementById('loading') || /could not/.test(document.getElementById('loading').textContent), null, { timeout: 900000 });
 console.log('loaded in', ((Date.now() - t0) / 1000).toFixed(1), 's');
+if (process.env.PRESET) await page.evaluate(q => { if (window.__kk.setGamePreset) window.__kk.setGamePreset(q); }, process.env.PRESET);
 await page.evaluate(() => { document.querySelectorAll('.panel,.topbar,.hint,#labels,#minimap,#gearBtn,#modes,#views,#cross,#toast').forEach(e => e.style.display = 'none'); });
 const settle = async (frames) => { await page.evaluate(n => new Promise(r => { let k = 0; const f = () => (++k >= n ? r() : requestAnimationFrame(f)); requestAnimationFrame(f); }), frames); };
 for (const v of views) {
