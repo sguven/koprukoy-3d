@@ -32,6 +32,7 @@ export function createGame(ctx) {
   const _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3(), _v3 = new THREE.Vector3(), _v4 = new THREE.Vector3(), _v5 = new THREE.Vector3();
   const len2 = (x, z) => Math.sqrt(x * x + z * z);   // Math.hypot boxes its result in unoptimised code
   const touchIn = ctx.touchIn || { jx: 0, jy: 0 };
+  const look = ctx.look || { sens: 1, fov: 55 };   // v1.1: the player's look sensitivity and field of view (Settings › Controls)
   const joyLen = () => len2(touchIn.jx, touchIn.jy);
   const isMoving = () => kd('KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight') || joyLen() > 0.2;
   const isRunning = () => kd('ShiftLeft', 'ShiftRight') || joyLen() > 0.92;
@@ -468,7 +469,7 @@ export function createGame(ctx) {
   }
   function setScope(on) {
     if (on === G.scoped) return;
-    G.scoped = on; camera.fov = on ? 14 : 55; camera.updateProjectionMatrix(); el('ghScope').style.display = on ? 'block' : 'none'; vm.visible = !on && G.on; scopeBtn.classList.toggle('on', on);
+    G.scoped = on; camera.fov = on ? 14 : look.fov; camera.updateProjectionMatrix(); el('ghScope').style.display = on ? 'block' : 'none'; vm.visible = !on && G.on; scopeBtn.classList.toggle('on', on);
   }
   // v1.1: tracers and dust / blood puffs are fixed rings of objects that stay in the scene (hidden when idle), each
   // puff with its own material made once: a shot allocates nothing, adds nothing to the scene and compiles no shader.
@@ -573,7 +574,7 @@ export function createGame(ctx) {
   let fireId = null, fx0 = 0, fy0 = 0;
   const fireUp = e => { if (e.pointerId !== fireId) return; fireId = null; G.firing = false; G.fired = false; fireBtn.classList.remove('down'); };
   fireBtn.addEventListener('pointerdown', e => { e.stopPropagation(); e.preventDefault(); if (fireId !== null) return; fireId = e.pointerId; fx0 = e.clientX; fy0 = e.clientY; try { fireBtn.setPointerCapture(e.pointerId); } catch (_) {} G.firing = true; G.fired = false; fireBtn.classList.add('down'); });
-  fireBtn.addEventListener('pointermove', e => { if (e.pointerId !== fireId) return; const dx = e.clientX - fx0, dy = e.clientY - fy0; fx0 = e.clientX; fy0 = e.clientY; const k = 0.005 * camera.fov / 55; P.yaw -= dx * k; P.pitch = Math.max(-1.45, Math.min(1.45, P.pitch - dy * k)); });
+  fireBtn.addEventListener('pointermove', e => { if (e.pointerId !== fireId) return; const dx = e.clientX - fx0, dy = e.clientY - fy0; fx0 = e.clientX; fy0 = e.clientY; const k = 0.005 * look.sens * camera.fov / look.fov; P.yaw -= dx * k; P.pitch = Math.max(-1.45, Math.min(1.45, P.pitch - dy * k)); });
   for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) fireBtn.addEventListener(ev, fireUp);
   const tap = (b, fn) => b.addEventListener('pointerdown', e => { e.stopPropagation(); e.preventDefault(); fn(); b.classList.add('down'); setTimeout(() => b.classList.remove('down'), 140); });
   tap(reloadBtn, () => reload());

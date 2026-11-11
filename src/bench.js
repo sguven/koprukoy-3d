@@ -54,7 +54,7 @@ export function createBench(ctx) {
   const tagAt = new Map();   // frame → tags (only frames where something scripted happened)
   let active = false, done = false, n = 0, t = 0, wp = 1, heading = 0, stuck = 0, bestD = 1e9, bestT = 0, scriptI = 0, fireOn = false, shots = 0;
   let calls = 0, tris = 0, shadowN = 0, shadowCalls = 0, shadowTris = 0, heap0 = 0, heapPrev = 0, alloc = 0, gcDrops = 0, prog0 = 0, progPrev = 0, minRes = 1, resSum = 0, enterMs = 0, autoWas = true, wall0 = 0;
-  let pendingTags = null, overlay = null, rndWas = null;
+  let pendingTags = null, overlay = null, rndWas = null, eyePrev = null, eyeJolts = 0, eyeMax = 0;
   const firsts = {};   // tag → frame index of its first occurrence
   const mark = (tag) => { (pendingTags || (pendingTags = [])).push(tag); if (!(tag in firsts)) firsts[tag] = n; };
 
@@ -115,6 +115,8 @@ export function createBench(ctx) {
     let fl = (shadowRedrawn ? 1 : 0) | (cullChanged ? 2 : 0);
     progAt[n] = Math.min(255, Math.max(0, progs - progPrev)); progPrev = progs;
     if (mem) { const h = heapNow(), dh = h - heapPrev; if (dh > 0) alloc += dh; else if (dh < -262144) { gcDrops++; fl |= 4; } heapPrev = h; }
+    // eye height: a step of more than 5 cm between two frames is a visible jolt (kerbs, road edges)
+    const ey = camera.position.y; if (eyePrev !== null) { const d = Math.abs(ey - eyePrev); if (d > 0.05 && d < 1.5) eyeJolts++; if (d < 1.5 && d > eyeMax) eyeMax = d; } eyePrev = ey;
     flags[n] = fl; if (pendingTags) { tagAt.set(n, pendingTags); pendingTags = null; }
     minRes = Math.min(minRes, perf.scale); resSum += perf.scale;
     if (cfg.marks) performance.mark('kkf' + n);
@@ -142,7 +144,7 @@ export function createBench(ctx) {
         drawCallsOther: Math.round((calls - shadowCalls) / plain), trianglesOther: Math.round((tris - shadowTris) / plain) },
       shadersCompiled: renderer.info.programs.length - prog0,
       heap: mem ? { startMB: r2(heap0 / 1048576), endMB: r2(heapPrev / 1048576), growthMB: r2((heapPrev - heap0) / 1048576), allocatedMB: r2(alloc / 1048576), allocMBperSec: r2(alloc / 1048576 / (t || 1)), gcDrops } : null,
-      enterMs: r2(enterMs), events,
+      enterMs: r2(enterMs), events, eye: { joltsOver5cm: eyeJolts, maxStepCm: r2(eyeMax * 100) },
       resolution: { min: r2(minRes), mean: r2(resSum / (n || 1)), pixelRatio: r2(renderer.getPixelRatio()), size: [innerWidth, innerHeight] },
       shadowMap: renderer.shadowMap.enabled ? ctx.shadowMapSize() : 0,
       longest: order.map(i => ({ frame: i, t: r2(tAt[i]), ms: r2(main[i]), js: r2(js[i]), sim: r2(simMs[i]), render: r2(renMs[i]), at: [Math.round(posAt[i * 2]), Math.round(posAt[i * 2 + 1])], tags: tagsOf(i) })),
@@ -172,6 +174,7 @@ export function createBench(ctx) {
       `shaders compiled during the run: ${res.shadersCompiled}   entering the game: ${res.enterMs} ms`,
       res.heap ? `JS heap ${res.heap.startMB} → ${res.heap.endMB} MB, allocated ${res.heap.allocatedMB} MB (${res.heap.allocMBperSec} MB/s), ${res.heap.gcDrops} GC drops` : 'JS heap: not available in this browser',
       `first shot ${res.events.firstShot ?? '–'} ms   first weapon switch ${res.events.firstSwitch ?? '–'} ms   resolution ${Math.round(res.resolution.mean * 100)} % (min ${Math.round(res.resolution.min * 100)} %)`,
+      `eye height: ${res.eye.joltsOver5cm} jolts over 5 cm between frames (largest ${res.eye.maxStepCm} cm)`,
       res.stuck ? `route: stepped past an obstacle ${res.stuck}×` : null,
       '',
       'longest frames:', ...res.longest.map(l => `  t=${String(l.t).padStart(6)} s  ${String(l.ms).padStart(7)} ms  (game ${l.sim}, render ${l.render})  ${l.tags.join(' ')}`),

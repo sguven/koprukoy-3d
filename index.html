@@ -265,6 +265,13 @@ body:not(.is-touch)[data-mode="game"] .hint { right: auto; left: 50%; transform:
     </div>
   </div>
   <div>
+    <div class="group-title">Controls</div>
+    <label class="chip" style="width:100%;justify-content:space-between"><span>Look sensitivity <b id="sensVal">1.0×</b></span>
+      <input type="range" id="optSens" min="0.3" max="3" step="0.1" value="1" style="flex:1;margin-left:10px" aria-label="Mouse and touch look sensitivity"></label>
+    <label class="chip" style="width:100%;justify-content:space-between;margin-top:8px"><span>Field of view <b id="fovVal">55°</b></span>
+      <input type="range" id="optFov" min="55" max="90" step="1" value="55" style="flex:1;margin-left:10px" aria-label="Field of view on foot"></label>
+  </div>
+  <div>
     <div class="group-title">Performance</div>
     <div class="row">
       <label class="chip"><input type="checkbox" id="optFps" checked> Show FPS</label>
@@ -530,7 +537,7 @@ loadAll().then(gltf => {
   // v1.1: build the Game's bots, weapons and effects now and compile every shader of the scene while "Loading…" is
   // still up, so that nothing compiles in the middle of a round (the first look at a material, the first shot, the
   // first bot used to stall a frame for 20–200 ms). The loop draws nothing until the shaders are ready (8 s at most).
-  try { game = createGame({ scene, camera, P, D, terrH, surfaceAt, surfaceInto, pushOut, kd, isTouch, touchIn, EYE, village: VILLAGE }); } catch (e) { console.error(e); }
+  try { game = createGame({ scene, camera, P, D, terrH, surfaceAt, surfaceInto, pushOut, look: LOOK, kd, isTouch, touchIn, EYE, village: VILLAGE }); } catch (e) { console.error(e); }
   warming = true;
   return Promise.race([renderer.compileAsync(scene, camera), new Promise(r => setTimeout(r, 8000))]).catch(() => {});
 }).then(() => {
@@ -757,6 +764,9 @@ function updateEngine(thr) {
 const P = { x: 0, z: 0, y: 0, vy: 0, yaw: 0, pitch: 0 };
 const EYE = 1.7;
 const walkG = { y: 0, road: false, water: false }, walkQ = { x: 0, z: 0 };   // scratch results of walkStep
+// v1.1: look settings (Settings › Controls, kept in localStorage) and the smoothed eye height
+const LOOK = { sens: 1, fov: 55 };
+let eyeY = null;   // camera height on foot: follows the feet with a short lag over kerbs and road edges (null = snap)
 function walkStep(dt, fly) {
   // touch: pushing the joystick to its rim runs
   const run = kd('ShiftLeft', 'ShiftRight') || touchIn.jx * touchIn.jx + touchIn.jy * touchIn.jy > 0.92 * 0.92;
@@ -779,19 +789,32 @@ function walkStep(dt, fly) {
     P.vy -= 9.81 * dt; P.y += P.vy * dt; if (P.y <= g2.y) { P.y = g2.y; P.vy = 0; }
   }
   P.x = Math.max(X0 + 10, Math.min(X0 + TSZ - 10, P.x)); P.z = Math.max(Z0 + 10, Math.min(Z0 + TSZ - 10, P.z));
-  camera.position.set(P.x, P.y + (fly ? 0 : EYE), P.z);
+  // eye height: the feet (P.y) step up kerbs and road edges at once; the eyes follow within ~50 ms so the view does
+  // not jolt. In the air (jump, fall) and after a teleport they follow exactly, so nothing feels delayed.
+  const wantY = P.y + (fly ? 0 : EYE);
+  if (fly || eyeY === null || P.vy !== 0 || Math.abs(wantY - eyeY) > 1.2) eyeY = wantY; else eyeY += (wantY - eyeY) * (1 - Math.exp(-dt * 20));
+  camera.position.set(P.x, eyeY, P.z);
   camera.rotation.set(P.pitch, P.yaw, 0, 'YXZ');
 }
 // mouse look (desktop: pointer lock)
 const dom = renderer.domElement;
-dom.addEventListener('click', () => { if ((mode === 'walk' || mode === 'fly' || mode === 'game') && !isTouch && document.pointerLockElement !== dom) { try { const r = dom.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (e) {} } });
-document.addEventListener('mousemove', e => { if (document.pointerLockElement === dom) { P.yaw -= e.movementX * 0.0022; P.pitch = Math.max(-1.45, Math.min(1.45, P.pitch - e.movementY * 0.0022)); } });
+// v1.1: raw mouse input where the browser offers it (no OS pointer acceleration: the same hand movement always turns
+// the same angle); browsers that do not know the option ignore it, those that refuse it get the plain request
+function lockPointer() {
+  const plain = () => { try { const r = dom.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (e) {} };
+  try { const r = dom.requestPointerLock({ unadjustedMovement: true }); if (r && r.catch) r.catch(plain); } catch (e) { plain(); }
+}
+dom.addEventListener('click', () => { if ((mode === 'walk' || mode === 'fly' || mode === 'game') && !isTouch && document.pointerLockElement !== dom) lockPointer(); });
+// look speed: the sensitivity setting, scaled with the zoom (through the AWP scope, fov 14, the mouse used to turn the
+// view as fast as unscoped, about 4× too fast on screen; touch was already scaled)
+const lookK = (base) => base * LOOK.sens * camera.fov / LOOK.fov;
+document.addEventListener('mousemove', e => { if (document.pointerLockElement === dom) { const k = lookK(0.0022); P.yaw -= e.movementX * k; P.pitch = Math.max(-1.45, Math.min(1.45, P.pitch - e.movementY * k)); } });
 // touch look: drag on the screen; unlocked dragging also works on desktop
 let lookId = null, lx0 = 0, ly0 = 0;
 dom.addEventListener('pointerdown', e => { if (mode === 'walk' || mode === 'fly' || mode === 'game' || mode === 'car') { if (document.pointerLockElement === dom) return; lookId = e.pointerId; lx0 = e.clientX; ly0 = e.clientY; } });
 addEventListener('pointermove', e => { if (e.pointerId !== lookId) return; const dx = e.clientX - lx0, dy = e.clientY - ly0; lx0 = e.clientX; ly0 = e.clientY;
   if (mode === 'car') { carYawOff -= dx * 0.006; carPitchOff = Math.max(-0.4, Math.min(0.6, carPitchOff + dy * 0.004)); return; }
-  const k = 0.005 * camera.fov / 55; P.yaw -= dx * k; P.pitch = Math.max(-1.45, Math.min(1.45, P.pitch - dy * k)); });
+  const k = lookK(0.005); P.yaw -= dx * k; P.pitch = Math.max(-1.45, Math.min(1.45, P.pitch - dy * k)); });
 addEventListener('pointerup', e => { if (e.pointerId === lookId) lookId = null; });
 addEventListener('pointercancel', e => { if (e.pointerId === lookId) lookId = null; });
 // joystick: appears under the thumb anywhere in the left part of the screen, rests bottom-left
@@ -848,9 +871,11 @@ function setMode(m) {
   // phones: render the game at a lower resolution so it stays smooth with many bots
   if (isTouch && !LITE && (m === 'game') !== (prev === 'game')) perf.reset();   // basePixelRatio() depends on the mode
   setShadowMapSize(m === 'game' ? SHADOW_SIZE_GAME : SHADOW_SIZE); sun.shadow.needsUpdate = true;
-  if (m === 'game') { if (!game) game = createGame({ scene, camera, P, D, terrH, surfaceAt, surfaceInto, pushOut, kd, isTouch, touchIn, EYE, village: VILLAGE }); game.start();
+  if (m === 'game') { if (!game) game = createGame({ scene, camera, P, D, terrH, surfaceAt, surfaceInto, pushOut, look: LOOK, kd, isTouch, touchIn, EYE, village: VILLAGE }); game.start();
     if (isTouch && innerHeight > innerWidth && !rotateTold) { rotateTold = true; toast('Turn your phone sideways for the best view'); toastT = 3.5; } }
   else if (prev === 'game' && game) game.stop();
+  // on foot the field of view is the player's setting; orbit and the Toros keep 55°
+  eyeY = null; const fovNow = m === 'walk' || m === 'fly' || m === 'game' ? LOOK.fov : 55; if (camera.fov !== fovNow) { camera.fov = fovNow; camera.updateProjectionMatrix(); }
   if (m === 'car') { initAudio(); if (audio && audio.ac.state === 'suspended') audio.ac.resume(); carYawOff = 0; carPitchOff = 0; }
   if (m === 'orbit' && prev !== 'orbit') { controls.target.set(camera.position.x + (prev === 'car' ? 0 : 0), camera.position.y, camera.position.z); const fwd = new THREE.Vector3(); camera.getWorldDirection(fwd); controls.target.copy(camera.position).addScaledVector(fwd, 60); controls.repin(); }
 }
@@ -923,6 +948,15 @@ const savePref = (k, v) => { try { localStorage.setItem(k, v ? '1' : '0'); } cat
 for (const [id, k, set] of [['optFps', 'kk_fps', v => { perf.visible = v; }], ['optAutoRes', 'kk_autores', v => { perf.auto = v; }]]) {
   const el = document.getElementById(id); el.checked = loadPref(k, el.checked); set(el.checked);
   el.addEventListener('change', e => { set(e.target.checked); savePref(k, e.target.checked); });
+}
+for (const [id, key, lab, fmt, set] of [
+  ['optSens', 'kk_sens', 'sensVal', v => v.toFixed(1) + '×', v => { LOOK.sens = v; }],
+  ['optFov', 'kk_fov', 'fovVal', v => Math.round(v) + '°', v => { LOOK.fov = v; if (mode === 'walk' || mode === 'fly' || (mode === 'game' && !(game && game.state.scoped))) { camera.fov = v; camera.updateProjectionMatrix(); } }],
+]) {
+  const el = document.getElementById(id), out = document.getElementById(lab), lo = +el.min, hi = +el.max;
+  let v = +el.value; try { const st = parseFloat(localStorage.getItem(key)); if (isFinite(st)) v = Math.max(lo, Math.min(hi, st)); } catch (_) {}
+  el.value = v; out.textContent = fmt(v); set(v);
+  el.addEventListener('input', () => { const n = +el.value; out.textContent = fmt(n); set(n); try { localStorage.setItem(key, String(n)); } catch (_) {} });
 }
 const shadowFocus = new THREE.Vector3(1e9, 0, 0), shadowCentre = new THREE.Vector3(); let shadowExt = 0, mmT = 0;
 setSun(15);
