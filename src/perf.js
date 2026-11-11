@@ -131,13 +131,16 @@ export class DistanceCuller {
     const c = bs.center.clone().applyMatrix4(obj.matrixWorld);
     this.items.push({ obj, c, r: bs.radius, d: maxDist });
   }
-  /** Returns true when visibility changed (the shadow map then needs a refresh). */
-  update(camPos, force = false) {
+  /**
+   * Returns true when visibility changed (the shadow map then needs a refresh). With `within`, only changes closer
+   * than that to the camera count: what pops in or out beyond the shadow map does not need it redrawn.
+   */
+  update(camPos, force = false, within = Infinity) {
     if (!force && camPos.distanceToSquared(this.last) < 16) return false;   // re-check after 4 m of movement
     this.last.copy(camPos); let changed = false;
     for (const it of this.items) {
-      const v = !it.obj.userData.layerOff && camPos.distanceTo(it.c) - it.r < it.d * this.scale;
-      if (it.obj.visible !== v) { it.obj.visible = v; changed = true; }
+      const d = camPos.distanceTo(it.c) - it.r, v = !it.obj.userData.layerOff && d < it.d * this.scale;
+      if (it.obj.visible !== v) { it.obj.visible = v; if (d < within) changed = true; }
     }
     return changed;
   }

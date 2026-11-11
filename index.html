@@ -339,10 +339,16 @@ controls.addEventListener('start', () => { anim = null; });
 
 const sky = new Sky(); sky.scale.setScalar(20000); scene.add(sky);
 const su = sky.material.uniforms; su.turbidity.value = 3.2; su.rayleigh.value = 1.9; su.mieCoefficient.value = 0.004; su.mieDirectionalG.value = 0.82;
-const sunDir = new THREE.Vector3();
+const sunDir = new THREE.Vector3(), lightRight = new THREE.Vector3(), lightUp = new THREE.Vector3();   // sun direction and the shadow camera's axes
 const hemi = new THREE.HemisphereLight(0xe6e2d6, 0x7a6248, 0.9); scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xfff1dc, 3.0); sun.castShadow = true;
-sun.shadow.mapSize.set(LITE ? 1024 : isTouch ? 2048 : 4096, LITE ? 1024 : isTouch ? 2048 : 4096); sun.shadow.bias = -0.0003; sun.shadow.normalBias = 0.5;
+// v1.1: the Game mode uses a smaller map (2048², phones 1024²: over its 300 m that is still ~15 cm / ~29 cm a texel)
+const SHADOW_SIZE = LITE ? 1024 : isTouch ? 2048 : 4096, SHADOW_SIZE_GAME = LITE || isTouch ? 1024 : 2048;
+function setShadowMapSize(n) {
+  if (sun.shadow.mapSize.x === n) return;
+  sun.shadow.mapSize.set(n, n); if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; } sun.shadow.needsUpdate = true;
+}
+sun.shadow.mapSize.set(SHADOW_SIZE, SHADOW_SIZE); sun.shadow.bias = -0.0003; sun.shadow.normalBias = 0.5;
 // v1.0: the shadow map is redrawn only when something that casts a shadow or the shadow camera moved (see the loop),
 // not every frame: it was a second full render of ~1.1 M triangles at 4096² each frame.
 sun.shadow.autoUpdate = false; sun.shadow.needsUpdate = true;
@@ -357,6 +363,7 @@ function setSun(h) {
   sunHour = h;
   const t = (h - 13) / 6.6, az = THREE.MathUtils.degToRad(180 + t * 78), el = THREE.MathUtils.degToRad(Math.max(-2, 44 * Math.cos(t * Math.PI / 2)));
   sunDir.set(Math.cos(el) * Math.sin(az), Math.sin(el), -Math.cos(el) * Math.cos(az));
+  lightRight.set(0, 1, 0).cross(sunDir).normalize(); lightUp.crossVectors(sunDir, lightRight);
   su.sunPosition.value.copy(sunDir); for (const k of ['turbidity', 'rayleigh']) envSky.material.uniforms[k].value = su[k].value; envSky.material.uniforms.sunPosition.value.copy(sunDir);
   // the environment map must not contain the sun disc (the directional light is the sun), otherwise shadows wash out
   envSky.material.uniforms.mieCoefficient.value = 0.0008; envSky.material.uniforms.mieDirectionalG.value = 0.5;
@@ -806,7 +813,7 @@ function setMode(m) {
   }
   // phones: render the game at a lower resolution so it stays smooth with many bots
   if (isTouch && !LITE && (m === 'game') !== (prev === 'game')) perf.reset();   // basePixelRatio() depends on the mode
-  sun.shadow.needsUpdate = true;
+  setShadowMapSize(m === 'game' ? SHADOW_SIZE_GAME : SHADOW_SIZE); sun.shadow.needsUpdate = true;
   if (m === 'game') { if (!game) game = createGame({ scene, camera, P, D, terrH, surfaceAt, pushOut, kd, isTouch, touchIn, EYE, village: VILLAGE }); game.start();
     if (isTouch && innerHeight > innerWidth && !rotateTold) { rotateTold = true; toast('Turn your phone sideways for the best view'); toastT = 3.5; } }
   else if (prev === 'game' && game) game.stop();
@@ -883,7 +890,7 @@ for (const [id, k, set] of [['optFps', 'kk_fps', v => { perf.visible = v; }], ['
   const el = document.getElementById(id); el.checked = loadPref(k, el.checked); set(el.checked);
   el.addEventListener('change', e => { set(e.target.checked); savePref(k, e.target.checked); });
 }
-const shadowFocus = new THREE.Vector3(1e9, 0, 0); let shadowExt = 0, mmT = 0;
+const shadowFocus = new THREE.Vector3(1e9, 0, 0), shadowCentre = new THREE.Vector3(); let shadowExt = 0, mmT = 0;
 setSun(15);
 const camTarget = new THREE.Vector3(), camPos = new THREE.Vector3();
 let last = performance.now(), last0 = last;
@@ -928,15 +935,25 @@ renderer.setAnimationLoop(now => {
     carYawOff *= Math.exp(-dt * (lookId === null ? 2 : 0)); carPitchOff *= Math.exp(-dt * (lookId === null ? 2 : 0));
   }
   // small village details and far grass patches: shown / hidden by distance (re-checked every 4 m of camera movement)
-  const cullChanged = culler.update(camera.position); if (cullChanged) sun.shadow.needsUpdate = true;
   // shadow camera follows the focus. v1.0: the shadow map is static and redrawn only when the focus has moved a few
   // metres (6 m on foot, 4 % of the view size in orbit), the view size changed, the Toros drives (it casts a shadow),
   // or something else asked for it (time of day, layers, culling). Light, camera and map always change together.
-  const ext = mode === 'orbit' ? Math.min(900, Math.max(150, camera.position.distanceTo(focus) * 1.2)) : 140;
-  const step = mode === 'orbit' ? ext * 0.04 : 6;
+  // v1.1, Game mode: the map covers 150 m around the player and is redrawn every 24 m (about every 3 s at a run, it
+  // was every 6 m = 0.75 s), and its camera moves in whole texels, so the shadow edges do not crawl when it is redrawn.
+  const inGame = mode === 'game';
+  const ext = mode === 'orbit' ? Math.min(900, Math.max(150, camera.position.distanceTo(focus) * 1.2)) : inGame ? 150 : 140;
+  const step = mode === 'orbit' ? ext * 0.04 : inGame ? 24 : 6;
+  // small village details and far grass patches: shown / hidden by distance (re-checked every 4 m of camera movement);
+  // the shadow map only needs a refresh when something inside it appeared or went
+  const cullChanged = culler.update(camera.position, false, ext); if (cullChanged) sun.shadow.needsUpdate = true;
   if (sun.shadow.needsUpdate || mode === 'car' || shadowFocus.distanceToSquared(focus) > step * step || Math.abs(ext - shadowExt) > shadowExt * 0.08) {
     const sc = sun.shadow.camera; if (sc.right !== ext) { sc.left = -ext; sc.right = ext; sc.top = ext; sc.bottom = -ext; sc.near = 1; sc.far = 4000; sc.updateProjectionMatrix(); }
-    sun.target.position.copy(focus); sun.position.copy(focus).addScaledVector(sunDir, 1500);
+    shadowCentre.copy(focus);
+    if (inGame) {   // snap the centre to the texel grid of the light (its right / up axes)
+      const texel = 2 * ext / sun.shadow.mapSize.x, a = focus.dot(lightRight), b = focus.dot(lightUp);
+      shadowCentre.addScaledVector(lightRight, Math.round(a / texel) * texel - a).addScaledVector(lightUp, Math.round(b / texel) * texel - b);
+    }
+    sun.target.position.copy(shadowCentre); sun.position.copy(shadowCentre).addScaledVector(sunDir, 1500);
     shadowFocus.copy(focus); shadowExt = ext; sun.shadow.needsUpdate = true;
   }
   const shadowRedrawn = sun.shadow.needsUpdate; if (shadowRedrawn) perf.shadowRedrawn();
