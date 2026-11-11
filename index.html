@@ -306,6 +306,7 @@ import { buildVillageLayout, buildCentreLayout, roadSamples, squareSamples, cars
 import { pruneOldVillage, pruneRocks, LIFT } from './src/village.js';
 import { createGame } from './src/game.js';
 import { PERF, DistanceCuller, createPerfMeter } from './src/perf.js';
+import { parseBench, createBench } from './src/bench.js';
 
 const POIS = [{"id": "kopru", "label": "Çeşnigir Bridge", "kind": "tarihi", "pos": [-377, 16, -277]}, {"id": "viyaduk", "label": "D.260 viaduct", "kind": "yol", "pos": [-539, 22, -105]}, {"id": "d260a", "label": "D.260", "kind": "yon", "pos": [-951, 35, -319]}, {"id": "d260b", "label": "D.260", "kind": "yon", "pos": [154, 36, 568]}, {"id": "karakecili", "label": "To Karakeçili", "kind": "yon", "pos": [-825, 21, -209]}, {"id": "gezi", "label": "Promenade", "kind": "yer", "pos": [-267, 14, -57]}, {"id": "seyir", "label": "Viewpoint rock", "kind": "yer", "pos": [-292, 24, -338]}, {"id": "iskele", "label": "Boat pier", "kind": "yer", "pos": [-305, 9, -367]}, {"id": "kanyon", "label": "Çeşnigir Canyon", "kind": "yer", "pos": [-277, 55, -602]}, {"id": "nehir", "label": "Kızılırmak · Kapulukaya Reservoir", "kind": "su", "pos": [-318, 8, 331]}];
 const isTouch = matchMedia('(pointer: coarse)').matches;
@@ -345,6 +346,8 @@ sun.shadow.mapSize.set(LITE ? 1024 : isTouch ? 2048 : 4096, LITE ? 1024 : isTouc
 // v1.0: the shadow map is redrawn only when something that casts a shadow or the shadow camera moved (see the loop),
 // not every frame: it was a second full render of ~1.1 M triangles at 4096² each frame.
 sun.shadow.autoUpdate = false; sun.shadow.needsUpdate = true;
+// v1.1: count the shadow pass too (three.js resets the counters after it): the loop resets them once per frame
+renderer.info.autoReset = false;
 scene.add(sun, sun.target);
 scene.fog = new THREE.FogExp2(0xcfd9df, 0.00007);
 const pmrem = new THREE.PMREMGenerator(renderer);
@@ -420,7 +423,7 @@ function pushOut(p, r) {
 // ---------- model ----------
 const layers = { bina: [], agac: [], yol: [] };
 const culler = new DistanceCuller();   // v1.0: hides small village details and far grass patches (src/perf.js)
-let waterMat = null, terrainMesh = null, realism = null, VILLAGE = null;
+let waterMat = null, terrainMesh = null, realism = null, VILLAGE = null, sceneReady = false;
 function mergeByMaterial(group) {
   group.updateMatrixWorld(true);
   const buckets = new Map();
@@ -512,7 +515,7 @@ loadAll().then(gltf => {
     .then(r => { realism = r; waterMat = null; culler.update(camera.position, true); sun.shadow.needsUpdate = true; })
     .catch(err => console.error('realism layer failed, falling back to base materials', err));
 }).then(() => {
-  document.getElementById('loading').remove();
+  document.getElementById('loading').remove(); sceneReady = true;
 }).catch(err => { document.getElementById('loading').textContent = 'The model could not be loaded. Please reload the page.'; console.error(err); });
 
 // layer toggles: userData.layerOff keeps the distance culler from showing a mesh whose layer is switched off
@@ -885,10 +888,16 @@ setSun(15);
 const camTarget = new THREE.Vector3(), camPos = new THREE.Vector3();
 let last = performance.now(), last0 = last;
 if (LITE) window.__dbg = { CS, carStep, keys, touchIn, P, walkStep, surfaceAt, get mode() { return mode; } };
+// v1.1: #bench / #bench=50 runs the game-mode benchmark once the model is in (src/bench.js)
+const BENCH = parseBench(location.hash);
+const bench = BENCH ? createBench({ cfg: BENCH, renderer, camera, P, touchIn, surfaceAt, setMode, getGame: () => game, perf, shadowMapSize: () => sun.shadow.mapSize.x }) : null;
+let benchWait = 30;   // frames to let the scene settle after loading before the run starts
 renderer.setAnimationLoop(now => {
+  const tFrame = performance.now();
+  if (bench && sceneReady && !bench.active && !bench.done && --benchWait <= 0) { bench.begin(); last = now; }
   // real elapsed time (capped at 0.25 s): on slow devices a 0.05 s cap made walking crawl at low frame rates
-  const dt = Math.min(0.25, (now - last) / 1000); last = now;
-  perf.frame(now, (now - last0) / 1000); last0 = now;
+  const frameMs = now - last0, dt = bench && bench.step ? bench.step : Math.min(0.25, (now - last) / 1000); last = now;
+  perf.frame(now, frameMs / 1000); last0 = now;
   // the minimap is redrawn ~30 times a second, not every frame (a 340 px canvas rotate + clip + drawImage)
   mmT -= dt; const mmDue = mmT <= 0; if (mmDue) mmT = 1 / 30;
   if (waterMat) { waterMat.normalMap.offset.x = now * 0.000006; waterMat.normalMap.offset.y = now * 0.000004; }
@@ -901,6 +910,7 @@ renderer.setAnimationLoop(now => {
     controls.update(); focus = controls.target;
   } else if (mode === 'walk' || mode === 'fly') { const n = Math.ceil(dt / 0.05); for (let i = 0; i < n; i++) walkStep(dt / n, mode === 'fly'); focus = camera.position; if (mmDue) drawMinimap(P.x, P.z, -P.yaw); }
   else if (mode === 'game') {
+    if (bench) bench.pre(dt);
     const n = Math.ceil(dt / 0.05); for (let i = 0; i < n; i++) walkStep(dt / n, false);
     game.update(dt, now); focus = camera.position;
     if (mmDue) { drawMinimap(P.x, P.z, -P.yaw);
@@ -918,7 +928,7 @@ renderer.setAnimationLoop(now => {
     carYawOff *= Math.exp(-dt * (lookId === null ? 2 : 0)); carPitchOff *= Math.exp(-dt * (lookId === null ? 2 : 0));
   }
   // small village details and far grass patches: shown / hidden by distance (re-checked every 4 m of camera movement)
-  if (culler.update(camera.position)) sun.shadow.needsUpdate = true;
+  const cullChanged = culler.update(camera.position); if (cullChanged) sun.shadow.needsUpdate = true;
   // shadow camera follows the focus. v1.0: the shadow map is static and redrawn only when the focus has moved a few
   // metres (6 m on foot, 4 % of the view size in orbit), the view size changed, the Toros drives (it casts a shadow),
   // or something else asked for it (time of day, layers, culling). Light, camera and map always change together.
@@ -929,7 +939,10 @@ renderer.setAnimationLoop(now => {
     sun.target.position.copy(focus); sun.position.copy(focus).addScaledVector(sunDir, 1500);
     shadowFocus.copy(focus); shadowExt = ext; sun.shadow.needsUpdate = true;
   }
-  renderer.render(scene, camera); placeLabels();
+  const shadowRedrawn = sun.shadow.needsUpdate; if (shadowRedrawn) perf.shadowRedrawn();
+  const tRender = performance.now();
+  renderer.info.reset(); renderer.render(scene, camera); placeLabels();
+  if (bench && bench.active) bench.post(frameMs, tFrame, tRender, shadowRedrawn, cullChanged);
 });
 </script>
 </body>

@@ -499,6 +499,7 @@ export function createGame(ctx) {
   }
   function hurtPlayer(dmg, from) {
     if (G.dead > 0) return;
+    if (G.god) dmg = Math.min(dmg, G.health - 1);   // benchmark run (src/bench.js): hit, never killed
     G.health -= dmg; G.hurt = 1;
     if (G.health > 0) sound('hurt');
     else { G.health = 0; G.dead = 3.5; G.deaths++; setScope(false); sound('death'); feed(`${from.name} seni vurdu — ${WEAPONS[from.weapon].name}`); }
@@ -630,5 +631,5 @@ export function createGame(ctx) {
     if (e.code === 'Enter' && G.roundOver) newRound();
   });
 
-  return { start, stop, update, drawMinimap, setBots, setPrimary, setDifficulty, fire, reload, setWeapon, state: G, newRound, WEAPONS };
+  return { start, stop, update, drawMinimap, setBots, setPrimary, setDifficulty, fire, reload, setWeapon, setScope, state: G, newRound, WEAPONS };
 }
