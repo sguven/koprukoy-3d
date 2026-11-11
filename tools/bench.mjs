@@ -86,7 +86,7 @@ console.log(`shaders compiled in the run ${res.shadersCompiled} · enter ${res.e
 if (res.heap) console.log(`heap ${res.heap.startMB} → ${res.heap.endMB} MB · allocated ${res.heap.allocatedMB} MB (${res.heap.allocMBperSec} MB/s) · GC drops ${res.heap.gcDrops}`);
 if (res.stuck) console.log(`route: stepped past an obstacle ${res.stuck}×`);
 console.log('longest frames:'); for (const l of res.longest) console.log(`  t=${l.t}s ${l.ms} ms (game ${l.sim}, render ${l.render}) [${l.tags.join(' ')}]` + (l.why ? '  ← ' + l.why : ''));
-if (res.trace) { console.log('main-thread self time over the whole run:'); for (const [n, ms, pc] of res.trace.top) console.log(`  ${String(ms).padStart(8)} ms ${String(pc).padStart(5)} %  ${n}`); console.log(`GC inside frames: ${res.trace.gcMs} ms in ${res.trace.gcCount} collections`); }
+if (res.trace) { console.log('main-thread self time over the whole run:'); for (const [n, ms, pc] of res.trace.top) console.log(`  ${String(ms).padStart(8)} ms ${String(pc).padStart(5)} %  ${n}`); console.log(`GC inside frames: ${res.trace.gcMs} ms in ${res.trace.gcCount} collections`); console.log('page work (ms, count):', JSON.stringify(res.trace.dom), 'placeLabels', res.trace.placeLabelsMs, 'updateHud', res.trace.updateHudMs, 'botStep', res.trace.botStepMs); }
 if (res.alloc) { console.log('allocations by function during the run (MB):'); for (const [k, v] of res.alloc) console.log(`  ${String(v).padStart(8)}  ${k}`); }
 if (out) { fs.mkdirSync(path.dirname(path.resolve(out)), { recursive: true }); fs.writeFileSync(out, JSON.stringify(res, null, 1)); console.log('saved', out); }
 
@@ -122,5 +122,9 @@ function analyseTrace(evs, res) {
   }
   const first = marks.get(0), last = marks.get(res.frames - 1), all = span(first, last), busy = all.self.filter(x => !/^\((idle|program)\)/.test(x[0])), sum = busy.reduce((s, x) => s + x[1], 0);
   const inRun = gcs.filter(g => g.ts >= first && g.ts < last);
-  return { top: busy.slice(0, 25).map(x => [x[0], +x[1].toFixed(1), +(x[1] / sum * 100).toFixed(1)]), byOwner: all.by.slice(0, 15).map(x => [x[0], +x[1].toFixed(1)]), gcMs: +inRun.reduce((s, g) => s + g.dur / 1000, 0).toFixed(1), gcCount: inRun.length };
+  // the browser's own page work caused by DOM / style writes (HUD, labels, FPS meter)
+  const dom = {}; for (const e of evs) if (e.ph === 'X' && e.pid === pid && e.tid === tid && e.ts >= first && e.ts < last && /^(UpdateLayoutTree|Layout|PrePaint|Paint|Layerize|Commit|ParseHTML|ScheduleStyleRecalculation)$/.test(e.name)) { const d = dom[e.name] || (dom[e.name] = [0, 0]); d[0] += e.dur / 1000; d[1]++; }
+  const fn = (re) => +busy.filter(x => re.test(x[0])).reduce((s2, x) => s2 + x[1], 0).toFixed(1);
+  return { top: busy.slice(0, 25).map(x => [x[0], +x[1].toFixed(1), +(x[1] / sum * 100).toFixed(1)]), byOwner: all.by.slice(0, 15).map(x => [x[0], +x[1].toFixed(1)]), gcMs: +inRun.reduce((s, g) => s + g.dur / 1000, 0).toFixed(1), gcCount: inRun.length,
+    dom: Object.fromEntries(Object.entries(dom).map(([k, v]) => [k, [+v[0].toFixed(1), v[1]]])), placeLabelsMs: fn(/^placeLabels/), updateHudMs: fn(/^updateHud/), botStepMs: fn(/^botStep/) };
 }
