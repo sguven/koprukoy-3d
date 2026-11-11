@@ -430,7 +430,7 @@ function pushOut(p, r) {
 // ---------- model ----------
 const layers = { bina: [], agac: [], yol: [] };
 const culler = new DistanceCuller();   // v1.0: hides small village details and far grass patches (src/perf.js)
-let waterMat = null, terrainMesh = null, realism = null, VILLAGE = null, sceneReady = false;
+let waterMat = null, terrainMesh = null, realism = null, VILLAGE = null, sceneReady = false, warming = false;
 function mergeByMaterial(group) {
   group.updateMatrixWorld(true);
   const buckets = new Map();
@@ -522,8 +522,35 @@ loadAll().then(gltf => {
     .then(r => { realism = r; waterMat = null; culler.update(camera.position, true); sun.shadow.needsUpdate = true; })
     .catch(err => console.error('realism layer failed, falling back to base materials', err));
 }).then(() => {
+  // v1.1: build the Game's bots, weapons and effects now and compile every shader of the scene while "Loading…" is
+  // still up, so that nothing compiles in the middle of a round (the first look at a material, the first shot, the
+  // first bot used to stall a frame for 20–200 ms). The loop draws nothing until the shaders are ready (8 s at most).
+  try { game = createGame({ scene, camera, P, D, terrH, surfaceAt, pushOut, kd, isTouch, touchIn, EYE, village: VILLAGE }); } catch (e) { console.error(e); }
+  warming = true;
+  return Promise.race([renderer.compileAsync(scene, camera), new Promise(r => setTimeout(r, 8000))]).catch(() => {});
+}).then(() => {
+  warming = false;
+  try { warmScene(); } catch (e) { console.error(e); }
   document.getElementById('loading').remove(); sceneReady = true;
 }).catch(err => { document.getElementById('loading').textContent = 'The model could not be loaded. Please reload the page.'; console.error(err); });
+
+// v1.1: one frame, still behind "Loading…", that draws the whole map from above with every distance-culled detail,
+// the bots, weapons and effects switched on and the shadow map stretched over all of it. Whatever the renderer
+// prepares at the first sight of a thing (vertex buffers, textures, the shadow pass's depth shaders, each program's
+// uniform table) is prepared here instead of in the frame where the player first turns towards it.
+function warmScene() {
+  const wc = new THREE.PerspectiveCamera(70, 1, 5, 20000), cx = X0 + TSZ / 2, cz = Z0 + TSZ / 2, sc = sun.shadow.camera, half = TSZ * 0.75;
+  wc.position.set(cx, 2600, cz); wc.lookAt(cx, 0, cz - 0.01); wc.updateMatrixWorld();
+  culler.scale = 1e6; culler.update(wc.position, true);
+  if (game) game.warm(true);
+  sc.left = -half; sc.right = half; sc.top = half; sc.bottom = -half; sc.near = 1; sc.far = 4000; sc.updateProjectionMatrix();
+  wc.getWorldPosition(sun.target.position).setY(0); sun.position.copy(sun.target.position).addScaledVector(sunDir, 1500); sun.shadow.needsUpdate = true;
+  renderer.render(scene, wc);
+  for (const pr of renderer.info.programs) { pr.getUniforms(); pr.getAttributes(); }
+  if (game) game.warm(false);
+  culler.scale = 1; culler.update(camera.position, true);
+  shadowExt = 0; shadowFocus.set(1e9, 0, 0); sun.shadow.needsUpdate = true;   // the loop sets the shadow camera up again
+}
 
 // layer toggles: userData.layerOff keeps the distance culler from showing a mesh whose layer is switched off
 const bind = (id, k) => document.getElementById(id).addEventListener('change', e => {
@@ -900,8 +927,9 @@ const BENCH = parseBench(location.hash);
 const bench = BENCH ? createBench({ cfg: BENCH, renderer, camera, P, touchIn, surfaceAt, setMode, getGame: () => game, perf, shadowMapSize: () => sun.shadow.mapSize.x }) : null;
 let benchWait = 30;   // frames to let the scene settle after loading before the run starts
 renderer.setAnimationLoop(now => {
-  const tFrame = performance.now();
+  if (warming) return;   // shaders are compiling in the background: drawing now would make each one block
   if (bench && sceneReady && !bench.active && !bench.done && --benchWait <= 0) { bench.begin(); last = now; }
+  const tFrame = performance.now();
   // real elapsed time (capped at 0.25 s): on slow devices a 0.05 s cap made walking crawl at low frame rates
   const frameMs = now - last0, dt = bench && bench.step ? bench.step : Math.min(0.25, (now - last) / 1000); last = now;
   perf.frame(now, frameMs / 1000); last0 = now;

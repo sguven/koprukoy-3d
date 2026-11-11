@@ -109,7 +109,7 @@ function analyseTrace(evs, res) {
   for (const l of res.longest) {
     const a = marks.get(l.frame - 1), b = marks.get(l.frame); if (a === undefined || b === undefined) continue;
     const s = span(a, b);
-    l.why = s.self.filter(x => !/^\((idle|program)\)/.test(x[0])).slice(0, 3).map(x => `${x[0]} ${x[1].toFixed(1)} ms`).join(', ') + (s.gc > 0.5 ? `, GC ${s.gc.toFixed(1)} ms` : '');
+    l.why = s.self.filter(x => !/^\((idle|program)\)/.test(x[0])).slice(0, +(env.WHY || 3)).map(x => `${x[0]} ${x[1].toFixed(1)} ms`).join(', ') + (s.gc > 0.5 ? `, GC ${s.gc.toFixed(1)} ms` : '');
   }
   const first = marks.get(0), last = marks.get(res.frames - 1), all = span(first, last), busy = all.self.filter(x => !/^\((idle|program)\)/.test(x[0])), sum = busy.reduce((s, x) => s + x[1], 0);
   const inRun = gcs.filter(g => g.ts >= first && g.ts < last);

@@ -29,7 +29,7 @@ export function createGame(ctx) {
   const joyLen = () => Math.hypot(touchIn.jx, touchIn.jy);
   const isMoving = () => kd('KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight') || joyLen() > 0.2;
   const isRunning = () => kd('ShiftLeft', 'ShiftRight') || joyLen() > 0.92;
-  const rnd = Math.random;
+  const rnd = () => Math.random();   // looked up at each call: the benchmark swaps in a seeded generator
   const G = {
     on: false, bots: [], botCount: 8, difficulty: 1.0, primary: 'ak47',
     health: 100, weapon: 'ak47', lastWeapon: 'deagle', ammo: {}, reloading: 0, fireCd: 0, swapT: 0, heat: 0, scoped: false,
@@ -144,6 +144,21 @@ export function createGame(ctx) {
   const getDeath = () => deathDec || (deathDec = deathFetch.then(a => a ? new Promise(res => ac.decodeAudioData(a, res, () => res(null))) : null));
   const playDeath = (buf) => { if (!buf || G.dead <= 0) return; const s = ac.createBufferSource(), g = ac.createGain(); s.buffer = buf; g.gain.value = 1; s.connect(g); g.connect(ac.destination); s.start(); };
   const noiseBufs = new Map();
+  const noiseBuf = (dur, decay) => {
+    const nk = dur + '|' + decay; let buf = noiseBufs.get(nk);
+    if (!buf) { const len = Math.floor(ac.sampleRate * dur); buf = ac.createBuffer(1, len, ac.sampleRate); const d = buf.getChannelData(0); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay); noiseBufs.set(nk, buf); }
+    return buf;
+  };
+  // v1.1: the audio context and every noise shape are made when the game starts (the click on "Game"), not at the
+  // first shot heard in the middle of a fight (20+ ms)
+  const warmAudio = () => {
+    try {
+      if (!ac) ac = new (window.AudioContext || window.webkitAudioContext)();
+      if (ac.state === 'suspended') ac.resume();
+      for (const [dur, decay] of [[0.5, 1.8], [0.25, 2.2], [0.12, 3], [0.08, 4], [0.18, 2.5], [0.1, 3]]) noiseBuf(dur, decay);
+      getDeath();
+    } catch (e) { /* no audio */ }
+  };
   const sound = (kind, dist = 0, weapon = 'ak47') => {
     try {
       if (!ac) ac = new (window.AudioContext || window.webkitAudioContext)();
@@ -152,9 +167,7 @@ export function createGame(ctx) {
       getDeath();
       const t = ac.currentTime, att = 1 / (1 + dist / 30);
       const noise = (dur, cutoff, gain, decay = 2.5) => {
-        // v1.0: one noise buffer per shape, made once (a 50-bot fight made a new buffer for every shot heard)
-        const nk = dur + '|' + decay; let buf = noiseBufs.get(nk);
-        if (!buf) { const len = Math.floor(ac.sampleRate * dur); buf = ac.createBuffer(1, len, ac.sampleRate); const d = buf.getChannelData(0); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay); noiseBufs.set(nk, buf); }
+        const buf = noiseBuf(dur, decay);   // v1.0: one noise buffer per shape, made once
         const n = ac.createBufferSource();
         n.buffer = buf; const f = ac.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = cutoff; const g = ac.createGain(); g.gain.value = gain;
         n.connect(f); f.connect(g); g.connect(ac.destination); n.start(t);
@@ -425,7 +438,8 @@ export function createGame(ctx) {
   }
 
   // ------------------------------------------------------------------ player weapons
-  const vm = new THREE.Group();   // view model holder, child of the camera
+  const vm = new THREE.Group(); vm.visible = false;   // view model holder, child of the camera (shown while playing)
+  if (!camera.parent) scene.add(camera); camera.add(vm);
   const models = {}; for (const k in WEAPONS) { models[k] = weaponModel(k); models[k].visible = false; vm.add(models[k]); }
   const vmFlash = flashSprite(0.35); vm.add(vmFlash);
   const REST = { ak47: [0.26, -0.24, -0.5], m4a1: [0.26, -0.24, -0.5], mp5: [0.24, -0.22, -0.42], awp: [0.24, -0.25, -0.5], deagle: [0.2, -0.23, -0.56], knife: [0.22, -0.22, -0.4] };
@@ -436,21 +450,30 @@ export function createGame(ctx) {
   }
   function setScope(on) {
     if (on === G.scoped) return;
-    G.scoped = on; camera.fov = on ? 14 : 55; camera.updateProjectionMatrix(); el('ghScope').style.display = on ? 'block' : 'none'; vm.visible = !on; scopeBtn.classList.toggle('on', on);
+    G.scoped = on; camera.fov = on ? 14 : 55; camera.updateProjectionMatrix(); el('ghScope').style.display = on ? 'block' : 'none'; vm.visible = !on && G.on; scopeBtn.classList.toggle('on', on);
   }
-  const fx = [];
-  // v1.0: tracers and puffs come from small pools (they used to allocate a geometry and clone a material per shot)
-  const tracerPool = [], puffPool = [];
+  // v1.1: tracers and dust / blood puffs are fixed rings of objects that stay in the scene (hidden when idle), each
+  // puff with its own material made once: a shot allocates nothing, adds nothing to the scene and compiles no shader.
+  // When every one is in use the oldest is taken over.
+  const TRACERS = 48, PUFFS = 32, tracers = [], puffs = []; let tracerI = 0, puffI = 0;
+  for (let i = 0; i < TRACERS; i++) {
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+    const l = new THREE.Line(g, tracerMat); l.frustumCulled = false; l.visible = false; l.userData.t = 0; group.add(l); tracers.push(l);
+  }
+  for (let i = 0; i < PUFFS; i++) { const s = new THREE.Sprite(puffMat.clone()); s.visible = false; s.frustumCulled = false; s.userData.t = 0; group.add(s); puffs.push(s); }
   function tracer(a, b) {
-    let l = tracerPool.pop();
-    if (!l) { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3)); l = new THREE.Line(g, tracerMat); l.frustumCulled = false; l.userData.pool = tracerPool; }
+    const l = tracers[tracerI]; tracerI = (tracerI + 1) % TRACERS;
     const p = l.geometry.attributes.position; p.setXYZ(0, a.x, a.y, a.z); p.setXYZ(1, b.x, b.y, b.z); p.needsUpdate = true;
-    group.add(l); fx.push({ obj: l, t: 0.05 });
+    l.visible = true; l.userData.t = 0.05;
   }
   function puff(x, y, z, size = 0.6, m = puffMat) {
-    let s = puffPool.pop(); if (!s) { s = new THREE.Sprite(m.clone()); s.userData.pool = puffPool; }
+    const s = puffs[puffI]; puffI = (puffI + 1) % PUFFS;
     s.material.color.copy(m.color); s.material.opacity = m.opacity;
-    s.position.set(x, y, z); s.scale.setScalar(size); group.add(s); fx.push({ obj: s, t: 0.35, grow: true });
+    s.position.set(x, y, z); s.scale.setScalar(size); s.visible = true; s.userData.t = 0.35;
+  }
+  function updateFx(dt) {
+    for (let i = 0; i < TRACERS; i++) { const l = tracers[i]; if (l.visible && (l.userData.t -= dt) <= 0) l.visible = false; }
+    for (let i = 0; i < PUFFS; i++) { const s = puffs[i]; if (!s.visible) continue; const t = s.userData.t -= dt; s.scale.multiplyScalar(1 + dt * 4); s.material.opacity = Math.max(0, t * 2); if (t <= 0) s.visible = false; }
   }
   function fire() {
     const W = WEAPONS[G.weapon], A = G.ammo[G.weapon];
@@ -574,8 +597,7 @@ export function createGame(ctx) {
   function start() {
     G.on = true; group.visible = true; hud.style.display = 'block';
     if (isTouch) for (const b of [fireBtn, reloadBtn, jumpBtn]) b.classList.add('show');
-    if (!camera.parent) scene.add(camera);
-    camera.add(vm);
+    vm.visible = true; warmAudio();
     if (!G.bots.length) for (let i = 0; i < G.botCount; i++) G.bots.push(spawnBot(i));
     newRound();
   }
@@ -584,7 +606,14 @@ export function createGame(ctx) {
     for (const b of G.bots) respawnBot(b);
   }
   function stop() {
-    G.on = false; group.visible = false; hud.style.display = 'none'; for (const b of touchBtns) b.classList.remove('show'); setScope(false); camera.remove(vm); G.firing = false; fireId = null; touchIn.jump = false; if (cross) { cross.classList.remove('off'); cross.style.removeProperty('--gap'); } hudCache.clear();
+    G.on = false; group.visible = false; hud.style.display = 'none'; for (const b of touchBtns) b.classList.remove('show'); setScope(false); vm.visible = false; for (const l of tracers) l.visible = false; for (const p of puffs) p.visible = false; G.firing = false; fireId = null; touchIn.jump = false; if (cross) { cross.classList.remove('off'); cross.style.removeProperty('--gap'); } hudCache.clear();
+  }
+  /** Loading: show (then hide again) one of everything the game draws, so a frame rendered in between prepares it all. */
+  function warm(on) {
+    group.visible = on; vm.visible = on; vmFlash.visible = on;
+    for (const k in models) models[k].visible = on || (G.on && k === G.weapon);
+    for (const l of tracers) l.visible = on; for (const p of puffs) p.visible = on;
+    for (const k in IM) { IM[k].count = on ? 1 : 0; IM[k].visible = on; }
   }
   function setBots(n) { G.botCount = n; while (G.bots.length > n) { const b = G.bots.pop(); group.remove(b.mesh); } while (G.bots.length < n) G.bots.push(spawnBot(G.bots.length)); }
   function setPrimary(k) { if (!WEAPONS[k] || WEAPONS[k].slot !== 1) return; G.primary = k; if (G.on) { G.ammo[k] = { mag: WEAPONS[k].mag, reserve: WEAPONS[k].reserve }; setWeapon(k); } }
@@ -610,7 +639,7 @@ export function createGame(ctx) {
     vm.position.set(rx + Math.sin(G.bob) * 0.007 * (moving ? 1 : 0.3), ry + Math.abs(Math.cos(G.bob)) * 0.009 * (moving ? 1 : 0.3) - rel * 0.14 - swap * 0.35, rz + G.kick * 0.07 * W.kick);
     vm.rotation.set(0.02 - G.kick * 0.1 * W.kick + rel * 0.55 + swap * 0.6, 0.06 + (G.weapon === 'knife' ? -0.5 : 0) + G.kick * (G.weapon === 'knife' ? -0.8 : 0), rel * 0.2);
     vmFlash.visible = G.time - G.lastShot < 0.035 && !W.melee;
-    for (let i = fx.length - 1; i >= 0; i--) { const f = fx[i]; f.t -= dt; if (f.grow) { f.obj.scale.multiplyScalar(1 + dt * 4); f.obj.material.opacity = Math.max(0, f.t * 2); } if (f.t <= 0) { group.remove(f.obj); f.obj.userData.pool.push(f.obj); fx.splice(i, 1); } }
+    updateFx(dt);
     syncBotInstances();
     updateHud();
   }
@@ -631,5 +660,5 @@ export function createGame(ctx) {
     if (e.code === 'Enter' && G.roundOver) newRound();
   });
 
-  return { start, stop, update, drawMinimap, setBots, setPrimary, setDifficulty, fire, reload, setWeapon, setScope, state: G, newRound, WEAPONS };
+  return { start, stop, update, drawMinimap, setBots, setPrimary, setDifficulty, fire, reload, setWeapon, setScope, warm, state: G, newRound, WEAPONS };
 }

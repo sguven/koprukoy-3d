@@ -70,7 +70,7 @@ export function createBench(ctx) {
     P.x = ROUTE[0][0]; P.z = ROUTE[0][1]; P.y = surfaceAt(P.x, P.z).y; P.vy = 0; P.pitch = 0;
     heading = Math.atan2(-(ROUTE[1][0] - P.x), -(ROUTE[1][1] - P.z)); P.yaw = heading;
     prog0 = progPrev = renderer.info.programs.length; heap0 = heapPrev = mem ? heapNow() : 0;
-    active = true; wall0 = performance.now(); mark('enter');
+    active = true; wall0 = performance.now(); mark('enter'); if (cfg.marks) performance.mark('kkf-1');
     console.log(`[bench] start: ${cfg.bots} bots${cfg.step ? `, fixed step ${(cfg.step * 1000).toFixed(2)} ms` : ''}${cfg.sync ? ', gpu sync' : ''}`);
   }
 
