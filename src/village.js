@@ -482,9 +482,9 @@ export function buildVillage(ctx, layout, M) {
     const lx = X * c - Z * s, lz = X * s + Z * c;
     return Math.abs(lz) > Math.abs(lx) ? (lz > 0 ? '+z' : '-z') : (lx > 0 ? '+x' : '-x');
   }
-  /** The side of a house whose outward normal points closest to the world direction b.porch.dir ([x, z]). */
-  function porchSide(b) {
-    const c = Math.cos(b.yaw), s = Math.sin(b.yaw), [dx, dz] = b.porch.dir;
+  /** The side of a house whose outward normal points closest to the world direction dir ([x, z]; default b.porch.dir). */
+  function porchSide(b, dir) {
+    const c = Math.cos(b.yaw), s = Math.sin(b.yaw), [dx, dz] = dir || b.porch.dir;
     const n = { '+x': [c, -s], '-x': [-c, s], '+z': [s, c], '-z': [-s, -c] };
     return Object.keys(n).reduce((a, k) => (n[k][0] * dx + n[k][1] * dz > n[a][0] * dx + n[a][1] * dz ? k : a), '+x');
   }
@@ -497,7 +497,7 @@ export function buildVillage(ctx, layout, M) {
     const wallKey0 = b.wallKey || (b.kind === 'school' ? 'redWall' : b.kind === 'market' || b.kind === 'kahve' ? 'Duvar_Beyaz' : WALLS[Math.floor(rnd() * WALLS.length)]);
     const wallKey = b.ownWall || wallKey0;   // v0.9.7: an owner's colour replaces the draw but the draw is still made
     const roofKey = b.roof === 'm' ? (rnd() < 0.7 ? 'Cati_Sac_Gri' : 'Cati_Sac_Mavi') : TILES[Math.floor(rnd() * TILES.length)];
-    const add = (key, geo, m) => { if (m) geo.applyMatrix4(m); bat.add(key, geo, frame, bld); };
+    const add = (key, geo, m) => { if (m) geo.applyMatrix4(m); bat.add(key, geo, frame, bld); }, add0 = add;
     const front = frontSide(b), isBarn = !!b.barn;
     // plinth
     if (b.lowerFloor) lowerFloor();
@@ -597,6 +597,15 @@ export function buildVillage(ctx, layout, M) {
         add('railing', rail, fm);
         for (let i = 0; i <= steps; i += 4) add('railing', box(0.04, 0.95, 0.04, xs + go * i + 0.05, i * rise + 0.48, 1.0), fm);
       }
+      // v1.2 (owner): doors the owner pointed out — an entrance onto the terrace, a glass door onto the balcony.
+      // `at` = position along the side (0..1, same measure as a porch span); no random draws.
+      for (const od of b.doors || []) {
+        if (porchSide(b, od.dir) !== side) continue;
+        const x = -L / 2 + L * od.at, dw = od.glass ? 0.9 : 1.0;
+        const hy = y0 + 0.04 + 1.04;   // a hair above the floor line: a hole on the wall's edge is lost by the triangulator
+        holes.push({ x, y: hy, w: dw, h: 2.08 }); panes.push({ x, y: hy, w: dw, h: 2.08, door: true, glassDoor: !!od.glass });
+        if (!od.glass) add('step', box(dw + 0.3, 0.05, 0.3, x, y0 + 0.02, 0.12), fm);   // a stone threshold onto the terrace
+      }
       // the wall itself, with holes, and the reveals + panes
       add(wallKey, facadeWithHoles(L, y0, y1, 0, 1, holes), fm);
       for (const h of holes) {
@@ -647,11 +656,14 @@ export function buildVillage(ctx, layout, M) {
         add('metalDark', box(w + 2 * e, 0.06, 0.06, 0, ry - 0.03, -d / 2 - e));
       }
     }
-    if (b.porch) buildPorch();
+    if (b.porch) buildPorch(b.porch);
+    if (b.balc) buildPorch(b.balc);
     // v0.9.7 (owner): on one side the roof runs on over a sitting terrace — wooden posts, a concrete floor, a table
     // with white plastic chairs — and in front of it a grapevine (asma) on a timber pergola. No random draws.
-    function buildPorch() {
-      const P = b.porch, side = porchSide(b), L = side === '+z' || side === '-z' ? w : d, fm = faceMatrix(side, w, d);
+    // v1.2 (owner): with `balcony` set the same roof covers a balcony on the main floor over the lower storey —
+    // a cantilevered concrete slab with an iron railing instead of the stone-faced terrace, no table.
+    function buildPorch(P) {
+      const side = porchSide(b, P.dir), L = side === '+z' || side === '-z' ? w : d, fm = faceMatrix(side, w, d);
       const xa = -L / 2 + L * P.span[0], xb = -L / 2 + L * P.span[1], xm = (xa + xb) / 2, len = xb - xa, D = P.depth, V = P.vine || 0;
       const ry = y1 - 0.08, e = 0.55, th = 0.2, fy = y0 - 0.15, hash = (u, v) => { const t = Math.sin(u * 127.1 + v * 311.7 + b.x) * 43758.5453; return t - Math.floor(t); };
       const yRoof = (z) => ry - 0.02 - (z - e) * Math.tan(th);
@@ -660,11 +672,22 @@ export function buildVillage(ctx, layout, M) {
       sh.translate(xm, ry - 0.02 - rl / 2 * Math.sin(th), e + rl / 2 * Math.cos(th)); add(roofKey, sh, fm);
       add('woodRaw', box(len + 0.3, 0.18, 0.05, xm, yRoof(D + 0.35) - 0.08, D + 0.36), fm);
       // terrace slab, posts and the beam
-      add('rubble', boxY(len, D + 0.2, b.yLow - b.yTop - 0.3, fy - 0.12, xm, (D + 0.2) / 2), fm);   // stone-faced terrace
-      add('beton', boxY(len + 0.06, D + 0.26, fy - 0.12, fy, xm, (D + 0.2) / 2), fm);
-      const nP = Math.max(2, Math.round(len / 3.2) + 1);
-      for (let i = 0; i < nP; i++) { const x = xa + 0.15 + (len - 0.3) * i / (nP - 1); add('woodRaw', boxY(0.14, 0.14, fy, yRoof(D) - 0.1, x, D), fm); }
+      if (P.balcony) {
+        add('beton', boxY(len + 0.06, D + 0.1, fy - 0.2, fy, xm, (D + 0.1) / 2), fm);   // cantilevered slab
+        add('trim', box(len + 0.06, 0.05, 0.08, xm, fy - 0.03, D + 0.1), fm);          // slab edge
+        const rz = D - 0.05, rh = 1.0;
+        add('railing', box(len, 0.05, 0.05, xm, fy + rh, rz), fm); add('railing', box(len, 0.03, 0.03, xm, fy + 0.12, rz), fm);
+        for (const ex of [xa + 0.03, xb - 0.03]) { add('railing', box(0.05, 0.05, D, ex, fy + rh, D / 2), fm); add('railing', box(0.03, 0.03, D, ex, fy + 0.12, D / 2), fm); }
+        for (let x = xa + 0.06; x <= xb - 0.05; x += 0.13) add('railing', box(0.02, rh - 0.1, 0.02, x, fy + 0.07 + rh / 2, rz), fm);
+        for (let z = 0.15; z < D - 0.05; z += 0.13) for (const ex of [xa + 0.03, xb - 0.03]) add('railing', box(0.02, rh - 0.1, 0.02, ex, fy + 0.07 + rh / 2, z), fm);
+      } else {
+        add('rubble', boxY(len, D + 0.2, b.yLow - b.yTop - 0.3, fy - 0.12, xm, (D + 0.2) / 2), fm);   // stone-faced terrace
+        add('beton', boxY(len + 0.06, D + 0.26, fy - 0.12, fy, xm, (D + 0.2) / 2), fm);
+      }
+      const nP = Math.max(2, Math.round(len / 3.2) + 1), pw = P.balcony ? 0.1 : 0.14;
+      for (let i = 0; i < nP; i++) { const x = xa + 0.15 + (len - 0.3) * i / (nP - 1); add('woodRaw', boxY(pw, pw, fy, yRoof(D) - 0.1, x, D), fm); }
       add('woodRaw', box(len, 0.16, 0.14, xm, yRoof(D) - 0.15, D), fm);
+      if (P.balcony) return;
       // table with a cloth, four white plastic chairs
       const tx = xm, tz = D * 0.5, ty = fy + 0.75;
       add('woodRaw', box(1.5, 0.05, 0.85, tx, ty, tz), fm); add('canvas', box(1.56, 0.012, 0.91, tx, ty + 0.03, tz), fm);
@@ -700,6 +723,7 @@ export function buildVillage(ctx, layout, M) {
 
     // garden: wall or wire fence on the street side with a gate, and the plot trees
     if (!isBarn && b.wall && b.wall !== 'none' && b.front) {
+      const add = b.wallGone ? () => {} : add0;   // v1.2: a wall the owner removed still takes its random draws
       const L = front === '+z' || front === '-z' ? w : d, depth = front === '+z' || front === '-z' ? d : w;
       const hwRoad = roadDist(b.x, b.z).w / 2;
       const off = Math.min(b.front - hwRoad - 1.6, depth / 2 + 9);

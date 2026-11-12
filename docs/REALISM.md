@@ -36,6 +36,26 @@ Not modelled (transient in the photos): the opening's flower wreaths and the ext
 ![front](screenshots/v0.9.8_cesnigir_der_front.jpg)
 ![aerial](screenshots/v0.9.8_cesnigir_der_aerial.jpg)
 
+## v1.2 — balcony, entrance and two walls (11 Nov 2026)
+
+Corrections from the owner's four screenshots of the same corner (`OWNER_FIX` and `STONE_WALLS` in
+`src/village_layout.js`; `buildPorch` and the owner's doors in `src/village.js`):
+
+- **Dusty-rose house, south side:** a covered balcony on the main floor over the lower storey, along the west four
+  fifths of the side — a cantilevered concrete slab, an iron railing on the front and both ends, the roof carried
+  out over it on wooden posts as on the east terrace, and a glazed door onto it between the two windows.
+- **Dusty-rose house, entrance:** the entrance door is on the east side, opening onto the terrace at its south end
+  (next to the free part of the wall with the window), with a stone threshold.
+- **Stone wall along the lane:** no longer runs on from the bend to the cream house's gate, in front of the
+  dusty-rose house's gate; the short piece west of the cream house's gate stays.
+- **House at (117.6, 340.6):** its garden wall (the L-shaped piece towards the bend) is removed. Its random draws are
+  still taken, so its colours, chimney and trees and every other house stay as they were.
+
+![balcony](screenshots/v1.2_balcony.jpg)
+![entrance](screenshots/v1.2_entrance.jpg)
+![lane wall](screenshots/v1.2_lane_wall.jpg)
+![no garden wall](screenshots/v1.2_no_garden_wall.jpg)
+
 ## v0.9.7 — the owner's houses by the lake road (Nov 2026)
 
 Corrections from the owner's screenshot of the lane north-west of the big cemetery, above the D.260 lake road

@@ -35,7 +35,7 @@ const server = http.createServer((req, res) => {
 await new Promise(r => server.listen(0, r));
 const port = server.address().port;
 
-const browser = await chromium.launch({ headless: true, args: ['--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--disable-dev-shm-usage'] });
+const browser = await chromium.launch({ headless: true, executablePath: process.env.CHROME_PATH || undefined, args: ['--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--disable-dev-shm-usage'] });
 const page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: 1 });
 page.on('console', m => { const t = m.text(); if (!/favicon|fonts\.g|THREE\.WebGLRenderer/.test(t)) console.log('[page]', t.slice(0, 300)); });
 page.on('pageerror', e => console.log('[pageerror]', e.message));
@@ -50,6 +50,11 @@ for (const v of views) {
   const t1 = Date.now();
   let name = v.replace(/[:,]/g, '_');
   if (v.startsWith('cam:')) { const [px, py, pz, tx, ty, tz] = v.slice(4).split(',').map(Number); await page.evaluate(([px, py, pz, tx, ty, tz]) => { const k = window.__kk; k.setMode('orbit'); k.camera.position.set(px, py, pz); k.controls.target.set(tx, ty, tz); k.controls.update(); }, [px, py, pz, tx, ty, tz]); }
+  else if (v.startsWith('tcam:')) { // tcam:tx,tz,headingDeg,dist,elevDeg[,label] — orbit camera aimed at a ground point
+    const parts = v.slice(5).split(','); const [tx, tz, hd, dist, el] = parts.slice(0, 5).map(Number); if (parts[5]) name = parts[5];
+    await page.evaluate(([tx, tz, hd, dist, el]) => { const k = window.__kk; k.setMode('orbit'); const ty = k.terrH(tx, tz) + 1.5, h = hd * Math.PI / 180, e = el * Math.PI / 180;
+      k.camera.position.set(tx - Math.sin(h) * Math.cos(e) * dist, ty + Math.sin(e) * dist, tz + Math.cos(h) * Math.cos(e) * dist); k.controls.target.set(tx, ty, tz); k.controls.update(); }, [tx, tz, hd, dist, el]);
+  }
   else if (v.startsWith('walk:')) { // walk:x,z,headingDeg[,pitch][,label]
     const parts = v.slice(5).split(','); const [x, z, hd] = parts.slice(0, 3).map(Number); const pitch = parts[3] !== undefined && parts[3] !== '' ? +parts[3] : 0.0; if (parts[4]) name = parts[4];
     await page.evaluate(([x, z, hd, pitch]) => { const k = window.__kk; k.setMode('walk'); k.P.x = x; k.P.z = z; k.P.yaw = -hd * Math.PI / 180; k.P.pitch = pitch; k.P.y = k.surfaceAt(x, z).y + 0.8; k.P.vy = 0; }, [x, z, hd, pitch]);

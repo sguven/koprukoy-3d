@@ -328,12 +328,17 @@ export function buildVillageLayout(terrH, existingRoads = []) {
 // xz = the house's position in village_data.js; set = what changes.
 const OWNER_FIX = [
   { xz: [101.4, 359.6], set: { kind: 'tandir' }, note: 'the small building in front is the tandır house (bread oven), not a dwelling' },
-  { xz: [88.6, 350.0], set: { lowerFloor: true, lowerDoorAt: 0, ownWall: 'Duvar_Gul', porch: { dir: [1, 0], span: [0.3, 1.0], depth: 2.8, vine: 3.2 } },
+  { xz: [88.6, 350.0], set: { lowerFloor: true, lowerDoorAt: 0, ownWall: 'Duvar_Gul', porch: { dir: [1, 0], span: [0.3, 1.0], depth: 2.8, vine: 3.2 },
+      // v1.2 (owner, 11 Nov 2026): a roofed balcony along the south side over the lower storey; the entrance door
+      // opens onto the east terrace, at its south end
+      balc: { dir: [0, 1], span: [0.0, 0.8], depth: 1.6, balcony: true },
+      doors: [{ dir: [1, 0], at: 0.37 }, { dir: [0, 1], at: 0.5, glass: true }] },
     note: 'two storeys on the west, downhill side because of the slope, one storey on the east side behind the trees; soft red-magenta plaster. ' +
           'On the east side the roof runs on over a sitting terrace with a table and chairs, a grapevine pergola in front of it, then the trees ' +
           '(span: the part of the side clear of the tandır, from its south end). ' +
           'v1.1.1 (owner, 11 Nov 2026): on the south face of the lower storey the door and the window swap places — the door on the left, the window on the right as seen from the south' },
   { xz: [60.0, 319.4], set: { storeys: 1 }, note: 'single storey, not two' },
+  { xz: [117.6, 340.6], set: { wallGone: true }, note: 'no garden wall in front of this house (owner, 11 Nov 2026)' },
   { xz: [88.5, 322.8], set: { wall: 'none' }, note: 'its plot is closed by the stone wall along the lane (STONE_WALLS), not a wire fence' },
   // v0.9.8 (owner's photos of the opening): the white house among the trees west of the çardak plot is the
   // ÇEŞNİGİR-DER association building — single storey, pale grey render, a long glazed front facing the çardak and
@@ -346,8 +351,9 @@ const OWNER_FIX = [
 // Dry-stone walls along a lane: `road` = road id, the wall runs on the `toward` side of it, `off` metres from the
 // centreline, between the points of the lane nearest to `from` and `to`; `gaps` = openings (x, z, width).
 const STONE_WALLS = [
-  { road: 'local_367', from: [78, 334], to: [99, 286], toward: [88.5, 322.8], off: 3.0, h: 1.15, gaps: [[88.5, 333.5, 3.0]],
-    note: 'stone wall along the lane on the north / west side, in front of the cream house and up the hill (owner)' },
+  { road: 'local_367', from: [78, 334], to: [99, 286], toward: [88.5, 322.8], off: 3.0, h: 1.15, gaps: [[92.0, 333.5, 10.0]],
+    note: 'stone wall along the lane on the north / west side, in front of the cream house and up the hill (owner); ' +
+          'v1.2: open from the cream house\'s gate to the bend, opposite the dusty-rose house\'s gate (owner, 11 Nov 2026)' },
 ];
 function stoneWallLine(roads, sw) {
   const r = roads.find(q => q.id === sw.road); if (!r) return null;
