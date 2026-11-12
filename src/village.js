@@ -212,6 +212,7 @@ export function buildVillage(ctx, layout, M) {
   }
   for (const w of S.stoneWalls || []) buildStoneWall(w);
   if (S.roseYard && !centreOnly) buildRoseYard(S.roseYard);
+  if (S.ownerPlot && !centreOnly) buildOwnerPlot(S.ownerPlot);
   buildCarsi(S);
   if (!centreOnly) {
     for (const c of S.cemeteries || []) buildCemetery(c);
@@ -566,6 +567,78 @@ export function buildVillage(ctx, layout, M) {
       }
     }
   }
+  // ---------------------------------------------------------------- owner's field (v1.4) -------
+  // The owner's drawing of 11 Nov 2026: a chain-link fence round the field by the dusty-rose house, twelve new trees
+  // and a kamelya. Built without any random draws, so every other house, tree and detail stays as it was.
+  function buildOwnerPlot(op) {
+    // chain-link (tel örgü): galvanised pipe posts every ~2.5 m, a top rail, the diamond mesh 1.5 m high and a
+    // tension wire along the foot; posts and mesh follow the ground
+    const H = 1.5, [fx, fz] = op.fence[0], y0 = yAt(fx, fz), fid = bid++;
+    const ff = { x: fx, y: y0, z: fz, yaw: 0 }, fb = { id: fid, base: y0 - 5, top: y0 + 5, yaw: 0, cx: fx, cz: fz };
+    const posts = [];
+    op.fence.forEach((p, i) => {
+      if (i === 0) { posts.push({ x: p[0], z: p[1], end: true }); return; }
+      const q = op.fence[i - 1], L = Math.hypot(p[0] - q[0], p[1] - q[1]), n = Math.max(1, Math.round(L / 2.5));
+      for (let k = 1; k <= n; k++) posts.push({ x: q[0] + (p[0] - q[0]) * k / n, z: q[1] + (p[1] - q[1]) * k / n, end: k === n });
+    });
+    for (const p of posts) {
+      const g = yAt(p.x, p.z) - y0, r = p.end ? 0.045 : 0.03;
+      bat.add('metal', cyl(r, r, H + 0.12 + 0.5, p.x - fx, g + (H + 0.12 - 0.5) / 2, p.z - fz, 8), ff, fb);
+      bat.add('metal', cyl(r + 0.01, r + 0.01, 0.03, p.x - fx, g + H + 0.13, p.z - fz, 8), ff, fb);   // post cap
+    }
+    for (let i = 1; i < posts.length; i++) {
+      const a = posts[i - 1], b = posts[i], L = Math.hypot(b.x - a.x, b.z - a.z), ga = yAt(a.x, a.z) - y0, gb = yAt(b.x, b.z) - y0;
+      // mesh panel: a quad from post to post, uv in metres / the 0.21 m texture tile (same mesh as the yard fence)
+      const u0 = 0, u1 = L / 0.21, v1 = H / 0.21, ax = a.x - fx, az = a.z - fz, bx = b.x - fx, bz = b.z - fz;
+      const pos = [ax, ga + 0.04, az, bx, gb + 0.04, bz, bx, gb + H, bz, ax, ga + 0.04, az, bx, gb + H, bz, ax, ga + H, az];
+      const uv = [u0, 0, u1, 0, u1, v1, u0, 0, u1, v1, u0, v1];
+      const q = new THREE.BufferGeometry(); q.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); q.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); q.computeVertexNormals();
+      bat.add('chainLink', q, ff, fb);
+      // top rail
+      const rail = new THREE.CylinderGeometry(0.022, 0.022, Math.hypot(L, gb - ga), 6); rail.rotateZ(Math.PI / 2);
+      rail.rotateZ(Math.atan2(gb - ga, L)); rail.rotateY(Math.atan2(-(bz - az), bx - ax)); rail.translate((ax + bx) / 2, (ga + gb) / 2 + H + 0.02, (az + bz) / 2);
+      bat.add('metal', rail, ff, fb);
+      for (const h of [0.08]) wires.push(a.x, yAt(a.x, a.z) + h, a.z, b.x, yAt(b.x, b.z) + h, b.z);
+    }
+    // the twelve trees, a mix of mulberry and fruit trees, as planted a few years ago
+    op.trees.forEach(([x, z], i) => treeSpots.push({ x, z, species: i % 3 === 1 ? 'fruit' : 'mulberry', size: 0.85 + ((i * 7) % 5) * 0.07, force: true }));
+    buildKamelya(op.kamelya);
+  }
+  /** Kamelya: a square wooden garden gazebo on a plank deck — six posts, a waist-high rail on three sides (open
+   *  towards the house), a fixed picnic table with two benches, a tile hip roof on wooden eaves. */
+  function buildKamelya(k) {
+    const { w, d } = k, c = Math.cos(k.yaw), s = Math.sin(k.yaw);
+    const cs = [[-w / 2, -d / 2], [w / 2, -d / 2], [w / 2, d / 2], [-w / 2, d / 2]].map(([lx, lz]) => yAt(k.x + lx * c + lz * s, k.z - lx * s + lz * c));
+    const yD = Math.max(...cs, yAt(k.x, k.z)) + 0.25, yLo = Math.min(...cs) - yD - 0.3, id = bid++;
+    const frame = { x: k.x, y: yD, z: k.z, yaw: k.yaw }, bld = { id, base: yD, top: yD + 3.6, yaw: k.yaw, cx: k.x, cz: k.z };
+    const add = (key, geo) => bat.add(key, geo, frame, bld), hw = w / 2, hd = d / 2;
+    // deck: a stone footing, joists hidden, planks on top
+    add('fieldstone', boxY(w + 0.1, d + 0.1, yLo, -0.12));
+    for (let i = 0; i < 12; i++) add('woodRaw', boxY(w + 0.2, d / 12 - 0.02, -0.12, 0, 0, -d / 2 - 0.1 + (d + 0.2) * (i + 0.5) / 12));
+    add('step', boxY(0.45, 1.2, yLo + 0.1, -0.13, hw + 0.35, 0));   // a stone step at the opening, towards the house
+    // posts: four corners and one in the middle of the north and south sides
+    const PH = 2.35;
+    for (const [px, pz] of [[-hw, -hd], [hw, -hd], [hw, hd], [-hw, hd], [0, -hd], [0, hd]]) add('woodRaw', box(0.14, PH, 0.14, px * 0.97, PH / 2, pz * 0.97));
+    // rail and balusters on the west, north and south sides; the east side (to the house) is open
+    for (const [x0, z0, x1, z1] of [[-hw, -hd, -hw, hd], [-hw, -hd, hw, -hd], [-hw, hd, hw, hd]]) {
+      const L = Math.hypot(x1 - x0, z1 - z0), ang = Math.atan2(-(z1 - z0), x1 - x0), mx = (x0 + x1) / 2 * 0.97, mz = (z0 + z1) / 2 * 0.97;
+      for (const [yy, hh] of [[0.92, 0.07], [0.15, 0.06]]) { const g = box(L, hh, 0.08, 0, 0, 0); g.rotateY(ang); g.translate(mx, yy, mz); add('woodRaw', g); }
+      for (let t = 0.1; t < 0.95; t += 0.1) add('woodRaw', box(0.045, 0.72, 0.045, (x0 + (x1 - x0) * t) * 0.97, 0.54, (z0 + (z1 - z0) * t) * 0.97));
+    }
+    // picnic table along the long axis with a bench on either side
+    add('woodRaw', box(1.9, 0.06, 0.8, -0.1, 0.76, 0));
+    for (const sx of [-0.75, 0.55]) add('woodRaw', box(0.08, 0.73, 0.6, sx, 0.37, 0));
+    for (const sz of [-0.68, 0.68]) { add('woodRaw', box(1.9, 0.05, 0.3, -0.1, 0.45, sz)); for (const sx of [-0.75, 0.55]) add('woodRaw', box(0.07, 0.43, 0.07, sx, 0.21, sz)); }
+    // beams and a tile hip roof on plain boarded eaves
+    for (const sz of [-hd, hd]) add('woodRaw', box(w + 0.2, 0.16, 0.12, 0, PH + 0.08, sz * 0.97));
+    for (const sx of [-hw, hw]) add('woodRaw', box(0.12, 0.16, d + 0.2, sx * 0.97, PH + 0.08, 0));
+    const e = 0.45, ry = PH + 0.16, W = hw + e, Dd = hd + e;
+    add('Cati_Kiremit', roofGeometry(w, d, e, 0.52, ry, 'h'));
+    const sof = new THREE.PlaneGeometry(2 * W, 2 * Dd); sof.rotateX(Math.PI / 2); sof.translate(0, ry - 0.01, 0); add('woodRaw', sof);
+    add('woodRaw', box(2 * W, 0.14, 0.04, 0, ry - 0.05, Dd)); add('woodRaw', box(2 * W, 0.14, 0.04, 0, ry - 0.05, -Dd));
+    add('woodRaw', box(0.04, 0.14, 2 * Dd, W, ry - 0.05, 0)); add('woodRaw', box(0.04, 0.14, 2 * Dd, -W, ry - 0.05, 0));
+  }
+
   // ---------------------------------------------------------------- generic house -------------
   function faceMatrix(side, w, d) {
     const m = new THREE.Matrix4(), r = new THREE.Matrix4();
