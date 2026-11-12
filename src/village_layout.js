@@ -320,7 +320,7 @@ export function buildVillageLayout(terrH, existingRoads = []) {
     }
   }
   const stoneWalls = STONE_WALLS.map(sw => stoneWallLine(roads, sw)).filter(Boolean);
-  return { roads, buildings, sites: { ...SITES, stoneWalls, roseYard: ROSE_YARD }, rnd };
+  return { roads, buildings, sites: { ...SITES, stoneWalls, roseYard: ROSE_YARD, ownerPlot: OWNER_PLOT }, rnd };
 }
 
 // ---------------------------------------------------------------- owner's corrections (v0.9.7)
@@ -367,6 +367,22 @@ const STONE_WALLS = [
     note: 'stone wall along the lane on the north / west side, in front of the cream house and up the hill (owner); ' +
           'v1.2: open from the cream house\'s gate to the bend, opposite the dusty-rose house\'s gate (owner, 11 Nov 2026)' },
 ];
+// v1.4 (owner's drawing on the Orbit screenshot of 11 Nov 2026): the open field west and south of the dusty-rose
+// house. Black line = a chain-link fence round the field, from the tandır's south-east corner, south along the
+// lake-road side, west and back up to the house's north-west corner; green = trees to plant; red = a kamelya
+// (wooden garden gazebo) in front of the house's two-storey west side. Points were read off the screenshot by
+// casting each drawn pixel onto the terrain from the matched camera (cam -28, 50, 445 → target 93.7, 33.7, 352.6)
+// and kept ≥ 1.6 m off the road edges.
+export const OWNER_PLOT = {
+  fence: [[103.4, 365.9], [107.1, 368.5], [109.0, 371.6], [108.8, 373.8], [104.2, 379.4], [91.1, 391.9], [70.4, 402.1],
+    [52.2, 409.1], [41.5, 410.3], [20.4, 409.7], [15.9, 399.0], [16.3, 392.9], [20.3, 385.2], [33.3, 369.5], [40.3, 362.8],
+    [45.7, 359.4], [70.4, 346.3], [81.0, 342.6]],
+  trees: [[80.6, 376.4], [85.0, 385.5], [48.8, 375.9], [36.6, 378.7], [60.5, 401.4], [53.5, 395.1], [28.9, 377.9],
+    [44.0, 390.3], [33.3, 392.3], [23.0, 390.8], [34.5, 406.8], [22.8, 401.1]],
+  kamelya: { x: 68.8, z: 353.8, w: 3.6, d: 3.6, yaw: -0.07 },   // squared to the house (yaw 3.07 − π)
+};
+/** The owner's fence as straight pieces [x0, z0, x1, z1]. */
+export const fencePieces = (pts) => pts.slice(1).map((p, i) => [pts[i][0], pts[i][1], p[0], p[1]]);
 function stoneWallLine(roads, sw) {
   const r = roads.find(q => q.id === sw.road); if (!r) return null;
   const L = r.line, i0 = distToPolyline(sw.from[0], sw.from[1], L).i, i1 = distToPolyline(sw.to[0], sw.to[1], L).i;
@@ -417,6 +433,11 @@ export function carsiBoxes(sites) {
   if (sites.kiosk) out.push(sites.kiosk.x, sites.kiosk.z, sites.kiosk.yaw, sites.kiosk.w / 2, sites.kiosk.d / 2);
   if (sites.cardak) out.push(sites.cardak.x, sites.cardak.z, 0, sites.cardak.size / 2, sites.cardak.size / 2);
   for (const w of sites.stoneWalls || []) for (const [x0, z0, x1, z1] of wallPieces(w)) out.push((x0 + x1) / 2, (z0 + z1) / 2, Math.atan2(-(z1 - z0), x1 - x0), Math.hypot(x1 - x0, z1 - z0) / 2, 0.3);
+  const op = sites.ownerPlot;   // v1.4: the owner's kamelya and chain-link fence
+  if (op) {
+    const k = op.kamelya; out.push(k.x, k.z, k.yaw, k.w / 2 + 0.15, k.d / 2 + 0.15);
+    for (const [x0, z0, x1, z1] of fencePieces(op.fence)) out.push((x0 + x1) / 2, (z0 + z1) / 2, Math.atan2(-(z1 - z0), x1 - x0), Math.hypot(x1 - x0, z1 - z0) / 2, 0.08);
+  }
   return out;
 }
 /** A stone wall as straight pieces [x0, z0, x1, z1], with its gaps left open. */
