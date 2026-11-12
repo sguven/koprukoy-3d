@@ -110,7 +110,7 @@ export function splitInstancedByCell(mesh, size) {
 // --------------------------------------------------------------------------------------------- distance culling
 // Small pieces (window trims, railings, steps, pipes, signs, garden furniture, cables ...) are a third of the
 // village's triangles but a few pixels each beyond ~200 m. Material keys of the procedural village (village.js).
-const DETAIL = /^(trim|metal|metalDark|railing|railBlue|step|garden|glass|chimney|lead|greenPaint|whitePlastic|redPlastic|woodRaw|wood|vine|grape|orange|bronze|door|pole|pvc|pilaster|coping|tableGrey|mudBase|flag|flagTR|yellowTank|canvas|voidDark|navy|sign\w*|plaque|kerb\w*|lines|plinth)$/;
+const DETAIL = /^(trim|metal|metalDark|railing|railBlue|step|garden|glass|chimney|lead|greenPaint|whitePlastic|redPlastic|woodRaw|wood|vine|grape|orange|bronze|door|pole|pvc|pilaster|coping|tableGrey|mudBase|flag|flagTR|yellowTank|canvas|voidDark|navy|sign\w*|plaque|kerb\w*|lines|plinth|chainLink|donkey\w*|leather|kilim)$/;
 /** Maximum view distance (m) for a village material key, or Infinity. */
 export function viewDistance(key, quality = PERF.quality) {
   if (DETAIL.test(key)) return quality >= 2 ? 260 : 170;

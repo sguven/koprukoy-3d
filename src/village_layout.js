@@ -320,7 +320,7 @@ export function buildVillageLayout(terrH, existingRoads = []) {
     }
   }
   const stoneWalls = STONE_WALLS.map(sw => stoneWallLine(roads, sw)).filter(Boolean);
-  return { roads, buildings, sites: { ...SITES, stoneWalls }, rnd };
+  return { roads, buildings, sites: { ...SITES, stoneWalls, roseYard: ROSE_YARD }, rnd };
 }
 
 // ---------------------------------------------------------------- owner's corrections (v0.9.7)
@@ -343,6 +343,18 @@ const OWNER_FIX = [
   { xz: [225.3, 154.6], set: { kind: 'dernek', x: 226.2, z: 150.8, faceFix: 0, wall: 'none', tree: false },
     note: 'ÇEŞNİGİR-DER: Köprüköy Çeşnigir Kültür Sosyal Yardımlaşma ve Dayanışma Derneği' },
 ];
+// v1.2 (owner's screenshot of 11 Nov 2026): the yard on the south side of the dusty-rose house (88.6, 350.0). A low
+// galvanised wire-mesh fence runs from the house's south-west corner round the open ground to the tandır by the
+// fruit tree (the line the owner drew, cast onto the terrain from his view); inside it, where he put the two
+// crosses, a garden table with four chairs and a two-seat swing, and between the swing and the fence a small
+// saddled donkey for riding. Model metres (x east, z south); no random draws, so nothing else in the village moves.
+const ROSE_YARD = {
+  fence: { h: 1.0, pts: [[80.5, 356.9], [78.9, 358.3], [77.7, 360.1], [77.0, 362.6], [77.1, 364.8], [78.5, 367.8], [80.8, 371.6],
+    [84.6, 373.4], [89.0, 374.0], [94.2, 373.4], [97.2, 372.2], [99.3, 370.3], [99.9, 368.3], [100.9, 365.2]] },
+  table: { x: 83.3, z: 364.6, yaw: 3.07 },          // first cross: wooden garden table, four white plastic chairs
+  swing: { x: 90.7, z: 367.4, yaw: 3.07 },          // second cross: blue A-frame swing, beam along the house
+  donkey: { x: 94.6, z: 369.3, head: [0.34, 0.94] }, // beside it, head towards the fence's south side
+};
 // Dry-stone walls along a lane: `road` = road id, the wall runs on the `toward` side of it, `off` metres from the
 // centreline, between the points of the lane nearest to `from` and `to`; `gaps` = openings (x, z, width).
 const STONE_WALLS = [

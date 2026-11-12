@@ -118,6 +118,29 @@ export function villageMaterials(lib, { quality = 2 } = {}) {
   M.navy = std({ color: 0x1f2638, roughness: 0.5, metalness: 0.2 });
   const paving = lib.set('paving');
   M.pavingRed = triplanarMaterial({ set: paving, scale: paving.size, normalScale: 0.8, antiTile: 0.4, sharp: 12, tint: new THREE.Color(0xc59484), roughBase: 0.9, cacheKey: 'pavered', polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  // ---- v1.2 the dusty-rose house's yard (owner): galvanised chain-link fence, a saddled donkey, a kilim saddle cloth ----
+  {
+    const t = canvasTex(128, 128, (c, W, H) => {   // three diamonds across a 0.21 m tile, wire ~3 mm
+      c.clearRect(0, 0, W, H); c.strokeStyle = '#c4c7c9'; c.lineWidth = 3.2; c.lineCap = 'round';
+      const n = 3, s = W / n;
+      for (let i = -n; i <= 2 * n; i++) { c.beginPath(); c.moveTo(i * s, 0); c.lineTo(i * s + H, H); c.stroke(); c.beginPath(); c.moveTo(i * s, 0); c.lineTo(i * s - H, H); c.stroke(); }
+    });
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    // transparent, not alpha-tested: up close the diamonds are crisp, far away the mesh fades to a faint grey veil
+    M.chainLink = std({ map: t, roughness: 0.45, metalness: 0.6, transparent: true, depthWrite: false, alphaTest: 0.02, side: THREE.DoubleSide });
+    M.chainLink.userData.noShadow = true;
+  }
+  M.donkeyGrey = std({ color: 0x7f766b, roughness: 0.95 });      // mouse-grey Anatolian donkey
+  M.donkeyPale = std({ color: 0xd2cabd, roughness: 0.95 });      // muzzle, eye rings, belly
+  M.donkeyDark = std({ color: 0x2c2824, roughness: 0.9 });       // mane, ear tips, tail tuft, hooves
+  M.leather = std({ color: 0x5b3b24, roughness: 0.7 });          // saddle pad, girth and halter
+  M.kilim = std({ roughness: 0.95, map: canvasTex(256, 128, (c, W, H) => {   // woven saddle cloth: red field, navy and ochre bands, white diamonds
+    c.fillStyle = '#9b2a22'; c.fillRect(0, 0, W, H);
+    for (const [y, h, col] of [[0, 10, '#1f2a4a'], [14, 6, '#c8962e'], [H - 20, 6, '#c8962e'], [H - 10, 10, '#1f2a4a']]) { c.fillStyle = col; c.fillRect(0, y, W, h); }
+    c.fillStyle = '#efe6d2';
+    for (let x = 16; x < W; x += 32) { c.beginPath(); c.moveTo(x, H / 2 - 18); c.lineTo(x + 12, H / 2); c.lineTo(x, H / 2 + 18); c.lineTo(x - 12, H / 2); c.closePath(); c.fill(); }
+    c.fillStyle = '#1f2a4a'; for (let x = 16; x < W; x += 32) c.fillRect(x - 3, H / 2 - 3, 6, 6);
+  }) });
   M.signDer = std({ map: canvasTex(1024, 480, (c, W, H) => {   // "ÇEŞNİGİR-DER" board over the door (owner's photo)
     c.fillStyle = '#1f2638'; c.fillRect(0, 0, W, H);
     const g = c.createLinearGradient(0, 0, 0, H); g.addColorStop(0, 'rgba(255,255,255,0.06)'); g.addColorStop(1, 'rgba(0,0,0,0.12)'); c.fillStyle = g; c.fillRect(0, 0, W, H);
