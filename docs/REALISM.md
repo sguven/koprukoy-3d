@@ -5,6 +5,25 @@ Two passes so far: **v0.7 "materials"** (surfaces only, nothing moved) and **v0.
 `model/koprukoy.glb` are still the v0.6 files. Terrain (SRTM 30 m), the reservoir at 724 m, the
 Çeşnigir Bridge body, D.260 and the roads outside the village are unchanged.
 
+## v1.3 — the dusty-rose house's yard (Nov 2026)
+
+From the owner's screenshot of 11 Nov 2026 (a line and two crosses drawn on the Orbit view). The drawn line was cast
+onto the terrain from a camera fitted to his view (house corners, tandır corner and the fruit tree as reference
+points), so the fence follows it to within about a metre (`ROSE_YARD` in `src/village_layout.js`, `buildRoseYard` in
+`src/village.js`):
+
+- **Wire-mesh fence**: a low (1.0 m) galvanised chain-link fence on pipe posts with a top rail, from the south-west
+  corner of the dusty-rose house round the open ground on its south side to the tandır by the fruit tree. The mesh is
+  a transparent diamond texture, so it reads as wire up close and as a faint grey veil from afar, and casts no
+  solid shadow.
+- **First cross**: a wooden garden table with four white plastic chairs.
+- **Second cross**: a blue pipe A-frame swing with a plank seat and a red plastic seat on chains.
+- **Donkey**: beside the swing, a small mouse-grey Anatolian donkey to ride on — pale muzzle and belly, dark
+  mane, ear tips and tail tuft, a leather halter, and a red kilim saddle cloth under a leather pad, held by a girth.
+
+No random draws, so the rest of the village is unchanged. Screenshots: `docs/screenshots/v1.3_rose_yard.jpg`
+(the owner's view) and `docs/screenshots/v1.3_rose_yard_close.jpg`.
+
 ## v0.9.8 — ÇEŞNİGİR-DER (Nov 2026)
 
 The owner's screenshot of the çardak plot south of the çarşı, with two photos taken at the opening of the

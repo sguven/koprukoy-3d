@@ -211,6 +211,7 @@ export function buildVillage(ctx, layout, M) {
     buildHouse(b);
   }
   for (const w of S.stoneWalls || []) buildStoneWall(w);
+  if (S.roseYard && !centreOnly) buildRoseYard(S.roseYard);
   buildCarsi(S);
   if (!centreOnly) {
     for (const c of S.cemeteries || []) buildCemetery(c);
@@ -467,6 +468,104 @@ export function buildVillage(ctx, layout, M) {
     }
   }
 
+  // ---------------------------------------------------------------- the dusty-rose house's yard (v1.3, owner) ----
+  // A low chain-link fence on galvanised pipe posts with a top rail, a wooden garden table with four white chairs, a
+  // blue A-frame swing with two seats and a small grey donkey with a kilim saddle cloth. No random draws.
+  function buildRoseYard(Y) {
+    const id = bid++, [x0, z0] = Y.fence.pts[0], y0 = yAt(x0, z0), frame = { x: x0, y: y0, z: z0, yaw: 0 };
+    const bld = { id, base: y0 - 3, top: y0 + 3, yaw: 0, cx: x0, cz: z0 };
+    // fence: posts every ≤2.2 m that follow the ground, mesh panels between them (u, v in metres / tile size)
+    { const H = Y.fence.h, TILE = 0.21, pos = [], uv = [], idx = []; let run = 0;
+      const posts = [];
+      for (let i = 0; i + 1 < Y.fence.pts.length; i++) {
+        const [ax, az] = Y.fence.pts[i], [bx, bz] = Y.fence.pts[i + 1], L = Math.hypot(bx - ax, bz - az), k = Math.max(1, Math.ceil(L / 2.2));
+        for (let j = (i === 0 ? 0 : 1); j <= k; j++) posts.push([ax + (bx - ax) * j / k, az + (bz - az) * j / k]);
+      }
+      for (let i = 0; i < posts.length; i++) {
+        const [px, pz] = posts[i], gy = yAt(px, pz) - y0, end = i === 0 || i === posts.length - 1;
+        bat.add('metal', cyl(end ? 0.045 : 0.032, end ? 0.045 : 0.032, H + 0.35, px - x0, gy + (H + 0.35) / 2 - 0.3, pz - z0, 8), frame, bld);
+        bat.add('metal', cyl(end ? 0.055 : 0.04, end ? 0.055 : 0.04, 0.04, px - x0, gy + H + 0.07, pz - z0, 8), frame, bld);   // post caps
+        if (i === 0) continue;
+        const [qx, qz] = posts[i - 1], gq = yAt(qx, qz) - y0, L = Math.hypot(px - qx, pz - qz);
+        // top rail between the posts
+        const rail = cyl(0.021, 0.021, L, 0, 0, 0, 6); rail.rotateZ(Math.PI / 2);
+        rail.rotateZ(Math.atan2(gy - gq, L)); rail.rotateY(Math.atan2(-(pz - qz), px - qx));
+        rail.translate((px + qx) / 2 - x0, (gy + gq) / 2 + H, (pz + qz) / 2 - z0); bat.add('metal', rail, frame, bld);
+        // the mesh: from 3 cm above the ground to the rail
+        const b = pos.length / 3;
+        pos.push(qx - x0, gq + 0.03, qz - z0, px - x0, gy + 0.03, pz - z0, px - x0, gy + H, pz - z0, qx - x0, gq + H, qz - z0);
+        uv.push(run / TILE, 0, (run + L) / TILE, 0, (run + L) / TILE, (H - 0.03) / TILE, run / TILE, (H - 0.03) / TILE);
+        idx.push(b, b + 1, b + 2, b, b + 2, b + 3); run += L;
+      }
+      const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals();
+      bat.add('chainLink', g, frame, bld);
+    }
+    const at = (o) => ({ x: o.x, y: yAt(o.x, o.z), z: o.z, yaw: o.yaw || 0 });
+    // garden table (first cross): plank top on four legs, four white plastic chairs
+    { const T = Y.table, fr = at(T);
+      bat.add('woodRaw', box(1.4, 0.05, 0.85, 0, 0.74, 0), fr, bld);
+      for (const [lx, lz] of [[-0.62, -0.34], [0.62, -0.34], [-0.62, 0.34], [0.62, 0.34]]) bat.add('woodRaw', boxY(0.06, 0.06, -0.1, 0.72, lx, lz), fr, bld);
+      bat.add('woodRaw', box(1.2, 0.05, 0.05, 0, 0.2, 0), fr, bld);
+      for (const [cx, dz] of [[-0.36, -1], [0.36, -1], [-0.36, 1], [0.36, 1]]) {
+        const cz = dz * 0.72;
+        bat.add('whitePlastic', box(0.44, 0.05, 0.42, cx, 0.44, cz), fr, bld);
+        const bk = box(0.44, 0.45, 0.04, 0, 0, 0); bk.rotateX(-dz * 0.15); bk.translate(cx, 0.7, cz + dz * 0.22); bat.add('whitePlastic', bk, fr, bld);
+        for (const [a, c] of [[-0.19, -0.18], [0.19, -0.18], [-0.19, 0.18], [0.19, 0.18]]) bat.add('whitePlastic', boxY(0.04, 0.04, -0.08, 0.44, cx + a, cz + c), fr, bld);
+      }
+    }
+    // swing (second cross): blue pipe A-frame, a plank seat and a red plastic seat on chains
+    { const S2 = Y.swing, fr = at(S2), top = 2.15, half = 1.45;
+      for (const sx of [-half, half]) for (const dz of [-1, 1]) {
+        const leg = cyl(0.04, 0.04, 2.35, 0, 0, 0, 8); leg.rotateX(-dz * 0.3); leg.translate(sx, top / 2 - 0.05, dz * 0.33); bat.add('railBlue', leg, fr, bld);
+      }
+      const beam = cyl(0.045, 0.045, 2 * half + 0.2, 0, 0, 0, 8); beam.rotateZ(Math.PI / 2); beam.translate(0, top, 0); bat.add('railBlue', beam, fr, bld);
+      for (const sx of [-half, half]) bat.add('railBlue', box(0.05, 0.05, 0.98, sx, 0.5, 0), fr, bld);   // ground braces
+      for (const [sx, key, w] of [[-0.55, 'woodRaw', 0.48], [0.55, 'redPlastic', 0.44]]) {
+        for (const dx of [-w / 2 + 0.03, w / 2 - 0.03]) bat.add('metalDark', boxY(0.015, 0.015, 0.46, top, sx + dx, 0), fr, bld);
+        bat.add(key, box(w, 0.04, 0.2, sx, 0.45, 0), fr, bld);
+      }
+    }
+    // donkey: small grey Anatolian donkey, standing, saddled with a kilim cloth and a leather pad (local +x = head)
+    { const Dk = Y.donkey, fr = { x: Dk.x, y: yAt(Dk.x, Dk.z), z: Dk.z, yaw: Math.atan2(-Dk.head[1], Dk.head[0]) };
+      const add = (key, g) => bat.add(key, g, fr, bld);
+      const ell = (rx, ry, rz, x, y, z, key, rotZ = 0) => { const g = new THREE.SphereGeometry(1, 14, 10); g.scale(rx, ry, rz); if (rotZ) g.rotateZ(rotZ); g.translate(x, y, z); add(key, g); };
+      const limb = (r0, r1, a, b, key) => {   // tapered cylinder from point a to point b ([x, y, z])
+        const d = new THREE.Vector3(b[0] - a[0], b[1] - a[1], b[2] - a[2]), L = d.length(), g = cyl(r1, r0, L, 0, 0, 0, 8);
+        g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize())); g.translate((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2); add(key, g);
+      };
+      ell(0.6, 0.29, 0.25, 0, 0.8, 0, 'donkeyGrey');                         // barrel
+      ell(0.42, 0.14, 0.2, 0.02, 0.62, 0, 'donkeyPale');                     // pale belly
+      ell(0.26, 0.27, 0.24, -0.42, 0.83, 0, 'donkeyGrey');                   // rump
+      for (const [lx, lz, f] of [[0.38, 0.13, 1], [0.38, -0.13, 1], [-0.42, 0.13, 0], [-0.42, -0.13, 0]]) {
+        const knee = f ? [lx + 0.02, 0.33, lz] : [lx - 0.05, 0.36, lz];
+        limb(0.075, 0.055, [lx, 0.72, lz], knee, 'donkeyGrey'); limb(0.05, 0.042, knee, [lx, 0.06, lz], 'donkeyGrey');
+        add('donkeyDark', cyl(0.05, 0.055, 0.1, lx, 0.0, lz, 8));             // hoof (a little into the ground)
+      }
+      limb(0.17, 0.12, [0.45, 0.88, 0], [0.72, 1.2, 0], 'donkeyGrey');        // neck
+      add('donkeyDark', (() => { const g = box(0.38, 0.07, 0.035, 0, 0, 0); g.rotateZ(0.9); g.translate(0.5, 1.12, 0); return g; })());   // short upright mane
+      ell(0.26, 0.12, 0.11, 0.88, 1.12, 0, 'donkeyGrey', -0.75);             // head, nose down
+      ell(0.1, 0.085, 0.095, 1.02, 0.95, 0, 'donkeyPale');                   // pale muzzle
+      add('donkeyDark', new THREE.SphereGeometry(0.025, 6, 5).translate(1.05, 0.92, 0.07)); add('donkeyDark', new THREE.SphereGeometry(0.025, 6, 5).translate(1.05, 0.92, -0.07));
+      for (const sz of [-1, 1]) {
+        ell(0.035, 0.035, 0.02, 0.83, 1.19, sz * 0.105, 'donkeyPale');        // eye ring
+        add('donkeyDark', new THREE.SphereGeometry(0.018, 6, 5).translate(0.835, 1.19, sz * 0.12));
+        const ear = new THREE.ConeGeometry(0.055, 0.3, 7); ear.scale(1, 1, 0.55); ear.rotateZ(0.35); ear.rotateX(-sz * 0.3); ear.translate(0.7, 1.38, sz * 0.08); add('donkeyGrey', ear);
+        const tip = new THREE.ConeGeometry(0.03, 0.08, 6); tip.rotateZ(0.35); tip.rotateX(-sz * 0.3); tip.translate(0.655, 1.5, sz * 0.115); add('donkeyDark', tip);
+      }
+      limb(0.03, 0.02, [-0.66, 0.92, 0], [-0.74, 0.5, 0], 'donkeyGrey');     // tail with a dark tuft
+      ell(0.035, 0.09, 0.035, -0.745, 0.44, 0, 'donkeyDark');
+      // halter: noseband and cheek strap
+      { const nb = new THREE.TorusGeometry(0.1, 0.012, 5, 14); nb.scale(1, 1, 1.05); nb.rotateY(Math.PI / 2); nb.rotateZ(-0.75); nb.translate(0.98, 1.0, 0); add('leather', nb); }
+      // saddle: kilim cloth draped over the back, a leather pad on it, the girth under the belly
+      { const g = box(0.62, 0.035, 0.6, 0.05, 1.105, 0); add('kilim', g);
+        for (const sz of [-1, 1]) { const f = box(0.62, 0.3, 0.025, 0.05, 0.96, sz * 0.29); f.rotateX(sz * 0.12); add('kilim', f); }
+        add('leather', box(0.44, 0.1, 0.36, 0.05, 1.16, 0));
+        add('leather', box(0.1, 0.07, 0.3, 0.24, 1.23, 0)); add('leather', box(0.1, 0.08, 0.3, -0.14, 1.235, 0));   // front and back rolls
+        const girth = new THREE.TorusGeometry(0.29, 0.02, 5, 20); girth.scale(1, 1, 0.9); girth.rotateY(Math.PI / 2); girth.translate(0.12, 0.81, 0); add('leather', girth);
+      }
+    }
+  }
   // ---------------------------------------------------------------- generic house -------------
   function faceMatrix(side, w, d) {
     const m = new THREE.Matrix4(), r = new THREE.Matrix4();
@@ -1181,5 +1280,6 @@ export function buildVillage(ctx, layout, M) {
   if (propsOut.wireMesh) group.add(propsOut.wireMesh);
   for (const m of propsOut.meshes) group.add(m);
   group.traverse(o => { if (o.isMesh && o.material && o.material.userData && o.material.userData.isRoad) { o.castShadow = false; o.renderOrder = 1; } });
+  group.traverse(o => { if (o.isMesh && o.material && o.material.userData && o.material.userData.noShadow) o.castShadow = false; });   // v1.3: the chain-link mesh
   return { group, trees: propsOut.meshes };
 }
