@@ -328,10 +328,11 @@ export function buildVillageLayout(terrH, existingRoads = []) {
 // xz = the house's position in village_data.js; set = what changes.
 const OWNER_FIX = [
   { xz: [101.4, 359.6], set: { kind: 'tandir' }, note: 'the small building in front is the tandır house (bread oven), not a dwelling' },
-  { xz: [88.6, 350.0], set: { lowerFloor: true, ownWall: 'Duvar_Gul', porch: { dir: [1, 0], span: [0.3, 1.0], depth: 2.8, vine: 3.2 } },
+  { xz: [88.6, 350.0], set: { lowerFloor: true, lowerDoorAt: 0, ownWall: 'Duvar_Gul', porch: { dir: [1, 0], span: [0.3, 1.0], depth: 2.8, vine: 3.2 } },
     note: 'two storeys on the west, downhill side because of the slope, one storey on the east side behind the trees; soft red-magenta plaster. ' +
           'On the east side the roof runs on over a sitting terrace with a table and chairs, a grapevine pergola in front of it, then the trees ' +
-          '(span: the part of the side clear of the tandır, from its south end)' },
+          '(span: the part of the side clear of the tandır, from its south end). ' +
+          'v1.1.1 (owner, 11 Nov 2026): on the south face of the lower storey the door and the window swap places — the door on the left, the window on the right as seen from the south' },
   { xz: [60.0, 319.4], set: { storeys: 1 }, note: 'single storey, not two' },
   { xz: [88.5, 322.8], set: { wall: 'none' }, note: 'its plot is closed by the stone wall along the lane (STONE_WALLS), not a wire fence' },
   // v0.9.8 (owner's photos of the opening): the white house among the trees west of the çardak plot is the

@@ -520,7 +520,9 @@ export function buildVillage(ctx, layout, M) {
         const nw = Math.max(L > 2.6 ? 1 : 0, Math.min(side === front ? (L > 15 ? 4 : 3) : 2, Math.round((L - 1.0) / 3.8)));
         for (let i = 0; i < nw; i++) {
           const x = -L / 2 + L * (i + 0.5) / nw, g = groundAt(fm, x, 0.8);
-          if (side === doorSide && i === Math.floor(nw / 2) && g < fL + 0.3) {
+          // b.lowerDoorAt: owner's choice of which opening on the door side is the door (default: the middle one)
+          const doorAt = b.lowerDoorAt !== undefined ? Math.min(b.lowerDoorAt, nw - 1) : Math.floor(nw / 2);
+          if (side === doorSide && i === doorAt && (g < fL + 0.3 || b.lowerDoorAt !== undefined)) {
             holes.push({ x, y: fL + 1.2, w: 1.0, h: 2.0 }); panes.push({ x, y: fL + 1.2, w: 1.0, h: 2.0, door: true });
             add('step', box(1.6, 0.16, 0.6, x, fL + 0.08, 0.3).applyMatrix4(fm));
           } else if (g < fL + 0.6) {
