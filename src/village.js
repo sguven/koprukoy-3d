@@ -76,6 +76,7 @@ export function pruneRocks(model, layout) {
     let hit = false;
     for (const rd of layout.roads) { if (distToPolyline(cx, cz, rd.line).d < rd.w / 2 + rad * 0.7 + 6.0) { hit = true; break; } }
     if (!hit) for (const b of layout.buildings) {
+      if (b.gone) continue;
       if (Math.abs(b.x - cx) > 60 || Math.abs(b.z - cz) > 60) continue;
       const co = Math.cos(b.yaw), si = Math.sin(b.yaw), dx = cx - b.x, dz = cz - b.z, lx = dx * co - dz * si, lz = dx * si + dz * co;
       if (Math.abs(lx) < b.w / 2 + rad * 0.7 + 18 && Math.abs(lz) < b.d / 2 + rad * 0.7 + 18) { hit = true; break; }
@@ -403,6 +404,7 @@ export function buildVillage(ctx, layout, M) {
     bat = { add() {} }; buildHouse(b.orig); bat = saved;
     if (b.kind !== 'tandir') treeSpots.length = nT;   // the tandır keeps the plot trees of the house it replaces
     wires.length = nW; bid = id0;
+    if (b.gone) { treeSpots.length = nT; rnd = baseRnd; return; }   // v1.4.1: no house here — draws made, nothing built
     let i = 0; const own = mulberry32(Math.round(b.x * 100) ^ Math.round(b.z * 100));
     rnd = () => (i < tape.length ? tape[i++] : own());
     if (b.kind === 'tandir') buildTandir(b); else if (b.kind === 'dernek') buildDernek(b); else buildHouse(b);
@@ -1339,7 +1341,7 @@ export function buildVillage(ctx, layout, M) {
     }
   }
   const blds = layout.buildings;
-  const inAnyBuilding = (x, z, m) => { for (const b of blds) { const c = Math.cos(b.yaw), s = Math.sin(b.yaw), dx = x - b.x, dz = z - b.z, lx = dx * c - dz * s, lz = dx * s + dz * c; if (Math.abs(lx) < b.w / 2 + m && Math.abs(lz) < b.d / 2 + m) return true; } return false; };
+  const inAnyBuilding = (x, z, m) => { for (const b of blds) { if (b.gone) continue; const c = Math.cos(b.yaw), s = Math.sin(b.yaw), dx = x - b.x, dz = z - b.z, lx = dx * c - dz * s, lz = dx * s + dz * c; if (Math.abs(lx) < b.w / 2 + m && Math.abs(lz) < b.d / 2 + m) return true; } return false; };
   const okSpot = (t) => t.force || (!onRoad(t.x, t.z, 1.2) && !inAnyBuilding(t.x, t.z, 1.0) && !inCarsi(S, t.x, t.z, 1.5) && terrH(t.x, t.z) > 2);
   const trees = treeSpots.filter(okSpot);
   // stone piles and a few fences out in the plots

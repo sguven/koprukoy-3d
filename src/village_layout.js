@@ -347,6 +347,11 @@ const OWNER_FIX = [
   // the walkway from the road reaches its south half.
   { xz: [225.3, 154.6], set: { kind: 'dernek', x: 226.2, z: 150.8, faceFix: 0, wall: 'none', tree: false },
     note: 'ÇEŞNİGİR-DER: Köprüköy Çeşnigir Kültür Sosyal Yardımlaşma ve Dayanışma Derneği' },
+  // v1.4.1 (owner's screenshot of 13 Nov 2026): there are no houses on the viewpoint rock above the boat pier — only
+  // the viewing terrace on top. The satellite tracer had read the terrace deck and the bare rock as two roofs. `gone`
+  // houses are run dry in village.js (their random draws are still made, so nothing else in the village changes).
+  { xz: [-294.9, -337.9], set: { gone: true }, note: 'not a house: the viewing terrace on the rock' },
+  { xz: [-286.5, -349.2], set: { gone: true }, note: 'not a house: bare rock between the terrace and the pier' },
 ];
 // v1.3 (owner's screenshot of 11 Nov 2026): the yard on the south side of the dusty-rose house (88.6, 350.0). A low
 // galvanised wire-mesh fence runs from the house's south-west corner round the open ground to the tandır by the
@@ -466,6 +471,6 @@ export function squareSamples(sites, terrH, lift = 0.06) {
 /** Building boxes in the data4 format ([x, z, yaw, hw, hd, ...]) for collision and the minimap. */
 export function buildingBoxes(buildings) {
   const out = [];
-  for (const b of buildings) out.push(b.x, b.z, b.yaw, b.w / 2, b.d / 2);
+  for (const b of buildings) if (!b.gone) out.push(b.x, b.z, b.yaw, b.w / 2, b.d / 2);
   return out;
 }
