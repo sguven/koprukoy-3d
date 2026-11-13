@@ -49,11 +49,13 @@ export function createGame(ctx) {
   // ------------------------------------------------------------------ materials
   const mat = (c, r = 0.8, m = 0.0) => new THREE.MeshStandardMaterial({ color: c, roughness: r, metalness: m });
   const M = {
-    skin: mat(0xc9a27e), cloth: mat(0x2e2f33), cloth2: mat(0x3b3a30), vest: mat(0x4a4f3a), team: mat(0xa8322a), boot: mat(0x1c1a18),
+    skin: mat(0xc9a27e), cloth: mat(0xd9281c), cloth2: mat(0x9a1c15), vest: mat(0x17181b), team: mat(0xffd21f), boot: mat(0x1c1a18),
     steel: mat(0x2b2d31, 0.45, 0.7), steelDark: mat(0x16171a, 0.5, 0.6), wood: mat(0x7a4a26, 0.6, 0.05), olive: mat(0x5c6a3f, 0.7), silver: mat(0xb9bcc2, 0.3, 0.9),
     rubber: mat(0x202020, 0.95), blade: mat(0xd5d8dc, 0.25, 0.95),
     flash: new THREE.SpriteMaterial({ color: 0xffe3a0, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false }),
   };
+  // bots stand out against the village: bright red kit, black vest, yellow scarf, with a little glow so they do not vanish in shadow
+  M.cloth.emissive.setHex(0x5a0d08); M.cloth2.emissive.setHex(0x3a0906); M.team.emissive.setHex(0x6b5200);
   const tracerMat = new THREE.LineBasicMaterial({ color: 0xfff3c0, transparent: true, opacity: 0.75 });
   const puffMat = new THREE.SpriteMaterial({ color: 0xd8cbb0, transparent: true, opacity: 0.8, depthWrite: false });
   const bloodMat = new THREE.SpriteMaterial({ color: 0x8a1b14, transparent: true, opacity: 0.85, depthWrite: false });
@@ -261,7 +263,7 @@ export function createGame(ctx) {
     body.add(box(0.22, 0.1, 0.3, -0.13, 0.05, 0.02, M.boot), box(0.22, 0.1, 0.3, 0.13, 0.05, 0.02, M.boot));
     body.add(box(0.5, 0.6, 0.28, 0, 1.16, 0, M.cloth));                                   // torso
     body.add(box(0.44, 0.34, 0.32, 0, 1.22, 0, M.vest));                                   // vest
-    body.add(box(0.54, 0.16, 0.34, 0, 1.5, 0, M.team));                                    // red scarf: the other team
+    body.add(box(0.54, 0.16, 0.34, 0, 1.5, 0, M.team));                                    // yellow scarf: the other team
     const head = new THREE.Mesh(new THREE.SphereGeometry(0.15, 10, 8), M.skin); head.position.y = 1.72; body.add(head);
     const mask = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 8, 0, Math.PI * 2, 0, Math.PI * 0.6), M.cloth); mask.position.y = 1.735; body.add(mask);
     const leg = new THREE.Group(); const lm = box(0.2, 0.84, 0.24, 0, -0.42, 0, M.cloth2); leg.add(lm);   // pivot at the hip
