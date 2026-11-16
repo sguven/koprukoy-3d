@@ -687,8 +687,8 @@ export function buildVillage(ctx, layout, M) {
       for (let u = -len / 2 + 0.07; u <= len / 2 - 0.05; u += 0.14) a('railing', box(0.022, h - 0.12, 0.022, u, h / 2 + 0.06, 0));
       if (posts) for (const u of [-len / 2, len / 2]) a('railing', box(0.07, h + 0.5, 0.07, u, h / 2 - 0.2, 0));
     };
-    { // the gate: two leaves with an arched top rail, a rendered pillar with the electricity meter on the west side
-      const G = V.gate, [ax, az] = G.a, [bx, bz] = G.b, L = Math.hypot(bx - ax, bz - az), yaw = Math.atan2(-(bz - az), bx - ax);
+    for (const G of V.gates) { // a gate: two leaves with an arched top rail, a rendered pillar with the electricity meter on the west side
+      const [ax, az] = G.a, [bx, bz] = G.b, L = Math.hypot(bx - ax, bz - az), yaw = Math.atan2(-(bz - az), bx - ax);
       const { fr, bld } = mk((ax + bx) / 2, (az + bz) / 2, yaw), a = (k, g) => bat.add(k, g, fr, bld);
       for (const sx of [-1, 1]) {
         const cx = sx * L / 4, w = L / 2 - 0.06;
@@ -698,6 +698,12 @@ export function buildVillage(ctx, layout, M) {
       }
       a('garden', boxY(0.5, 0.5, -0.8, 1.45, -L / 2 - 0.3, 0)); a('trim', box(0.3, 0.42, 0.2, -L / 2 - 0.3, 1.68, 0)); a('metalDark', box(0.06, 0.5, 0.06, -L / 2 - 0.3, 1.3, 0.28));
       a('railing', box(0.09, G.h + 0.6, 0.09, L / 2 + 0.05, G.h / 2, 0));
+    }
+    if (V.tank) { // horizontal steel water tank on a rubble pedestal
+      const T = V.tank, { fr, bld } = mk(T.x, T.z, T.yaw), a = (k, g) => bat.add(k, g, fr, bld);
+      a('rubble', boxY(1.9, 1.3, -0.6, 1.1)); a('beton', boxY(2.0, 1.4, 1.1, 1.18));
+      const tk = new THREE.CylinderGeometry(0.62, 0.62, 1.8, 16); tk.rotateZ(Math.PI / 2); tk.translate(0, 1.82, 0); a('metal', tk);
+      for (const sx of [-0.92, 0.92]) a('metal', new THREE.SphereGeometry(0.62, 12, 8).scale(0.25, 1, 1).translate(sx, 1.82, 0));
     }
     for (const f of V.fences || []) along(f.pts, 2.4, (x, z, yaw, len) => ironPanel(x, z, yaw, len, f.h));
     // clipped hedge: overlapping leafy blocks of slightly different height
