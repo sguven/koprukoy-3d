@@ -151,7 +151,7 @@ export function buildVillage(ctx, layout, M) {
     // kerb + 1.5 m pavement on both sides, interrupted around junctions with other roads
     for (const side of (r.kerbSide ? [r.kerbSide] : [-1, 1])) {
       let run = [];
-      const flush = () => { if (run.length > 2) addKerb(run, side); run = []; };
+      const flush = () => { if (run.length > 4) addKerb(run, side); run = []; };   // v1.5.1: no pavement stubs under ~12 m
       for (let pi = 0; pi < r.line.length; pi++) {
         const p = r.line[pi], q = r.line[Math.min(r.line.length - 1, pi + 1)], o = r.line[Math.max(0, pi - 1)];
         const tl = Math.hypot(q[0] - o[0], q[1] - o[1]) || 1, kx = p[0] - (q[1] - o[1]) / tl * (hw + 0.9) * side, kz = p[1] + (q[0] - o[0]) / tl * (hw + 0.9) * side;   // where this kerb runs
@@ -168,6 +168,13 @@ export function buildVillage(ctx, layout, M) {
       bat.add('kerb', ribbon(line, side < 0 ? kerbProf.slice().reverse() : kerbProf, yAt, 1));
       const pav = [{ u: k1, dy: L + 0.13 }, { u: p1, dy: L + 0.12 }, { u: p1 + 0.25 * side, dy: L * 0.3 }];
       bat.add('pave', ribbon(line, side < 0 ? pav.slice().reverse() : pav, yAt, 1));
+      // v1.5.1: a pavement ends in a kerb across it, not in an open cut (owner's report)
+      for (const [e, f] of [[line[0], line[1]], [line[line.length - 1], line[line.length - 2]]]) {
+        const fl = Math.hypot(f[0] - e[0], f[1] - e[1]) || 1, fx = (f[0] - e[0]) / fl, fz = (f[1] - e[1]) / fl;
+        const sgn = e === line[0] ? 1 : -1, nx = -fz * sgn, nz = fx * sgn, u = (k0 + p1) / 2, len = Math.abs(p1 - k0) + 0.1;
+        const cx = e[0] + nx * u - fx * 0.07, cz = e[1] + nz * u - fz * 0.07;
+        const g = boxY(len, 0.16, -0.4, L + 0.14); g.rotateY(Math.atan2(-nz, nx)); g.translate(cx, yAt(cx, cz), cz); bat.add('kerb', g);
+      }
     }
   }
   // utility poles along the main streets, with three sagging cables between them
@@ -189,6 +196,22 @@ export function buildVillage(ctx, layout, M) {
       }
       if (!placed) prev = null;
       s += 32 + rnd() * 10;
+    }
+  }
+
+  // v1.5.1: the main street is traced in many pieces and each piece strings its own run of poles, so the cables used
+  // to stop in mid-air at every joint (owner's report). A pole that starts a run is now tied to the nearest pole of
+  // another run (or the pole before a skipped one), so the line runs unbroken through the village.
+  if (!centreOnly) {
+    const poles = props.filter(p => p.kind === 'pole');
+    for (const p of poles) {
+      if (p.prev) continue;
+      let best = null, bd = 62;
+      for (const q of poles) {
+        if (q === p || (q.prev && q.prev.x === p.x && q.prev.z === p.z)) continue;
+        const d = Math.hypot(q.x - p.x, q.z - p.z); if (d > 4 && d < bd) { bd = d; best = q; }
+      }
+      if (best) p.prev = { x: best.x, z: best.z };
     }
   }
 
@@ -709,6 +732,13 @@ export function buildVillage(ctx, layout, M) {
       }
       for (const [yy, w] of [[H - 0.5, 1.5], [H - 1.9, 1.1]]) { a('rust', box(2 * w, 0.07, 0.07, 0, yy, 0)); for (const sx of [-w + 0.1, 0, w - 0.1]) a('metal', cyl(0.05, 0.05, 0.2, sx, yy + 0.13, 0, 6)); }
       a('beton', boxY(2.0, 2.0, -0.6, 0.12));
+      // v1.5.1: the line of poles on the main road ends at the pylon — three cables from the nearest pole to its upper arm
+      let np = null, nd = 80; for (const q of props) if (q.kind === 'pole') { const d = Math.hypot(q.x - P.x, q.z - P.z); if (d < nd) { nd = d; np = q; } }
+      if (np) {
+        const y0 = yAt(np.x, np.z) + 8.5, y1 = fr.y + H - 0.3, dx = P.x - np.x, dz = P.z - np.z, dl = Math.hypot(dx, dz) || 1, ox = -dz / dl, oz = dx / dl, f = (t) => 4 * t * (1 - t);
+        for (const sx of [-0.6, 0, 0.6]) for (let i = 0; i < 8; i++) { const t0 = i / 8, t1 = (i + 1) / 8;
+          wires.push(np.x + ox * sx + dx * t0, y0 + (y1 - y0) * t0 - 0.5 * f(t0), np.z + oz * sx + dz * t0, np.x + ox * sx + dx * t1, y0 + (y1 - y0) * t1 - 0.5 * f(t1), np.z + oz * sx + dz * t1); }
+      }
     }
     for (const [species, x, z, size] of V.trees || []) treeSpots.push({ x, z, species, size, force: true });
     if (V.grove) { // a planted wood: a loose grid, skipping roads and houses
@@ -869,7 +899,7 @@ export function buildVillage(ctx, layout, M) {
         const di = box(0.42, 0.42, 0.05, 0, 0, 0); di.rotateZ(Math.PI / 4); di.translate(0, y0 + FLOOR * 1.42, 0.075); add('trim', di, fm);
         const dc = box(0.3, 0.3, 0.05, 0, 0, 0); dc.rotateZ(Math.PI / 4); dc.translate(0, y0 + FLOOR * 1.42, 0.09); add(wallKey, dc, fm);
       }
-      if (b.kind === 'koyokulu' && isFront) add('signBlue', box(1.5, 0.85, 0.05, 1.45, y0 + 1.75, 0.04), fm);   // the blue sign board beside the door
+      if (b.kind === 'koyokulu' && isFront) add('signOkul', box(1.5, 0.85, 0.05, 1.45, y0 + 1.75, 0.04), fm);   // "Köprüköy İlkokulu" board beside the door
       for (const h of holes) {
         const dep = 0.16;
         add(wallKey, box(h.w, 0.02, dep, h.x, h.y + h.h / 2 - 0.01, -dep / 2), fm);

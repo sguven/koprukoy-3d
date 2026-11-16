@@ -103,6 +103,12 @@ export function villageMaterials(lib, { quality = 2 } = {}) {
       albedo *= 0.82 + 0.3 * kkTone;
       albedo = mix(albedo, vec3(0.62, 0.59, 0.54), kkJoint * 0.85);`);
   M.signBlue = std({ color: 0x2a78c2, roughness: 0.45, metalness: 0.1 });
+  M.signOkul = std({ map: canvasTex(768, 436, (c, W, H) => {   // v1.5.1: the school's name board (name from the owner)
+    c.fillStyle = '#1f6fb8'; c.fillRect(0, 0, W, H); c.strokeStyle = '#ffffff'; c.lineWidth = 10; c.strokeRect(14, 14, W - 28, H - 28);
+    c.fillStyle = '#ffffff'; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.font = 'bold 56px sans-serif'; c.fillText('T.C.', W / 2, 84);
+    c.font = 'bold 104px sans-serif'; c.fillText('KÖPRÜKÖY', W / 2, 206); c.font = 'bold 96px sans-serif'; c.fillText('İLKOKULU', W / 2, 330);
+  }), roughness: 0.55 });
   M.rust = std({ color: 0x6e4a38, roughness: 0.85, metalness: 0.35 });
   M.Duvar_Gul = plasterTint('gul', 0xb27a8b); M.adobe = plasterTint('adobe', 0xbba283, 'albedo *= 0.85 + 0.25 * smoothstep(0.3, 0.8, texture2D(tAlb, vec2(vWPos.x * 0.5 + vWPos.z * 0.5, vWPos.y * 0.4)).g);');
   M.turquoise = plasterTint('turq', 0x8fc9b8, 'albedo *= 1.0 - 0.25 * (1.0 - smoothstep(0.0, 1.2, vWPos.y - 27.0));');
