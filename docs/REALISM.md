@@ -5,6 +5,21 @@ Two passes so far: **v0.7 "materials"** (surfaces only, nothing moved) and **v0.
 `model/koprukoy.glb` are still the v0.6 files. Terrain (SRTM 30 m), the reservoir at 724 m, the
 Çeşnigir Bridge body, D.260 and the roads outside the village are unchanged.
 
+## v1.5.1 — second check: cables, pavements, storeys, the school's name (Nov 2026)
+
+- **Köprüköy İlkokulu.** The long building with the bust is the primary school (owner). Its blue board reads
+  "T.C. KÖPRÜKÖY İLKOKULU" (`signOkul`).
+- **Power line.** Poles are strung per traced road piece (`main_*`), so the cables ended at every joint between two
+  pieces. A pole that starts a run is now tied to the nearest pole of another run within 62 m; at the pylon junction
+  three cables run from the last pole to the pylon's upper arm.
+- **Pavements.** Each run of kerb and pavement ends in a kerb across it; runs shorter than about 12 m (the stubs left
+  between two junctions) are not built.
+- **Storeys (owner's rule): single storey unless clearly two.** v0.9.5 had made about half of the compact tile-roofed
+  houses out of sight of any panorama two storeys by a hash. Those 91 are now single storey; the 26 that a panorama
+  shows as two storeys (`TWO_STOREY_SEEN`) stay. They are rebuilt like the owner's corrections (`orig` + replayed
+  draws), so colours, roofs and all other houses are unchanged.
+- The brick wall at the pylon corner is moved off the pavement; the trees along the road stand behind it.
+
 ## v1.5 — three Street View panoramas (Nov 2026)
 
 The owner linked three Street View panoramas (images of April 2026) and asked for the model to be checked against
