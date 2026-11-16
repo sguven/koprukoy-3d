@@ -211,7 +211,10 @@ export function buildVillage(ctx, layout, M) {
     if (b.orig) { buildCorrected(b); continue; }
     buildHouse(b);
   }
+  // v1.5: buildings added from Street View, each on a random stream of its own (the village's stream is not touched)
+  for (const b of layout.extra || []) { rnd = mulberry32(Math.round(b.x * 100) ^ Math.round(b.z * 100)); buildHouse(b); rnd = baseRnd; }
   for (const w of S.stoneWalls || []) buildStoneWall(w);
+  if (S.sv && !centreOnly) buildStreetViewSites(S.sv);
   if (S.roseYard && !centreOnly) buildRoseYard(S.roseYard);
   if (S.ownerPlot && !centreOnly) buildOwnerPlot(S.ownerPlot);
   buildCarsi(S);
@@ -362,6 +365,8 @@ export function buildVillage(ctx, layout, M) {
     cx /= nP; cz /= nP; area = Math.abs(area) / 2;
     const inside = (x, z) => { let s = false; for (let i = 0, j = nP - 1; i < nP; j = i++) { const [xi, zi] = P[i], [xj, zj] = P[j]; if ((zi > z) !== (zj > z) && x < (xj - xi) * (z - zi) / (zj - zi) + xi) s = !s; } return s; };
     const clear = (x, z) => inside(x, z) && !onRoad(x, z, 2.5);
+    // v1.5: c.open = ground that Street View shows as open field; what falls there is drawn from the stream but not built
+    const O = c.open, inOpen = (x, z) => !!O && x > O.x0 && x < O.x1 && z > O.z0 && z < O.z1;
     const id = bid++, yG = yAt(cx, cz), frame = { x: cx, y: yG, z: cz, yaw: 0 }, bld = { id, base: yG - 4, top: yG + 2, yaw: 0, cx, cz };
     const add = (key, geo) => bat.add(key, geo, frame, bld);
     const wh = 0.9;
@@ -382,15 +387,17 @@ export function buildVillage(ctx, layout, M) {
       if (cl && rnd() < 0.75) { x = cl.x + (rnd() - 0.5) * 9; z = cl.z + (rnd() - 0.5) * 9; } else { x = x0 + rnd() * (x1 - x0); z = z0 + rnd() * (z1 - z0); cl = rnd() < 0.5 ? { x, z } : null; }
       if (!clear(x, z)) continue;
       const lx = x - cx, lz = z - cz, dy = yAt(x, z) - yG, h = 0.45 + rnd() * 0.55, yaw = yaw0 + (rnd() - 0.5) * 0.25;
-      const st = box(0.36, h + 0.35, 0.1, 0, dy + h / 2 - 0.17, 0); st.rotateY(yaw); st.translate(lx, 0, lz); add('limestone', st);
-      if (rnd() < 0.75) { const sl = box(0.5, 0.22, 1.5, 0, dy + 0.08, 0.85); sl.rotateY(yaw); sl.translate(lx, 0, lz); add('limestone', sl); }
+      const hide = inOpen(x, z);
+      const st = box(0.36, h + 0.35, 0.1, 0, dy + h / 2 - 0.17, 0); st.rotateY(yaw); st.translate(lx, 0, lz); if (!hide) add('limestone', st);
+      if (rnd() < 0.75 && !hide) { const sl = box(0.5, 0.22, 1.5, 0, dy + 0.08, 0.85); sl.rotateY(yaw); sl.translate(lx, 0, lz); add('limestone', sl); }
       placed++;
     }
     // trees: junipers / pines / the odd mulberry scattered over the hillside
     const nt = Math.floor(area / (c.trees || 300));
     for (let i = 0, t = 0; i < nt && t < nt * 20; t++) {
       const x = x0 + rnd() * (x1 - x0), z = z0 + rnd() * (z1 - z0); if (!clear(x, z)) continue;
-      treeSpots.push({ x, z, species: rnd() < 0.75 ? 'pine' : 'mulberry', size: 0.7 + rnd() * 0.6, force: true }); i++;
+      const spot = { x, z, species: rnd() < 0.75 ? 'pine' : 'mulberry', size: 0.7 + rnd() * 0.6, force: true }; i++;
+      if (!inOpen(x, z)) treeSpots.push(spot);
     }
   }
 
@@ -465,8 +472,9 @@ export function buildVillage(ctx, layout, M) {
       for (let i = 0; i < k; i++) {
         const px = ax + (bx - ax) * (i + 0.5) / k, pz = az + (bz - az) * (i + 0.5) / k, dy = yAt(px, pz) - yG;
         const h = sw.h + 0.08 * Math.sin(px * 1.7 + pz * 2.3);
-        const g = boxY(L / k + 0.12, 0.55, dy - 0.8, dy + h); g.rotateY(Math.atan2(-(bz - az), bx - ax)); g.translate(px - x0, 0, pz - z0); bat.add('rubble', g, frame, bld);
-        const cap = boxY(L / k + 0.16, 0.62, dy + h - 0.02, dy + h + 0.1); cap.rotateY(Math.atan2(-(bz - az), bx - ax)); cap.translate(px - x0, 0, pz - z0); bat.add('fieldstone', cap, frame, bld);
+        const t = sw.t || 0.55;   // v1.5: sw.key / sw.cap / sw.t = another wall (bare brick, whitewash) instead of dry stone
+        const g = boxY(L / k + 0.12, t, dy - 0.8, dy + h); g.rotateY(Math.atan2(-(bz - az), bx - ax)); g.translate(px - x0, 0, pz - z0); bat.add(sw.key || 'rubble', g, frame, bld);
+        const cap = boxY(L / k + 0.16, t + 0.07, dy + h - 0.02, dy + h + 0.1); cap.rotateY(Math.atan2(-(bz - az), bx - ax)); cap.translate(px - x0, 0, pz - z0); bat.add(sw.cap || 'fieldstone', cap, frame, bld);
       }
     }
   }
@@ -642,6 +650,77 @@ export function buildVillage(ctx, layout, M) {
   }
 
   // ---------------------------------------------------------------- generic house -------------
+  // ---------------------------------------------------------------- Street View additions (v1.5) ----
+  // What the panoramas of Apr 2026 show at the lane junction west of the centre and at the junction by the pylon,
+  // besides the houses: an iron gate and fence, a hedge, a bust on a white pedestal with a flag pole, a steel lattice
+  // pylon, and the trees. World positions from SV_SITES; no draws from the village's random stream.
+  function buildStreetViewSites(V) {
+    const mk = (x, z, yaw = 0) => { const y = yAt(x, z), id = bid++; return { fr: { x, y, z, yaw }, bld: { id, base: y - 3, top: y + 12, yaw, cx: x, cz: z }, y }; };
+    const along = (pts, step, fn) => { for (let i = 0; i + 1 < pts.length; i++) { const [ax, az] = pts[i], [bx, bz] = pts[i + 1], L = Math.hypot(bx - ax, bz - az), n = Math.max(1, Math.round(L / step)); for (let k = 0; k < n; k++) fn(ax + (bx - ax) * (k + 0.5) / n, az + (bz - az) * (k + 0.5) / n, Math.atan2(-(bz - az), bx - ax), L / n); } };
+    // wrought-iron panel: rails top and bottom, bars with spear tips, posts at both ends
+    const ironPanel = (x, z, yaw, len, h, posts = true) => {
+      const { fr, bld } = mk(x, z, yaw), a = (k, g) => bat.add(k, g, fr, bld);
+      a('railing', box(len, 0.05, 0.04, 0, h - 0.18, 0)); a('railing', box(len, 0.05, 0.04, 0, 0.22, 0));
+      for (let u = -len / 2 + 0.07; u <= len / 2 - 0.05; u += 0.14) a('railing', box(0.022, h - 0.12, 0.022, u, h / 2 + 0.06, 0));
+      if (posts) for (const u of [-len / 2, len / 2]) a('railing', box(0.07, h + 0.5, 0.07, u, h / 2 - 0.2, 0));
+    };
+    { // the gate: two leaves with an arched top rail, a rendered pillar with the electricity meter on the west side
+      const G = V.gate, [ax, az] = G.a, [bx, bz] = G.b, L = Math.hypot(bx - ax, bz - az), yaw = Math.atan2(-(bz - az), bx - ax);
+      const { fr, bld } = mk((ax + bx) / 2, (az + bz) / 2, yaw), a = (k, g) => bat.add(k, g, fr, bld);
+      for (const sx of [-1, 1]) {
+        const cx = sx * L / 4, w = L / 2 - 0.06;
+        a('railing', box(w, 0.06, 0.05, cx, 0.2, 0)); a('railing', box(w, 0.06, 0.05, cx, G.h - 0.45, 0)); a('railing', box(0.06, G.h, 0.05, cx - sx * w / 2, G.h / 2 + 0.1, 0)); a('railing', box(0.06, G.h + 0.25, 0.05, cx + sx * w / 2, G.h / 2 + 0.22, 0));
+        for (let u = -w / 2 + 0.1; u <= w / 2 - 0.08; u += 0.13) { const t = (u + w / 2) / w, top = G.h + 0.25 * (sx > 0 ? 1 - t : t); a('railing', box(0.022, top - 0.1, 0.022, cx + u, top / 2 + 0.15, 0)); }
+        a('metalDark', box(w - 0.1, 0.42, 0.03, cx, 0.45, 0));   // sheet panel with scroll work along the foot
+      }
+      a('garden', boxY(0.5, 0.5, -0.8, 1.45, -L / 2 - 0.3, 0)); a('trim', box(0.3, 0.42, 0.2, -L / 2 - 0.3, 1.68, 0)); a('metalDark', box(0.06, 0.5, 0.06, -L / 2 - 0.3, 1.3, 0.28));
+      a('railing', box(0.09, G.h + 0.6, 0.09, L / 2 + 0.05, G.h / 2, 0));
+    }
+    for (const f of V.fences || []) along(f.pts, 2.4, (x, z, yaw, len) => ironPanel(x, z, yaw, len, f.h));
+    // clipped hedge: overlapping leafy blocks of slightly different height
+    for (const h of V.hedges || []) along(h.pts, 0.8, (x, z, yaw, len) => {
+      const { fr, bld } = mk(x, z, yaw), k = Math.sin(x * 3.1 + z * 1.7), g = new THREE.IcosahedronGeometry(1, 1); g.scale(len * 0.85, h.h * 0.55 + 0.1 * k, h.t * 0.5); g.translate(0, h.h * 0.5 + 0.06 * k, 0); bat.add('vine', g, fr, bld);
+    });
+    if (V.bust) { // Atatürk bust: stepped base, tall white pedestal with a dark plaque, bronze head and shoulders
+      const B = V.bust, { fr, bld } = mk(B.x, B.z, Math.atan2(-B.face[0], -B.face[1]) + Math.PI), a = (k, g) => bat.add(k, g, fr, bld);   // local +z faces the lane
+      a('beton', boxY(2.4, 2.4, -0.6, 0.14)); a('trim', boxY(1.5, 1.5, 0.14, 0.3)); a('trim', boxY(0.95, 0.95, 0.3, 1.95)); a('trim', boxY(1.1, 1.1, 1.95, 2.05));
+      a('metalDark', box(0.5, 0.34, 0.03, 0, 1.3, 0.49));
+      const sh = new THREE.CapsuleGeometry(0.17, 0.34, 4, 10); sh.rotateZ(Math.PI / 2); sh.scale(1, 1.05, 0.8); sh.translate(0, 2.25, 0); a('bronze', sh);
+      a('bronze', boxY(0.5, 0.36, 2.05, 2.2)); a('bronze', cyl(0.085, 0.1, 0.16, 0, 2.47, 0, 10));
+      a('bronze', new THREE.SphereGeometry(0.17, 16, 12).scale(1, 1.2, 1.08).translate(0, 2.72, 0.01));
+    }
+    if (V.flagPole) { // white pole with the flag flying along the façade
+      const P = V.flagPole, { fr, bld } = mk(P.x, P.z, Math.atan2(-P.face[0], -P.face[1]) + Math.PI), a = (k, g) => bat.add(k, g, fr, bld);
+      a('beton', boxY(0.5, 0.5, -0.5, 0.2)); a('trim', cyl(0.035, 0.05, 7.6, 0, 3.9, 0, 8)); a('metal', new THREE.SphereGeometry(0.07, 8, 6).translate(0, 7.74, 0));
+      const g = new THREE.PlaneGeometry(1.5, 1.0, 6, 1), p = g.attributes.position; for (let i = 0; i < p.count; i++) p.setZ(i, 0.09 * Math.sin((p.getX(i) + 0.75) * 3.0)); g.computeVertexNormals(); g.translate(0.8, 7.1, 0); bat.add('flagTR', g, fr);
+    }
+    if (V.pylon) { // steel lattice pylon: four tapering legs, horizontal rings, zig-zag bracing, two cross-arms
+      const P = V.pylon, { fr, bld } = mk(P.x, P.z, 0.35), a = (k, g) => bat.add(k, g, fr, bld), H = 11, b0 = 0.75, b1 = 0.22;
+      const half = (y) => b0 + (b1 - b0) * y / H, bar = (x0, y0, z0, x1, y1, z1, t = 0.045) => {
+        const d = new THREE.Vector3(x1 - x0, y1 - y0, z1 - z0), len = d.length(), g = box(t, len, t, 0, 0, 0);
+        g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize())); g.translate((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2); a('rust', g);
+      };
+      const C = [[1, 1], [1, -1], [-1, -1], [-1, 1]];
+      for (const [sx, sz] of C) bar(sx * b0, -0.4, sz * b0, sx * b1, H, sz * b1, 0.08);
+      const NL = 8;
+      for (let l = 0; l < NL; l++) {
+        const ya = H * l / NL, yb = H * (l + 1) / NL, ha = half(ya), hb = half(yb);
+        for (let f = 0; f < 4; f++) { const [ax, az] = C[f], [bx, bz] = C[(f + 1) % 4]; bar(ax * hb, yb, az * hb, bx * hb, yb, bz * hb); if (l % 2) bar(ax * ha, ya, az * ha, bx * hb, yb, bz * hb); else bar(bx * ha, ya, bz * ha, ax * hb, yb, az * hb); }
+      }
+      for (const [yy, w] of [[H - 0.5, 1.5], [H - 1.9, 1.1]]) { a('rust', box(2 * w, 0.07, 0.07, 0, yy, 0)); for (const sx of [-w + 0.1, 0, w - 0.1]) a('metal', cyl(0.05, 0.05, 0.2, sx, yy + 0.13, 0, 6)); }
+      a('beton', boxY(2.0, 2.0, -0.6, 0.12));
+    }
+    for (const [species, x, z, size] of V.trees || []) treeSpots.push({ x, z, species, size, force: true });
+    if (V.grove) { // a planted wood: a loose grid, skipping roads and houses
+      const G = V.grove, hsh = (u, v) => { const t = Math.sin(u * 12.9898 + v * 78.233) * 43758.5453; return t - Math.floor(t); };
+      const nearB = (x, z) => layout.buildings.some(b => !b.gone && Math.hypot(b.x - x, b.z - z) < Math.max(b.w, b.d) / 2 + 5);
+      for (let x = G.x0; x <= G.x1; x += G.step) for (let z = G.z0; z <= G.z1; z += G.step) {
+        const px = x + (hsh(x, z) - 0.5) * 3.2, pz = z + (hsh(z, x) - 0.5) * 3.2;
+        if (onRoad(px, pz, 5) || nearB(px, pz)) continue;
+        treeSpots.push({ x: px, z: pz, species: G.species, size: 1.0 + 0.5 * hsh(x + 7, z + 3), force: true });
+      }
+    }
+  }
   function faceMatrix(side, w, d) {
     const m = new THREE.Matrix4(), r = new THREE.Matrix4();
     if (side === '+z') { m.makeTranslation(0, 0, d / 2); }
@@ -724,7 +803,8 @@ export function buildVillage(ctx, layout, M) {
       // stretches on long walls (Street View 03/36/57/60) — never a ribbon of six
       let nw = isBarn ? (L > 9 ? 2 : L > 5 ? 1 : 0) : Math.max(L > 2.6 ? 1 : 0, Math.min(isFront ? (L > 15 ? 4 : 3) : 2, Math.round((L - 1.0) / 3.8)));
       if (b.kind === 'market' || b.kind === 'kahve') nw = isFront ? Math.max(2, Math.round(L / 2.2)) : Math.round(L / 3.5);
-      if (b.kind === 'school') nw = Math.round(L / 3.0);
+      if (b.kind === 'school' || b.kind === 'koyokulu') nw = Math.round(L / 3.0);
+      const bandHere = !!b.band && porchSide(b, b.band.dir) === side;   // v1.5: the façade with the white band
       const doorIdx = isFront && nw > 0 ? Math.floor(nw / 2) : -1;
       const balIdx = balcony && isFront && nw > 0 ? (nw > 1 ? (doorIdx + 1) % nw : 0) : -1;
       for (let k = 0; k < n; k++) {
@@ -742,6 +822,7 @@ export function buildVillage(ctx, layout, M) {
             }
             continue;
           }
+          if (bandHere && k >= 1) continue;   // the upper floor is blank either side of the band (Street View)
           if (k === 1 && i === balIdx) { // balcony door
             holes.push({ x, y: fy + 1.05, w: 0.9, h: 2.1 }); panes.push({ x, y: fy + 1.05, w: 0.9, h: 2.1, door: true, glassDoor: true });
             add('beton', box(2.8, 0.15, 1.25, x, fy - 0.08, 0.6), fm);
@@ -782,6 +863,13 @@ export function buildVillage(ctx, layout, M) {
       }
       // the wall itself, with holes, and the reveals + panes
       add(wallKey, facadeWithHoles(L, y0, y1, 0, 1, holes), fm);
+      if (bandHere) {   // white render band up the middle of the wall with a diamond in the wall colour
+        add('trim', box(1.35, y1 - y0 - 0.1, 0.05, 0, (y0 + y1) / 2, 0.03), fm);
+        const dm = box(0.78, 0.78, 0.05, 0, 0, 0); dm.rotateZ(Math.PI / 4); dm.translate(0, y0 + FLOOR * 1.42, 0.06); add(wallKey, dm, fm);
+        const di = box(0.42, 0.42, 0.05, 0, 0, 0); di.rotateZ(Math.PI / 4); di.translate(0, y0 + FLOOR * 1.42, 0.075); add('trim', di, fm);
+        const dc = box(0.3, 0.3, 0.05, 0, 0, 0); dc.rotateZ(Math.PI / 4); dc.translate(0, y0 + FLOOR * 1.42, 0.09); add(wallKey, dc, fm);
+      }
+      if (b.kind === 'koyokulu' && isFront) add('signBlue', box(1.5, 0.85, 0.05, 1.45, y0 + 1.75, 0.04), fm);   // the blue sign board beside the door
       for (const h of holes) {
         const dep = 0.16;
         add(wallKey, box(h.w, 0.02, dep, h.x, h.y + h.h / 2 - 0.01, -dep / 2), fm);
@@ -820,10 +908,10 @@ export function buildVillage(ctx, layout, M) {
         add('chimney', boxY(0.5, 0.5, roofY - 0.3, roofY + 0.75, cx, cz)); add('beton', box(0.7, 0.07, 0.7, cx, roofY + 0.78, cz));
         if (rnd() < 0.3) add('metalDark', cyl(0.12, 0.12, 0.5, cx, roofY + 1.0, cz, 10));
         // satellite dish at an eaves corner
-        if (rnd() < 0.45) { const dish = new THREE.CircleGeometry(0.4, 18); dish.rotateX(-0.9); dish.translate(W - 0.5, ry + 0.25, Dd - 0.3); add('metal', dish); add('metalDark', cyl(0.025, 0.025, 1.1, W - 0.5, ry - 0.25, Dd - 0.2)); }
-        if (rnd() < 0.18) addTank(-W + 1.2, ry + rise * 0.3 + 0.2, 0);
+        if (rnd() < 0.45 && !b.plain) { const dish = new THREE.CircleGeometry(0.4, 18); dish.rotateX(-0.9); dish.translate(W - 0.5, ry + 0.25, Dd - 0.3); add('metal', dish); add('metalDark', cyl(0.025, 0.025, 1.1, W - 0.5, ry - 0.25, Dd - 0.2)); }
+        if (rnd() < 0.18 && !b.plain) addTank(-W + 1.2, ry + rise * 0.3 + 0.2, 0);
         // solar water heater on some roofs (very common in the region)
-        if (rnd() < 0.3) { const sp = box(1.9, 0.08, 1.1, 0, 0, 0); sp.rotateX(-pitch); sp.translate(W * 0.3, ry + (Dd * 0.55) * Math.tan(pitch) + 0.15, Dd * 0.45); add('metalDark', sp); const tk = new THREE.CylinderGeometry(0.3, 0.3, 1.5, 12); tk.rotateZ(Math.PI / 2); tk.translate(W * 0.3, ry + rise - 0.05, 0.3); add('metal', tk); }
+        if (rnd() < 0.3 && !b.plain) { const sp = box(1.9, 0.08, 1.1, 0, 0, 0); sp.rotateX(-pitch); sp.translate(W * 0.3, ry + (Dd * 0.55) * Math.tan(pitch) + 0.15, Dd * 0.45); add('metalDark', sp); const tk = new THREE.CylinderGeometry(0.3, 0.3, 1.5, 12); tk.rotateZ(Math.PI / 2); tk.translate(W * 0.3, ry + rise - 0.05, 0.3); add('metal', tk); }
       } else {
         // sheet roof: thin edge, a few purlin ends and a bit of overhang shadow
         add('metalDark', box(w + 2 * e, 0.06, 0.06, 0, ry - 0.03, d / 2 + e));

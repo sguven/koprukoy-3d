@@ -320,7 +320,11 @@ export function buildVillageLayout(terrH, existingRoads = []) {
     }
   }
   const stoneWalls = STONE_WALLS.map(sw => stoneWallLine(roads, sw)).filter(Boolean);
-  return { roads, buildings, sites: { ...SITES, stoneWalls, roseYard: ROSE_YARD, ownerPlot: OWNER_PLOT }, rnd };
+  for (const w of SV_SITES.walls) stoneWalls.push({ gaps: [], ...w });
+  // v1.5: buildings added from Street View are kept out of `buildings` (its length and order feed the random stream)
+  const extra = SV_SITES.extra.map(e => { const b = { ...e }; setGround(b); return b; });
+  const cemeteries = (SITES.cemeteries || []).map(c => ({ ...c, open: SV_OPEN, ...(c.label === 'grave strip' ? { wallEdges: [] } : {}) }));
+  return { roads, buildings, extra, sites: { ...SITES, cemeteries, stoneWalls, roseYard: ROSE_YARD, ownerPlot: OWNER_PLOT, sv: SV_SITES }, rnd };
 }
 
 // ---------------------------------------------------------------- owner's corrections (v0.9.7)
@@ -352,7 +356,54 @@ const OWNER_FIX = [
   // houses are run dry in village.js (their random draws are still made, so nothing else in the village changes).
   { xz: [-294.9, -337.9], set: { gone: true }, note: 'not a house: the viewing terrace on the rock' },
   { xz: [-286.5, -349.2], set: { gone: true }, note: 'not a house: bare rock between the terrace and the pier' },
+  // v1.5 (the three Street View panoramas the owner linked on 16 Nov 2026, images of Apr 2026; see SV_SITES below).
+  // The lane junction west of the centre (panoramas at model 108.2, 277.4 and 97.2, 273.7):
+  { xz: [108.4, 296.9], set: { storeys: 2, ownWall: 'Duvar_Visne', wall: 'none', tree: false, band: { dir: [-0.41, -0.91] } },
+    note: 'two storeys, dusty-rose render (was one storey of bare stone); on the side facing the junction a white vertical band with a ' +
+          'rose diamond, two windows on the ground floor only; no garden wall: an iron gate, a hedge and two junipers (SV_SITES)' },
+  { xz: [126.1, 289.8], set: { wall: 'none' }, note: 'no grey wall with a green gate here: the garden is closed by the iron gate and fence on the lane' },
+  { xz: [136.2, 268.4], set: { ownWall: 'Duvar_Okr' }, note: 'ochre render, not pink' },
+  { xz: [74.4, 284.3], set: { gone: true }, note: 'not a separate barn: the north half of the long building below' },
+  { xz: [81.2, 297.1], set: { x: 77.8, z: 290.7, w: 26.9, d: 9.1, kind: 'koyokulu', storeys: 1, ownWall: 'Duvar_Krem', wall: 'none', tree: false, faceFix: -0.42,
+      doors: [{ dir: [0.913, -0.408], at: 0.778 }] },
+    note: 'one long single-storey public building (the satellite tracer had split its roof in two houses): cream render, red tile roof, ' +
+          'brown doors and a blue sign board, an Atatürk bust and a flag pole in front, pines round it, a dry-stone yard wall with a gate' },
 ];
+// v1.5: what the three panoramas show besides the houses. Model metres (x east, z south). Nothing here takes a draw
+// from the village's random stream, so every other house, tree and detail stays where it was.
+//   walls   free-standing walls as polylines: dry stone (default), `key: 'brick'` bare red brick, `key: 'garden'` whitewash
+//   extra   buildings the satellite tracer missed (dark old roof under trees)
+export const SV_SITES = {
+  walls: [
+    { pts: [[95.5, 306.0], [93.9, 294.0], [92.7, 283.4]], h: 1.0, note: 'yard wall of the long building, south of its gate, on along the lane' },
+    { pts: [[92.2, 280.6], [91.0, 274.5], [89.6, 267.0], [88.6, 262.6]], h: 1.0, note: 'the same wall north of the gate, up to the stone barn' },
+    { pts: [[98.6, 258.0], [100.3, 268.5], [101.5, 271.8], [105.5, 272.6], [114.0, 266.5], [123.9, 256.6]], h: 0.9,
+      note: 'garden wall on the north side of the junction, curving from the north lane into the east lane' },
+    { pts: [[462.9, 549.0], [464.0, 553.8], [467.9, 566.0], [470.8, 570.3], [478.0, 568.2], [490.0, 566.8]], h: 1.8, t: 0.22, key: 'brick', cap: 'brick',
+      note: 'bare red-brick garden wall round the corner plot, north-east of the junction by the pylon' },
+    { pts: [[382.0, 512.0], [382.6, 560.0], [383.2, 642.0]], h: 1.0, t: 0.3, key: 'garden', cap: 'garden', note: 'low whitewashed cemetery wall beyond the open field' },
+  ],
+  extra: [
+    { x: 86.0, z: 258.8, yaw: 0.735, w: 8.5, d: 4.4, storeys: 1, roof: 'g', barn: true, plain: true, wallKey: 'rubble', note: 'old rubble-stone barn with a low tile roof at the junction' },
+  ],
+  gate: { a: [108.7, 280.9], b: [112.9, 280.3], h: 1.75 },                       // two-leaf wrought-iron gate, meter box on its west pillar
+  fences: [{ pts: [[113.2, 280.2], [115.8, 276.6], [122.5, 270.5]], h: 1.5 }],  // iron fence on along the east lane
+  hedges: [{ pts: [[107.3, 283.4], [102.8, 285.6], [101.3, 289.5], [101.4, 294.5]], h: 1.7, t: 1.3 }],
+  bust: { x: 83.6, z: 280.4, face: [0.913, -0.408] }, flagPole: { x: 82.4, z: 282.6, face: [0.913, -0.408] },
+  pylon: { x: 474.0, z: 571.5 },                                                  // rusty steel lattice pylon on the kerbed corner
+  trees: [
+    ['juniper', 115.5, 280.5, 1.1], ['juniper', 109.3, 283.5, 1.0],
+    ['pine', 88.6, 288.0, 0.85], ['pine', 88.2, 293.6, 0.95], ['pine', 89.4, 299.4, 0.85], ['pine', 86.4, 277.4, 0.9],
+    ['mulberry', 84.0, 268.2, 1.2],                                               // the big bare tree over the barn
+    ['pine', 68.0, 285.0, 1.0], ['pine', 70.5, 295.5, 0.9], ['pine', 66.0, 276.0, 0.95],
+    ['mulberry', 449.0, 568.5, 1.3],                                              // the big tree on the south-west corner
+    ['mulberry', 449.5, 556.0, 1.0], ['poplar', 445.5, 541.0, 1.0], ['mulberry', 441.0, 527.0, 0.9], ['mulberry', 436.0, 512.0, 1.0],   // the row along the road's west side
+  ],
+  grove: { x0: 484, x1: 522, z0: 582, z1: 624, step: 6.2, species: 'pine' },     // the pine wood between the junction and the school
+};
+// The field between the big cemetery and the main road is open grass (panorama at model 464.5, 574.6 looking west): no
+// graves or cemetery trees east of the whitewashed wall. The cemeteries' draws are still made, the results dropped.
+const SV_OPEN = { x0: 383, x1: 440, z0: 505, z1: 730 };
 // v1.3 (owner's screenshot of 11 Nov 2026): the yard on the south side of the dusty-rose house (88.6, 350.0). A low
 // galvanised wire-mesh fence runs from the house's south-west corner round the open ground to the tandır by the
 // fruit tree (the line the owner drew, cast onto the terrain from his view); inside it, where he put the two
@@ -438,6 +489,12 @@ export function carsiBoxes(sites) {
   if (sites.kiosk) out.push(sites.kiosk.x, sites.kiosk.z, sites.kiosk.yaw, sites.kiosk.w / 2, sites.kiosk.d / 2);
   if (sites.cardak) out.push(sites.cardak.x, sites.cardak.z, 0, sites.cardak.size / 2, sites.cardak.size / 2);
   for (const w of sites.stoneWalls || []) for (const [x0, z0, x1, z1] of wallPieces(w)) out.push((x0 + x1) / 2, (z0 + z1) / 2, Math.atan2(-(z1 - z0), x1 - x0), Math.hypot(x1 - x0, z1 - z0) / 2, 0.3);
+  const sv = sites.sv;          // v1.5: Street View additions — the barn, the gate and iron fence, the bust, the pylon
+  if (sv) {
+    for (const e of sv.extra) out.push(e.x, e.z, e.yaw, e.w / 2, e.d / 2);
+    for (const [x0, z0, x1, z1] of [[...sv.gate.a, ...sv.gate.b], ...sv.fences.flatMap(f => fencePieces(f.pts))]) out.push((x0 + x1) / 2, (z0 + z1) / 2, Math.atan2(-(z1 - z0), x1 - x0), Math.hypot(x1 - x0, z1 - z0) / 2, 0.08);
+    out.push(sv.bust.x, sv.bust.z, 0, 0.6, 0.6, sv.pylon.x, sv.pylon.z, 0, 0.8, 0.8);
+  }
   const op = sites.ownerPlot;   // v1.4: the owner's kamelya and chain-link fence
   if (op) {
     const k = op.kamelya; out.push(k.x, k.z, k.yaw, k.w / 2 + 0.15, k.d / 2 + 0.15);

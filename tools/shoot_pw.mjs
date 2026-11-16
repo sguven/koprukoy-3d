@@ -3,7 +3,7 @@
 // Usage: node tools/shoot_pw.mjs <outdir> "<view>;<view>;..."
 //   view = named viewpoint (genel, kopru, ...), cam:px,py,pz,tx,ty,tz, walk:x,z,headingDeg[,pitch][,label]
 //   (heading in compass degrees, 0 = north, 90 = east; model frame x east, z south)
-// Env: W, H (viewport), HASH (e.g. '#lite'), REPO, THREE_DIR, PRESET (Game performance preset: auto / smooth / quality)
+// Env: FOV (vertical field of view in degrees, to match a photo), W, H (viewport), HASH (e.g. '#lite'), REPO, THREE_DIR, PRESET (Game performance preset: auto / smooth / quality)
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -66,6 +66,7 @@ for (const v of views) {
     console.log('bots', info);
     await settle(2);
   } else await page.evaluate(v => window.__kk.go(v, true), v);
+  if (process.env.FOV) await page.evaluate(f => { const c = window.__kk.camera; c.fov = f; c.updateProjectionMatrix(); }, +process.env.FOV);
   await settle(4);
   await page.screenshot({ path: path.join(out, `${name}.jpg`), type: 'jpeg', quality: 85, timeout: 600000, animations: 'disabled' });
   console.log('shot', name, ((Date.now() - t1) / 1000).toFixed(1), 's');
