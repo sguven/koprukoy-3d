@@ -92,6 +92,18 @@ export function villageMaterials(lib, { quality = 2 } = {}) {
   // village render colours seen in Street View (mint green, pale blue, salmon)
   M.Duvar_Mint = plasterTint('mint', 0xb6c9a3); M.Duvar_Mavi = plasterTint('mavi', 0xa9c4d6); M.Duvar_Somon = plasterTint('somon', 0xd99a7a); M.Duvar_Beton = plasterTint('cbeton', 0x9a9890); M.Duvar_Lila = plasterTint('lila', 0xb4aec6);
   // v0.9.7: soft red-magenta (dusty rose) render, a natural earth-pigment tone (owner); adobe mud plaster for the tandır house
+  // v1.5 (Street View, Apr 2026): the two-storey house at the lane junction is a deeper dusty rose than the owner's;
+  // bare red-brick garden wall with mortar courses; blue enamel sign board; rusty steel of the lattice pylon
+  M.Duvar_Visne = plasterTint('visne', 0xa4606c);
+  M.brick = plasterTint('brick', 0xa9583e, `
+      float kkRow = vWPos.y / 0.085, kkOdd = mod(floor(kkRow), 2.0);
+      float kkCol = (vWPos.x * 0.83 + vWPos.z * 0.56) / 0.24 + 0.5 * kkOdd;
+      float kkJoint = max(smoothstep(0.80, 0.94, fract(kkRow)), smoothstep(0.90, 0.97, fract(kkCol)));
+      float kkTone = fract(sin(dot(vec2(floor(kkRow), floor(kkCol)), vec2(12.9898, 78.233))) * 43758.5453);
+      albedo *= 0.82 + 0.3 * kkTone;
+      albedo = mix(albedo, vec3(0.62, 0.59, 0.54), kkJoint * 0.85);`);
+  M.signBlue = std({ color: 0x2a78c2, roughness: 0.45, metalness: 0.1 });
+  M.rust = std({ color: 0x6e4a38, roughness: 0.85, metalness: 0.35 });
   M.Duvar_Gul = plasterTint('gul', 0xb27a8b); M.adobe = plasterTint('adobe', 0xbba283, 'albedo *= 0.85 + 0.25 * smoothstep(0.3, 0.8, texture2D(tAlb, vec2(vWPos.x * 0.5 + vWPos.z * 0.5, vWPos.y * 0.4)).g);');
   M.turquoise = plasterTint('turq', 0x8fc9b8, 'albedo *= 1.0 - 0.25 * (1.0 - smoothstep(0.0, 1.2, vWPos.y - 27.0));');
   // courtyard wall: red ochre plaster, faded and dusty at the base

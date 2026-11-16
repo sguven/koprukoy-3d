@@ -5,6 +5,48 @@ Two passes so far: **v0.7 "materials"** (surfaces only, nothing moved) and **v0.
 `model/koprukoy.glb` are still the v0.6 files. Terrain (SRTM 30 m), the reservoir at 724 m, the
 Çeşnigir Bridge body, D.260 and the roads outside the village are unchanged.
 
+## v1.5 — three Street View panoramas (Nov 2026)
+
+The owner linked three Street View panoramas (images of April 2026) and asked for the model to be checked against
+them. Each was matched in the model: panorama position → pin frame with `docs/survey/georef.json` → model frame with
+the v0.9 warp, rendered with `FOV=70 node tools/shoot_pw.mjs … "walk:x,z,heading"` (new `FOV` option; 70° vertical
+equals the 90° horizontal of the Street View frames) in four directions, and laid next to the photographs
+(`docs/screenshots/v1.5_sv_compare_*.jpg`: photograph, model before, model now).
+
+| Panorama | Model x, z | Looking |
+|---|---|---|
+| `4he4PWX1zE_5uyi2UhjcPw` (39.5753906, 33.4343441) | 108.2, 277.4 | S, at the iron gate |
+| `mfp21MG80uQrwJYVXYPP5g` (39.5754241, 33.4342168) | 97.2, 273.7 | SW, at the building with the bust |
+| `RWmYX_DhWj1RMBp0Q6Ev-g` (39.5727025, 33.4384978) | 464.5, 574.6 | E, at the pylon corner |
+
+What was wrong and is corrected (`OWNER_FIX` v1.5 entries, `SV_SITES`, `SV_OPEN` in `src/village_layout.js`;
+`buildStreetViewSites` in `src/village.js`):
+
+- **House south of the lane junction (108.4, 296.9):** one storey of bare stone → two storeys, dusty-rose render
+  (`Duvar_Visne`), white band with a diamond up the middle of the side facing the junction, windows on the ground floor
+  only on that side. Its grey garden wall and the poplar are gone; in their place the two-leaf wrought-iron gate with
+  the meter box on its pillar, two junipers, a clipped hedge along the lane and an iron fence up the east lane.
+- **Long building west of the lane (77.8, 290.7):** the roof tracer had split it into a house and a barn. Now one
+  27 × 9 m single-storey building, cream render, two doors and a blue sign board on the lane side, an Atatürk bust on a
+  white pedestal, a flag pole, pines in the yard and behind, a dry-stone yard wall with a gate opening. The sign cannot
+  be read in the panorama, so the building carries no name.
+- **Added:** the old rubble barn with a low tile roof right at the junction (missed by the tracer: dark roof under a
+  tree), the dry-stone garden wall on the north side of the junction, the big bare tree over the barn.
+- **House up the east lane (136.2, 268.4):** ochre, not pink. Its neighbour (126.1, 289.8) has no grey wall and gate.
+- **Pylon junction:** rusty steel lattice pylon on the kerbed corner; a bare red-brick wall (new `brick` material with
+  mortar courses) round the corner plot; a pine wood between the junction and the school; the big tree on the
+  south-west corner and a row of trees along the road's west side.
+- **Field west of the main road:** open grass. The "grave strip" and the east edge of the big cemetery had been laid
+  over it with a dense wood; graves and cemetery trees now start behind a low whitewashed wall about 80 m from the road.
+
+All of it is built without taking draws from the village's random stream (corrected houses replay their own draws,
+added buildings and the cemetery's dropped graves use separate streams or discard results), so no other house, tree
+or detail changes.
+
+Still different from the photographs, not changed in this pass: the ground is dry steppe where the April photographs
+are green; the main road at the pylon junction is dark asphalt in the model and pale and dusty in the photograph; the
+two two-storey houses north of the lane junction look single-storey in the panoramas but are too far away to be sure.
+
 ## v1.3 — the dusty-rose house's yard (Nov 2026)
 
 From the owner's screenshot of 11 Nov 2026 (a line and two crosses drawn on the Orbit view). The drawn line was cast
