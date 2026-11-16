@@ -377,6 +377,12 @@ const OWNER_FIX = [
       doors: [{ dir: [0.913, -0.408], at: 0.778 }] },
     note: 'Köprüköy İlkokulu (name from the owner): one long single-storey school building (the satellite tracer had split its roof in two houses): cream render, red tile roof, ' +
           'brown doors and a blue sign board, an Atatürk bust and a flag pole in front, pines round it, a dry-stone yard wall with a gate' },
+  // v1.6 (two more panoramas from the owner, 16 Nov 2026; model 655.2, 644.5 looking north and 652.6, 554.7 looking west):
+  { xz: [645.9, 608.6], set: { storeys: 1, ownWall: 'Duvar_Beyaz', wall: 'none', tree: false },
+    note: 'single-storey white house at the back of a long garden plot (was pink behind a grey wall with a big tree); the plot is closed by a block wall, a gate with an outbuilding beside it, wire and green mesh fences (SV_SITES)' },
+  { xz: [654.9, 569.5], set: { storeys: 2, ownWall: 'Duvar_Beyaz', wall: 'none', tree: false },
+    note: 'clearly two storeys, white (the single-storey rule had lowered it); a stone wall with a gate on the road side' },
+  { xz: [648.0, 536.0], set: { x: 648.0, z: 536.0, w: 3.6, d: 3.4, ownWall: 'redWall', wall: 'none', tree: false, barn: true, plain: true }, note: 'not a house: a small red pump hut on the open ground north of the crossroads' },
 ];
 // v1.5: what the three panoramas show besides the houses. Model metres (x east, z south). Nothing here takes a draw
 // from the village's random stream, so every other house, tree and detail stays where it was.
@@ -391,12 +397,22 @@ export const SV_SITES = {
     { pts: [[464.6, 548.6], [465.8, 553.4], [469.6, 565.2], [472.0, 568.6], [478.0, 567.6], [490.0, 566.4]], h: 1.8, t: 0.22, key: 'brick', cap: 'brick',
       note: 'bare red-brick garden wall round the corner plot, north-east of the junction by the pylon' },
     { pts: [[382.0, 512.0], [382.6, 560.0], [383.2, 642.0]], h: 1.0, t: 0.3, key: 'garden', cap: 'garden', note: 'low whitewashed cemetery wall beyond the open field' },
+    // v1.6: the two plots south of the crossroads (east side of the village)
+    { pts: [[612.0, 566.8], [624.0, 565.8], [636.1, 564.3], [649.8, 562.2]], h: 1.0, note: 'stone wall of the two-storey white house, west of its gate' },
+    { pts: [[654.4, 561.6], [664.3, 560.2], [666.0, 566.5]], h: 1.0, note: 'the same wall east of the gate and round the corner' },
+    { pts: [[666.0, 566.5], [669.3, 577.2], [676.0, 591.0], [685.4, 610.9], [684.5, 625.0]], h: 1.7, t: 0.05, key: 'greenMesh', cap: 'greenMesh', note: 'green mesh screen fence along the road, east side of the garden plot' },
+    { pts: [[632.7, 645.7], [641.4, 641.8]], h: 1.5, t: 0.2, key: 'Duvar_Beton', cap: 'Duvar_Beton', note: 'bare block wall on the lane, west of the garden gate' },
   ],
   extra: [
+    { x: 644.2, z: 636.6, yaw: 0.42, w: 6.0, d: 3.8, storeys: 1, roof: 'g', barn: true, plain: true, wallKey: 'Duvar_Beton', note: 'block outbuilding with a tile roof beside the garden gate' },
+    { x: 670.2, z: 602.8, yaw: -1.158, w: 8.0, d: 6.5, storeys: 1, roof: 'm', barn: true, plain: true, wallKey: 'Duvar_Beton', note: 'sheet-roofed shed on the east side of the garden plot' },
     { x: 86.0, z: 258.8, yaw: 0.735, w: 8.5, d: 4.4, storeys: 1, roof: 'g', barn: true, plain: true, wallKey: 'rubble', note: 'old rubble-stone barn with a low tile roof at the junction' },
   ],
-  gate: { a: [108.7, 280.9], b: [112.9, 280.3], h: 1.75 },                       // two-leaf wrought-iron gate, meter box on its west pillar
-  fences: [{ pts: [[113.2, 280.2], [115.8, 276.6], [122.5, 270.5]], h: 1.5 }],  // iron fence on along the east lane
+  gates: [{ a: [108.7, 280.9], b: [112.9, 280.3], h: 1.75 },                     // two-leaf wrought-iron gate, meter box on its west pillar
+    { a: [650.0, 562.2], b: [654.2, 561.6], h: 1.7 }, { a: [645.6, 639.9], b: [648.6, 638.5], h: 1.5 }],   // v1.6: the white house's gate; the garden gate
+  fences: [{ pts: [[113.2, 280.2], [115.8, 276.6], [122.5, 270.5]], h: 1.5 },   // iron fence on along the east lane
+    { pts: [[649.0, 638.3], [666.0, 630.9], [684.5, 625.0]], h: 1.3 }],         // v1.6: wire fence of the garden along the lane
+  tank: { x: 651.0, z: 545.2, yaw: 0.2 },                                        // v1.6: steel water tank on a stone pedestal at the crossroads
   hedges: [{ pts: [[107.3, 283.4], [102.8, 285.6], [101.3, 289.5], [101.4, 294.5]], h: 1.7, t: 1.3 }],
   bust: { x: 83.6, z: 280.4, face: [0.913, -0.408] }, flagPole: { x: 82.4, z: 282.6, face: [0.913, -0.408] },
   pylon: { x: 475.2, z: 571.6 },                                                  // rusty steel lattice pylon on the kerbed corner
@@ -405,6 +421,8 @@ export const SV_SITES = {
     ['pine', 88.6, 288.0, 0.85], ['pine', 88.2, 293.6, 0.95], ['pine', 89.4, 299.4, 0.85], ['pine', 86.4, 277.4, 0.9],
     ['mulberry', 84.0, 268.2, 1.2],                                               // the big bare tree over the barn
     ['pine', 68.0, 285.0, 1.0], ['pine', 70.5, 295.5, 0.9], ['pine', 66.0, 276.0, 0.95],
+    ['pine', 651.5, 634.6, 0.55], ['fruit', 655.0, 628.0, 0.7], ['fruit', 660.0, 622.0, 0.75], ['fruit', 652.0, 620.0, 0.7], ['fruit', 664.0, 615.0, 0.7],   // v1.6: the garden
+    ['mulberry', 667.5, 538.0, 1.0], ['mulberry', 674.0, 536.5, 0.95],             // v1.6: the old trees north-east of the crossroads
     ['mulberry', 447.2, 568.5, 1.3],                                              // the big tree on the south-west corner
     ['mulberry', 447.0, 556.0, 1.0], ['poplar', 442.6, 541.0, 1.0], ['mulberry', 438.2, 527.0, 0.9], ['mulberry', 433.2, 512.0, 1.0],   // the row along the road's west side
   ],
@@ -506,8 +524,8 @@ export function carsiBoxes(sites) {
   const sv = sites.sv;          // v1.5: Street View additions — the barn, the gate and iron fence, the bust, the pylon
   if (sv) {
     for (const e of sv.extra) out.push(e.x, e.z, e.yaw, e.w / 2, e.d / 2);
-    for (const [x0, z0, x1, z1] of [[...sv.gate.a, ...sv.gate.b], ...sv.fences.flatMap(f => fencePieces(f.pts))]) out.push((x0 + x1) / 2, (z0 + z1) / 2, Math.atan2(-(z1 - z0), x1 - x0), Math.hypot(x1 - x0, z1 - z0) / 2, 0.08);
-    out.push(sv.bust.x, sv.bust.z, 0, 0.6, 0.6, sv.pylon.x, sv.pylon.z, 0, 0.8, 0.8);
+    for (const [x0, z0, x1, z1] of [...sv.gates.map(g => [...g.a, ...g.b]), ...sv.fences.flatMap(f => fencePieces(f.pts))]) out.push((x0 + x1) / 2, (z0 + z1) / 2, Math.atan2(-(z1 - z0), x1 - x0), Math.hypot(x1 - x0, z1 - z0) / 2, 0.08);
+    out.push(sv.bust.x, sv.bust.z, 0, 0.6, 0.6, sv.pylon.x, sv.pylon.z, 0, 0.8, 0.8, sv.tank.x, sv.tank.z, sv.tank.yaw, 1.0, 0.7);
   }
   const op = sites.ownerPlot;   // v1.4: the owner's kamelya and chain-link fence
   if (op) {

@@ -109,6 +109,7 @@ export function villageMaterials(lib, { quality = 2 } = {}) {
     c.font = 'bold 56px sans-serif'; c.fillText('T.C.', W / 2, 84);
     c.font = 'bold 104px sans-serif'; c.fillText('KÖPRÜKÖY', W / 2, 206); c.font = 'bold 96px sans-serif'; c.fillText('İLKOKULU', W / 2, 330);
   }), roughness: 0.55 });
+  M.greenMesh = std({ color: 0x2f6b55, roughness: 0.9, metalness: 0.0, side: THREE.DoubleSide });   // v1.6: green screen mesh on a garden fence
   M.rust = std({ color: 0x6e4a38, roughness: 0.85, metalness: 0.35 });
   M.Duvar_Gul = plasterTint('gul', 0xb27a8b); M.adobe = plasterTint('adobe', 0xbba283, 'albedo *= 0.85 + 0.25 * smoothstep(0.3, 0.8, texture2D(tAlb, vec2(vWPos.x * 0.5 + vWPos.z * 0.5, vWPos.y * 0.4)).g);');
   M.turquoise = plasterTint('turq', 0x8fc9b8, 'albedo *= 1.0 - 0.25 * (1.0 - smoothstep(0.0, 1.2, vWPos.y - 27.0));');

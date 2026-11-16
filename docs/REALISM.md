@@ -5,6 +5,21 @@ Two passes so far: **v0.7 "materials"** (surfaces only, nothing moved) and **v0.
 `model/koprukoy.glb` are still the v0.6 files. Terrain (SRTM 30 m), the reservoir at 724 m, the
 Çeşnigir Bridge body, D.260 and the roads outside the village are unchanged.
 
+## v1.6 — two more panoramas on the east side (Nov 2026)
+
+Panoramas `ytP1TTnTz8jcXYDGrAvd-Q` (39.5720705, 33.4407201 → model 655.2, 644.5, looking north) and
+`L-quRb3yyAFEydmBPVYceg` (39.5728828, 33.44069 → model 652.6, 554.7, looking west), checked as in v1.5 and against the
+Google satellite view (0.15 m/px). Corrections are the v1.6 entries of `OWNER_FIX` and `SV_SITES`.
+
+- (654.9, 569.5) is clearly two storeys: the v1.5.1 rule had lowered it. White, stone wall with an iron gate on the road.
+- (648.0, 536.0) is a 3.5 m red pump hut, not a house; steel water tank on a rubble pedestal at the crossroads.
+- (645.9, 608.6): white single-storey house at the back of a long garden; added the block outbuilding by the gate and
+  the sheet-roofed shed (both missed by the roof tracer), the wire fence, the green mesh fence along the road, a pine
+  and fruit trees.
+- Not corrected: the traced lanes `local_479` and `secondary_456/458` run about 5 m north of the lanes in the satellite
+  view (houses are within 1–2 m). Moving a road changes the garden-wall draws of the houses along it and with them the
+  random stream of the whole village, so this needs its own pass. The SRTM ground also slopes more than the photographs.
+
 ## v1.5.1 — second check: cables, pavements, storeys, the school's name (Nov 2026)
 
 - **Köprüköy İlkokulu.** The long building with the bust is the primary school (owner). Its blue board reads
