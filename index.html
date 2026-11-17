@@ -319,6 +319,7 @@ import { buildVillageLayout, buildCentreLayout, roadSamples, squareSamples, cars
 import { pruneOldVillage, pruneRocks, LIFT } from './src/village.js';
 import { createGame } from './src/game.js';
 import { buildToros, COLORS, WB, TRACK, WR } from './src/toros.js';
+import { createEngine } from './src/engine.js';
 import { PERF, DistanceCuller, createPerfMeter } from './src/perf.js';
 import { parseBench, createBench } from './src/bench.js';
 
@@ -691,23 +692,17 @@ function updateCarTransform() {
   document.getElementById('spd').textContent = Math.round(Math.abs(CS.v) * 3.6);
   document.getElementById('gearTxt').textContent = `km/h · ${CS.v < -0.3 ? 'R' : Math.abs(CS.v) < 0.3 ? 'N' : CS.gear}`;
 }
-// motor sesi
+// motor sesi (v1.8: src/engine.js — firing pulses, exhaust rasp and pipe resonances instead of the muffled v1.7 hum)
 let audio = null;
 function initAudio() {
   if (audio) return; try {
     const ac = new (window.AudioContext || window.webkitAudioContext)();
-    const o1 = ac.createOscillator(), o2 = ac.createOscillator(), f = ac.createBiquadFilter(), gn = ac.createGain();
-    o1.type = 'sawtooth'; o2.type = 'square'; f.type = 'lowpass'; f.frequency.value = 520; gn.gain.value = 0;
-    o1.connect(f); o2.connect(f); f.connect(gn); gn.connect(ac.destination); o1.start(); o2.start();
-    audio = { ac, o1, o2, f, gn };
+    audio = { ac, eng: createEngine(ac, ac.destination) };
   } catch (e) { audio = null; }
 }
 function updateEngine(thr) {
-  if (!audio) return; const on = mode === 'car' && document.getElementById('optSound').checked;
-  const fr = CS.rpm / 60 * 2, t = audio.ac.currentTime;
-  audio.o1.frequency.setTargetAtTime(fr, t, 0.05); audio.o2.frequency.setTargetAtTime(fr * 0.5, t, 0.05);
-  audio.f.frequency.setTargetAtTime(380 + thr * 500 + CS.rpm * 0.08, t, 0.05);
-  audio.gn.gain.setTargetAtTime(on ? 0.045 + thr * 0.035 : 0, t, 0.08);
+  if (!audio) return;
+  audio.eng.set(CS.rpm, thr, mode === 'car' && document.getElementById('optSound').checked);
 }
 
 // v1.8: background music in the Toros (audio/toros_radio.m4a, the owner's recording) — loops while driving, pauses
