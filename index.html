@@ -197,7 +197,7 @@ body:not(.is-touch)[data-mode="game"] .hint { right: auto; left: 50%; transform:
 <div id="perf" aria-live="off">– FPS</div>
 
 <div class="topbar">
-  <div class="brand"><h1>Köprüköy</h1><div class="sub">Keskin · Kırıkkale, Türkiye — 3D v1.7</div></div>
+  <div class="brand"><h1>Köprüköy</h1><div class="sub">Keskin · Kırıkkale, Türkiye — 3D v1.8</div></div>
   <div class="modes" id="modes" role="tablist" aria-label="Navigation mode">
     <button data-mode="orbit" class="on">Orbit</button>
     <button data-mode="walk" title="Walk through the village">Walk</button>
@@ -258,6 +258,7 @@ body:not(.is-touch)[data-mode="game"] .hint { right: auto; left: 50%; transform:
       <label class="chip"><input type="checkbox" id="optRack"> Roof rack</label>
       <label class="chip"><input type="checkbox" id="optLights"> Headlights</label>
       <label class="chip"><input type="checkbox" id="optSound" checked> Engine sound</label>
+      <label class="chip"><input type="checkbox" id="optMusic" checked> Music</label>
     </div>
   </div>
   <div>
@@ -318,6 +319,7 @@ import { buildVillageLayout, buildCentreLayout, roadSamples, squareSamples, cars
 import { pruneOldVillage, pruneRocks, LIFT } from './src/village.js';
 import { createGame } from './src/game.js';
 import { buildToros, COLORS, WB, TRACK, WR } from './src/toros.js';
+import { createEngine } from './src/engine.js';
 import { PERF, DistanceCuller, createPerfMeter } from './src/perf.js';
 import { parseBench, createBench } from './src/bench.js';
 
@@ -690,24 +692,30 @@ function updateCarTransform() {
   document.getElementById('spd').textContent = Math.round(Math.abs(CS.v) * 3.6);
   document.getElementById('gearTxt').textContent = `km/h · ${CS.v < -0.3 ? 'R' : Math.abs(CS.v) < 0.3 ? 'N' : CS.gear}`;
 }
-// motor sesi
+// motor sesi (v1.8: src/engine.js — firing pulses, exhaust rasp and pipe resonances instead of the muffled v1.7 hum)
 let audio = null;
 function initAudio() {
   if (audio) return; try {
     const ac = new (window.AudioContext || window.webkitAudioContext)();
-    const o1 = ac.createOscillator(), o2 = ac.createOscillator(), f = ac.createBiquadFilter(), gn = ac.createGain();
-    o1.type = 'sawtooth'; o2.type = 'square'; f.type = 'lowpass'; f.frequency.value = 520; gn.gain.value = 0;
-    o1.connect(f); o2.connect(f); f.connect(gn); gn.connect(ac.destination); o1.start(); o2.start();
-    audio = { ac, o1, o2, f, gn };
+    audio = { ac, eng: createEngine(ac, ac.destination) };
   } catch (e) { audio = null; }
 }
 function updateEngine(thr) {
-  if (!audio) return; const on = mode === 'car' && document.getElementById('optSound').checked;
-  const fr = CS.rpm / 60 * 2, t = audio.ac.currentTime;
-  audio.o1.frequency.setTargetAtTime(fr, t, 0.05); audio.o2.frequency.setTargetAtTime(fr * 0.5, t, 0.05);
-  audio.f.frequency.setTargetAtTime(380 + thr * 500 + CS.rpm * 0.08, t, 0.05);
-  audio.gn.gain.setTargetAtTime(on ? 0.045 + thr * 0.035 : 0, t, 0.08);
+  if (!audio) return;
+  audio.eng.set(CS.rpm, thr, mode === 'car' && document.getElementById('optSound').checked);
 }
+
+// v1.8: background music in the Toros (audio/toros_radio.m4a, the owner's recording) — loops while driving, pauses
+// outside the Toros, when "Music" is unchecked or when the tab is hidden; it carries on from where it stopped
+const radio = new Audio(new URL('./audio/toros_radio.m4a', import.meta.url).href);
+radio.loop = true; radio.preload = 'none'; radio.volume = 0.6;
+function updateRadio() {
+  const on = mode === 'car' && document.getElementById('optMusic').checked && !document.hidden;
+  if (on && radio.paused) radio.play().catch(() => {});
+  else if (!on && !radio.paused) radio.pause();
+}
+document.getElementById('optMusic').addEventListener('change', updateRadio);
+document.addEventListener('visibilitychange', updateRadio);
 
 // ---------- walk / fly ----------
 const P = { x: 0, z: 0, y: 0, vy: 0, yaw: 0, pitch: 0 };
@@ -826,6 +834,7 @@ function setMode(m) {
   // on foot the field of view is the player's setting; orbit and the Toros keep 55°
   eyeY = null; const fovNow = m === 'walk' || m === 'fly' || m === 'game' ? LOOK.fov : 55; if (camera.fov !== fovNow) { camera.fov = fovNow; camera.updateProjectionMatrix(); }
   if (m === 'car') { initAudio(); if (audio && audio.ac.state === 'suspended') audio.ac.resume(); carYawOff = 0; carPitchOff = 0; }
+  updateRadio();
   if (m === 'orbit' && prev !== 'orbit') { controls.target.set(camera.position.x + (prev === 'car' ? 0 : 0), camera.position.y, camera.position.z); const fwd = new THREE.Vector3(); camera.getWorldDirection(fwd); controls.target.copy(camera.position).addScaledVector(fwd, 60); controls.repin(); }
 }
 document.querySelectorAll('#modes button').forEach(b => b.addEventListener('click', () => { if (!b.disabled) setMode(b.dataset.mode); }));
