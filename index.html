@@ -725,7 +725,7 @@ function updateRadio() {
   else if (!on && !radio.paused) radio.pause();
 }
 document.getElementById('optMusic').addEventListener('change', updateRadio);
-document.addEventListener('visibilitychange', updateRadio);
+document.addEventListener('visibilitychange', () => { updateRadio(); if (audio && document.hidden) audio.eng.set(CS.rpm, 0, false); });
 
 // ---------- walk / fly ----------
 const P = { x: 0, z: 0, y: 0, vy: 0, yaw: 0, pitch: 0 };
@@ -845,6 +845,8 @@ function setMode(m) {
   eyeY = null; const fovNow = m === 'walk' || m === 'fly' || m === 'game' ? LOOK.fov : 55; if (camera.fov !== fovNow) { camera.fov = fovNow; camera.updateProjectionMatrix(); }
   if (m === 'car') { initAudio(); if (audio && audio.ac.state === 'suspended') audio.ac.resume(); carYawOff = 0; carPitchOff = 0; }
   updateRadio();
+  // the engine is only driven from carStep(), so leaving the Toros must switch it off here or it keeps sounding in every other mode
+  if (audio && m !== 'car') audio.eng.set(CS.rpm, 0, false);
   if (m === 'orbit' && prev !== 'orbit') { controls.target.set(camera.position.x + (prev === 'car' ? 0 : 0), camera.position.y, camera.position.z); const fwd = new THREE.Vector3(); camera.getWorldDirection(fwd); controls.target.copy(camera.position).addScaledVector(fwd, 60); controls.repin(); }
 }
 document.querySelectorAll('#modes button').forEach(b => b.addEventListener('click', () => { if (!b.disabled) setMode(b.dataset.mode); }));
