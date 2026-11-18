@@ -1010,7 +1010,7 @@ renderer.setAnimationLoop(now => {
   }
   const shadowRedrawn = sun.shadow.needsUpdate; if (shadowRedrawn) perf.shadowRedrawn();
   const tRender = performance.now();
-  renderer.info.reset(); renderer.render(scene, camera); placeLabels();
+  renderer.info.reset(); renderer.render(scene, camera); if (inGame && game) game.renderOverlay(renderer); placeLabels();
   if (bench && bench.active) bench.post(frameMs, tFrame, tRender, shadowRedrawn, cullChanged);
 });
 </script>

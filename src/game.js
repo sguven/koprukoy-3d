@@ -459,11 +459,22 @@ export function createGame(ctx) {
   }
 
   // ------------------------------------------------------------------ player weapons
-  const vm = new THREE.Group(); vm.visible = false;   // view model holder, child of the camera (shown while playing)
-  if (!camera.parent) scene.add(camera); camera.add(vm);
+  // The view model (the gun in the player's hands) is drawn in its own small scene with its own camera, in a second
+  // pass after the village: it no longer depends on the camera being part of the main scene, so nothing in the
+  // village (culling, fog, shadow pass, instancing) and no browser quirk can hide it, and it never pokes into walls.
+  const vm = new THREE.Group(); vm.visible = false;
+  const vmScene = new THREE.Scene(), vmCam = new THREE.PerspectiveCamera(55, camera.aspect, 0.02, 10);
+  vmScene.add(vmCam, vm);
+  const vmSun = new THREE.DirectionalLight(0xfff1d6, 3.2); vmSun.position.set(0.4, 1, 0.6); vmScene.add(vmSun, new THREE.HemisphereLight(0xcfe3ff, 0x8a7a63, 2.6));
   const models = {}; for (const k in WEAPONS) { models[k] = weaponModel(k); models[k].visible = false; vm.add(models[k]); }
   const vmFlash = flashSprite(0.35); vm.add(vmFlash);
   const REST = { ak47: [0.26, -0.24, -0.5], m4a1: [0.26, -0.24, -0.5], mp5: [0.24, -0.22, -0.42], awp: [0.24, -0.25, -0.5], deagle: [0.2, -0.23, -0.56], knife: [0.22, -0.22, -0.4] };
+  /** Second pass, called by the main loop right after the village is drawn: the gun on top, depth cleared. */
+  function renderOverlay(renderer) {
+    if (!G.on || !vm.visible) return;
+    vmCam.aspect = camera.aspect; vmCam.fov = look.fov; vmCam.updateProjectionMatrix();
+    const ac = renderer.autoClear; renderer.autoClear = false; renderer.clearDepth(); renderer.render(vmScene, vmCam); renderer.autoClear = ac;
+  }
   function setWeapon(k) {
     if (k === G.weapon || G.dead > 0) return;
     G.lastWeapon = G.weapon; G.weapon = k; G.swapT = 0.45; G.reloading = 0; G.heat = 0; setScope(false); sound('swap');
@@ -694,5 +705,5 @@ export function createGame(ctx) {
     if (e.code === 'Enter' && G.roundOver) newRound();
   });
 
-  return { start, stop, update, drawMinimap, setBots, setPrimary, setDifficulty, fire, reload, setWeapon, setScope, warm, state: G, newRound, WEAPONS };
+  return { start, stop, update, renderOverlay, drawMinimap, setBots, setPrimary, setDifficulty, fire, reload, setWeapon, setScope, warm, state: G, newRound, WEAPONS };
 }
