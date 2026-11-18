@@ -528,7 +528,7 @@ async function loadAll() {
     for (let k = 0; k < oldR.length; k += 4) if (!inRegion(oldR[k], oldR[k + 1]) || oldR[k + 3] > 5) keepR.push(oldR[k], oldR[k + 1], oldR[k + 2], oldR[k + 3]);
     VILLAGE = buildVillageLayout(terrH, keepR);
     D.roads = keepR.concat(roadSamples(VILLAGE.roads, terrH, kind => LIFT[kind]));
-    D.spawn = { car: [262, 175], walk: [250, 138] };
+    D.spawn = { car: [253.0, 132.9], carFace: [312.9, 179.9], walk: [250, 138] };   // Toros: on the çarşı square in front of the old municipality, facing the mosque
   } else VILLAGE = buildCentreLayout(terrH);
   D.roads = D.roads.concat(squareSamples(VILLAGE.sites, terrH, LIFT.square));   // the çarşı square is walkable / drivable ground
   const inZone = FULL_VILLAGE ? inRegion : inCentreZone;
@@ -635,6 +635,10 @@ COLORS.forEach(([n, c], i) => { const b = document.createElement('button'); b.cl
 const CS = { x: 0, z: 0, y: 0, vy: 0, h: 0, v: 0, steer: 0, pitch: 0, roll: 0, spin: 0, safe: null, safeT: 0, dead: 0, cam: 0, gear: 1, rpm: 900 };
 function placeCarAtSpawn() {
   const [x, z] = D.spawn.car; CS.x = x; CS.z = z;
+  if (D.spawn.carFace) {   // a fixed start pose: stand exactly here and look at the given point
+    const [fx, fz] = D.spawn.carFace; CS.h = Math.atan2(-(fz - z), fx - x);
+    CS.y = surfaceAt(x, z).y; CS.v = 0; CS.safe = { x, z, h: CS.h }; updateCarTransform(0); return;
+  }
   // heading from the nearest road sample
   let best = 1e9, bk = 0; const R = D.roads; for (let k = 0; k < R.length; k += 4) { const d = (R[k] - x) ** 2 + (R[k + 1] - z) ** 2; if (d < best) { best = d; bk = k; } }
   CS.x = R[bk]; CS.z = R[bk + 1];
@@ -881,7 +885,8 @@ function setGamePreset(q) {
 }
 document.querySelectorAll('#gameQuality .pbtn').forEach(b => { b.classList.toggle('on', b.dataset.q === gamePreset); b.addEventListener('click', () => setGamePreset(b.dataset.q)); });
 document.querySelectorAll('#botCount .pbtn').forEach(b => b.addEventListener('click', () => { document.querySelectorAll('#botCount .pbtn').forEach(o => o.classList.toggle('on', o === b)); if (game) game.setBots(+b.dataset.bots); }));
-camera.position.set(...V.genel.p); controls.target.set(...V.genel.t);
+camera.position.set(...V.detay.p); controls.target.set(...V.detay.t);   // the page opens on the çarşı
+document.querySelectorAll('#views .pbtn').forEach(b => b.classList.toggle('on', b.dataset.view === 'detay'));
 const fsBtn = document.getElementById('fsBtn'), docEl = document.documentElement;
 if (isTouch && (document.fullscreenEnabled || document.webkitFullscreenEnabled)) fsBtn.hidden = false;
 fsBtn.addEventListener('click', async () => {
