@@ -38,11 +38,15 @@
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { height: 100%; margin: 0; }
+/* Home-screen web app on iOS: the page is laid out one status bar short, which left a grey band under the scene.
+   Growing the root by the top inset makes it cover the whole screen (fit() below also sizes the scene from the screen). */
+html { overflow: hidden; }
+@media (display-mode: standalone) { html { min-height: calc(100% + env(safe-area-inset-top, 0px)); } }
 body { background: #cdd8de; color: var(--ink); font: 15px/1.45 var(--body); overflow: hidden; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; overscroll-behavior: none; }
 body.is-touch { touch-action: none; position: fixed; inset: 0; }
-#scene { position: fixed; inset: 0; }
+#scene { position: fixed; left: 0; top: 0; width: 100%; height: var(--app-h, 100%); }
 canvas { display: block; touch-action: none; }
-#labels { position: fixed; inset: 0; pointer-events: none; }
+#labels { position: fixed; left: 0; top: 0; width: 100%; height: var(--app-h, 100%); pointer-events: none; overflow: hidden; }
 .lbl { position: absolute; transform: translate(-50%, -100%); white-space: nowrap; font: 600 12px/1 var(--body); padding: 5px 8px; border-radius: 4px; background: rgba(43, 38, 32, 0.82); color: #fff; }
 .lbl.tarihi { background: var(--accent); }
 .lbl.su { background: var(--water); }
@@ -85,7 +89,7 @@ canvas { display: block; touch-action: none; }
 /* v1.0: frame-time meter (Settings › Show FPS) */
 #perf { position: fixed; z-index: 30; left: 12px; bottom: 12px; font: 600 12px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; background: rgba(30, 27, 23, 0.72); color: #fff; padding: 4px 8px; border-radius: 6px; pointer-events: none; white-space: nowrap; }
 body:not(.is-touch)[data-mode="game"] #perf { bottom: auto; top: 64px; }
-body.is-touch #perf { left: 50%; transform: translateX(-50%); bottom: calc(4px + var(--sb, 0px)); font-size: 10px; padding: 2px 6px; }
+body.is-touch #perf { left: 50%; transform: translateX(-50%); bottom: calc(4px + var(--sb, 0px)); font-size: 10px; padding: 2px 6px; max-width: calc(100% - 16px); overflow: hidden; text-overflow: ellipsis; }
 /* nişangah: CS tarzı yeşil artı, koyu kenarlı — gökyüzünde de açık zeminde de görünür; --gap ateş dağılımıyla açılır */
 .crosshair { position: fixed; z-index: 20; left: 50%; top: 50%; width: 0; height: 0; display: none; pointer-events: none; --gap: 4px; --len: 9px; --th: 2px; }
 .crosshair.off { visibility: hidden; }
@@ -175,19 +179,19 @@ body:not(.is-touch)[data-mode="game"] .hint { right: auto; left: 50%; transform:
 #tCam { right: 18px; top: 256px; width: 64px; height: 44px; font-size: 14px; }
 
 @media (max-width: 700px) {
-  .topbar { left: 8px; right: 8px; top: 8px; gap: 6px; }
+  .topbar { left: calc(8px + var(--sl)); right: calc(8px + var(--sr)); top: calc(8px + var(--st)); gap: 6px; }
   .brand { display: none; }
   .modes { flex: 1; }
   .modes button { flex: 1; padding: 9px 4px; font-size: 14px; }
   .spacer { display: none; }
   .gear { padding: 9px 9px; font-size: 13px; }
   .panel { top: auto; bottom: 0; left: 0; right: 0; width: auto; max-height: 55%; border-radius: 14px 14px 0 0; }
-  #minimap { width: 120px; height: 120px; top: 70px; right: 12px; }
+  #minimap { width: 120px; height: 120px; right: calc(12px + var(--sr)); }
   .hint { display: none; }
-  .hud { bottom: auto; top: 66px; left: 12px; transform: none; }
+  .hud { bottom: auto; top: calc(66px + var(--st)); left: calc(12px + var(--sl)); transform: none; }
   .speedo { min-width: 86px; padding: 6px 10px 8px; }
   .speedo b { font-size: 28px; }
-  #minimap { top: 62px; }
+  #minimap { top: calc(62px + var(--st)); }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
@@ -351,13 +355,30 @@ const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'hi
 // Desktop is capped at 1.5 (was 2): on a high-DPI screen that is 44 % fewer pixels to shade, hardly visible in a 3D scene.
 let mode = 'orbit';
 const basePixelRatio = () => LITE ? 1 : Math.min(devicePixelRatio, mode === 'game' ? GAME_PRESETS[gamePreset].pr : isTouch ? 1.6 : 1.5);
+// The size the scene is drawn at. Normally the window; as a home-screen web app on iOS the window is reported one status
+// bar short, so there the screen's own size is used (only when the difference is that small: an iPad window stays as is).
+const VP = { w: innerWidth, h: innerHeight };
+function measureVP() {
+  let w = innerWidth, h = innerHeight;
+  if (navigator.standalone === true) {
+    const a = Math.min(screen.width, screen.height), b = Math.max(screen.width, screen.height), full = w > h ? a : b;
+    if (full > h && full - h <= 100) h = full;
+  }
+  const changed = w !== VP.w || h !== VP.h; VP.w = w; VP.h = h;
+  document.documentElement.style.setProperty('--app-h', h + 'px');
+  return changed;
+}
+measureVP();
+// Orbit and the Toros use 55°. Held upright, a phone would show only a 27° wide strip of that (one tree filled the
+// screen), so in portrait the view is widened until it is about 38° across, 74° top to bottom at most.
+const stdFov = () => { const a = VP.w / VP.h; return a >= 1 ? 55 : Math.min(74, Math.max(55, 2 * Math.atan(Math.tan(19 * Math.PI / 180) / a) * 180 / Math.PI)); };
 renderer.setPixelRatio(basePixelRatio());
-renderer.setSize(innerWidth, innerHeight);
+renderer.setSize(VP.w, VP.h);
 renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.AgXToneMapping; renderer.toneMappingExposure = 0.85;
 host.appendChild(renderer.domElement);
 const scene = new THREE.Scene(); scene.environmentIntensity = 0.1;
-const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.15, 9000);
+const camera = new THREE.PerspectiveCamera(stdFov(), VP.w / VP.h, 0.15, 9000);
 // Google Maps–style navigation: 1 finger pans (anchored), 2 fingers pinch-zoom / twist / tilt (see src/mapnav.js)
 const controls = new MapNav(camera, renderer.domElement);
 controls.addEventListener('start', () => { anim = null; });
@@ -611,14 +632,26 @@ const bind = (id, k) => document.getElementById(id).addEventListener('change', e
 bind('lyBina', 'bina'); bind('lyAgac', 'agac'); bind('lyYol', 'yol');
 const labelsEl = document.getElementById('labels');
 document.getElementById('lyEtiket').addEventListener('change', e => labelsEl.style.display = e.target.checked ? '' : 'none');
-const lbls = POIS.map(p => { const d = document.createElement('div'); d.className = `lbl ${p.kind}`; d.textContent = p.label; labelsEl.appendChild(d); return { el: d, v: new THREE.Vector3(...p.pos) }; });
+const lbls = POIS.map(p => { const d = document.createElement('div'); d.className = `lbl ${p.kind}`; d.textContent = p.label; labelsEl.appendChild(d); return { el: d, v: new THREE.Vector3(...p.pos), key: p.kind === 'tarihi' ? 1 : 0 }; });
 const tmpV = new THREE.Vector3();
+// Labels that would cover a nearer one are hidden (on a phone the far road labels used to pile up on each other).
+const shownLbls = [];
 function placeLabels() {
-  const far = mode === 'orbit' ? 3000 : 320;
+  const far = mode === 'orbit' ? 3000 : 320; shownLbls.length = 0;
   for (const l of lbls) {
-    tmpV.copy(l.v).project(camera); const dist = camera.position.distanceTo(l.v);
-    if (tmpV.z > 1 || tmpV.z < -1 || dist > far) { l.el.style.display = 'none'; continue; }
-    l.el.style.display = ''; l.el.style.left = `${(tmpV.x + 1) / 2 * innerWidth}px`; l.el.style.top = `${(1 - tmpV.y) / 2 * innerHeight}px`;
+    tmpV.copy(l.v).project(camera); l.d = camera.position.distanceTo(l.v);
+    if (tmpV.z > 1 || tmpV.z < -1 || l.d > far) { l.on = false; continue; }
+    l.on = true; l.x = (tmpV.x + 1) / 2 * VP.w; l.y = (1 - tmpV.y) / 2 * VP.h; shownLbls.push(l);
+  }
+  shownLbls.sort((a, b) => (b.key - a.key) || (a.d - b.d));   // the historic places keep their label, then the nearest
+  for (let i = 0; i < shownLbls.length; i++) {
+    const l = shownLbls[i]; if (!l.w) { l.el.style.display = ''; l.w = l.el.offsetWidth; l.h = l.el.offsetHeight; }
+    for (let j = 0; j < i; j++) { const o = shownLbls[j]; if (o.on && Math.abs(o.x - l.x) < (o.w + l.w) / 2 + 4 && Math.abs(o.y - l.y) < Math.max(o.h, l.h) + 3) { l.on = false; break; } }
+  }
+  for (const l of lbls) {
+    if (!l.on) { if (l.vis !== false) { l.vis = false; l.el.style.display = 'none'; } continue; }
+    if (l.vis !== true) { l.vis = true; l.el.style.display = ''; }
+    l.el.style.left = `${l.x}px`; l.el.style.top = `${l.y}px`;
   }
 }
 
@@ -846,7 +879,7 @@ function setMode(m) {
     if (isTouch && innerHeight > innerWidth && !rotateTold) { rotateTold = true; toast('Turn your phone sideways for the best view'); toastT = 3.5; } }
   else if (prev === 'game' && game) game.stop();
   // on foot the field of view is the player's setting; orbit and the Toros keep 55°
-  eyeY = null; const fovNow = m === 'walk' || m === 'fly' || m === 'game' ? LOOK.fov : 55; if (camera.fov !== fovNow) { camera.fov = fovNow; camera.updateProjectionMatrix(); }
+  eyeY = null; const fovNow = m === 'walk' || m === 'fly' || m === 'game' ? LOOK.fov : stdFov(); if (camera.fov !== fovNow) { camera.fov = fovNow; camera.updateProjectionMatrix(); }
   if (m === 'car') { initAudio(); if (audio && audio.ac.state === 'suspended') audio.ac.resume(); carYawOff = 0; carPitchOff = 0; }
   updateRadio();
   // the engine is only driven from carStep(), so leaving the Toros must switch it off here or it keeps sounding in every other mode
@@ -922,9 +955,18 @@ function drawMinimap(x, z, heading) {
 }
 
 // ---------- loop ----------
-addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+function fit(force) {
+  if (!measureVP() && force !== true) return;
+  camera.aspect = VP.w / VP.h; if (mode === 'orbit' || mode === 'car') camera.fov = stdFov();
+  camera.updateProjectionMatrix(); renderer.setSize(VP.w, VP.h);
+}
+// phones report the new size late after a turn or when the browser bars slide away: listen widely, and look again shortly after
+const fitSoon = () => { fit(); setTimeout(fit, 120); setTimeout(fit, 500); };
+for (const ev of ['resize', 'orientationchange', 'pageshow']) addEventListener(ev, fitSoon);
+if (window.visualViewport) visualViewport.addEventListener('resize', fitSoon);
+fitSoon();
 // v1.0: FPS meter + automatic resolution (src/perf.js); both can be switched off under Settings › Performance
-const perf = createPerfMeter(renderer, document.getElementById('perf'), basePixelRatio);
+const perf = createPerfMeter(renderer, document.getElementById('perf'), basePixelRatio, () => [VP.w, VP.h]);
 const loadPref = (k, d) => { try { const v = localStorage.getItem(k); return v === null ? d : v === '1'; } catch (_) { return d; } };
 const savePref = (k, v) => { try { localStorage.setItem(k, v ? '1' : '0'); } catch (_) {} };
 for (const [id, k, set] of [['optFps', 'kk_fps', v => { perf.visible = v; }], ['optAutoRes', 'kk_autores', v => { perf.auto = v; }]]) {

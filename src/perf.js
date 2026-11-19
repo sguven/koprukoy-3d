@@ -154,10 +154,10 @@ export class DistanceCuller {
  * v1.1: the meter also shows the 95th-percentile frame time of the last second (one frame in twenty was slower:
  * the stutter an average hides) and how many times the shadow map was redrawn in that second (shadowRedrawn()).
  */
-export function createPerfMeter(renderer, el, base) {
+export function createPerfMeter(renderer, el, base, size = () => [innerWidth, innerHeight]) {
   let frames = 0, acc = 0, t0 = performance.now(), slow = 0, fast = 0, scale = 1, shown = true, auto = true, lastPR = 0, probe = null, hold = 0, shadows = 0;
   const times = new Float32Array(512);
-  const apply = () => { const pr = Math.max(0.5, base() * scale); if (Math.abs(pr - lastPR) > 0.01) { lastPR = pr; renderer.setPixelRatio(pr); renderer.setSize(innerWidth, innerHeight); } };
+  const apply = () => { const pr = Math.max(0.5, base() * scale); if (Math.abs(pr - lastPR) > 0.01) { lastPR = pr; renderer.setPixelRatio(pr); renderer.setSize(...size()); } };
   apply();
   return {
     get scale() { return scale; },
