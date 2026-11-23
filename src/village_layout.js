@@ -12,6 +12,7 @@
 // This module has no three.js dependency: it only produces plain data (used for geometry, collision,
 // the minimap and the headless plan check in tools/plan_check.mjs).
 
+import { ROAD_SHIFT } from './road_frame.js';
 import { ROADS as DATA_ROADS, BUILDINGS as DATA_BUILDINGS, ANCHOR, MOSQUE_SITE, SITES as DATA_SITES } from './village_data.js';
 
 // ---------------------------------------------------------------- image -> model mapping
@@ -191,6 +192,7 @@ export const SITES = {
   // v1.11: the green with the playground lay across the main road. It is the kerbed lawn east of the road (Street
   // View from the road, satellite): the playground and a wooden çardak stand at its south end.
   gardens: (DATA_SITES.gardens || []).map(g => (Math.hypot(g.x - 239.9, g.z - 161.4) < 1 ? { ...g, der: true }
+    : Math.hypot(g.x - 255.9, g.z - 47.4) < 1 ? { ...g, x: 245.0, z: 69.0, w: 14, d: 13 }   // v1.13: the pine park is west of the road, opposite the old shops (0652)
     : g.play ? { ...g, x: 432.5, z: 338.0, w: 21, d: 44, playAt: [433.5, 357.0, -0.25], cardak: { x: 425.6, z: 351.0, w: 3.6, d: 3.6, yaw: -0.25 } } : g)),
 };
 
@@ -270,7 +272,7 @@ export function buildVillageLayout(terrH, existingRoads = []) {
   };
 
   const buildings = TRACED.map(b => ({ ...b }));
-  for (const [x, z, yaw, w, d, storeys, roof, extra] of DATA_BUILDINGS) { const e = { ...(extra || {}) }; if (e.wall) { e.wallKey = e.wall; delete e.wall; } buildings.push({ x, z, yaw, w, d, storeys, roof, ...e, traced: true, sat: true }); }
+  for (const [x, z, yaw, w, d, storeys, roof, extra] of DATA_BUILDINGS) { const e = { ...(extra || {}) }; if (e.wall) { e.wallKey = e.wall; delete e.wall; } buildings.push({ x, z, yaw, w, d, storeys, roof, ...e, traced: true, sat: true, data: [x, z] }); }
   const S = SITES;
   buildings.push({ x: S.mosque.x, z: S.mosque.z, yaw: 0, w: 13, d: 19, kind: 'mosque' });
   buildings.push({ x: S.mosque.x + 8.7, z: S.mosque.z - 6.7, yaw: 0, w: 2.6, d: 2.6, kind: 'minaret' });
@@ -333,7 +335,7 @@ export function buildVillageLayout(terrH, existingRoads = []) {
     let b = null, best = 4;
     for (const c of buildings) { const dd = Math.hypot(c.x - f.xz[0], c.z - f.xz[1]); if (dd < best) { best = dd; b = c; } }
     if (!b) { console.warn('[layout] owner fix: no building at', f.xz, f.note); continue; }
-    b.orig = { ...b }; Object.assign(b, f.set);
+    b.orig = { ...b }; Object.assign(b, f.set); b.ownerFix = true;
     if (f.set.faceFix !== undefined) b.face = f.set.faceFix;
     if (f.set.x !== undefined || f.set.z !== undefined) setGround(b);   // moved onto its true spot: new floor level
     if (b.lowerFloor) {   // a full storey under the floor on the downhill side: the lowest ground sits one storey below
@@ -359,8 +361,67 @@ export function buildVillageLayout(terrH, existingRoads = []) {
     r.orig = { line: r.line, pts: r.pts, w: r.w, kind: r.kind, kerb: r.kerb };
     Object.assign(r, mv); r.line = mv.gone ? mv.pts.map(q => q.slice()) : smoothPolyline(mv.pts, 3);
   }
-  const cemeteries = (SITES.cemeteries || []).map(c => ({ ...c, open: SV_OPEN, ...(c.label === 'grave strip' ? { wallEdges: [] } : {}) }));
+  shiftRoadsToHouseFrame(roads);   // v1.13
+  // v1.13: the houses had been pushed off the lanes where the lanes were drawn (up to 8 m). With the lanes in the
+  // houses' frame a house goes back to its traced footprint when that is clear of every road, and is otherwise pushed
+  // off the road it now touches. Houses the owner or a panorama corrected stay where they were put.
+  {
+    const live = roads.filter(r => !r.gone && r.line.length > 1);
+    const intr = (b, margin) => { let worst = 0; for (const c of rectCorners({ ...b, w: b.w + 2 * margin, d: b.d + 2 * margin }).concat([[b.x, b.z]])) for (const r of live) { if (Math.abs(r.line[0][0] - c[0]) > 400) continue; worst = Math.max(worst, r.w / 2 + 0.3 - distToPolyline(c[0], c[1], r.line).d); } return worst; };
+    const near = (x, z) => { let bestR = null, best = { d: Infinity }; for (const r of live) { const h = distToPolyline(x, z, r.line); if (h.d < best.d) { best = h; bestR = r; } } return { r: bestR, ...best }; };
+    let back = 0, pushed = 0;
+    for (const b of buildings) {
+      if (!b.sat || b.kind || b.fixed || b.ownerFix || !b.data) continue;
+      const was = { x: b.x, z: b.z }, t = { ...b, x: b.data[0], z: b.data[1] };
+      let cur = intr(t, 0.3);
+      for (let it = 0; it < 10 && cur > 0; it++) {
+        const h = near(t.x, t.z), p = h.r.line[h.i], q = h.r.line[Math.min(h.r.line.length - 1, h.i + 1)], dx = q[0] - p[0], dz = q[1] - p[1], L = Math.hypot(dx, dz) || 1;
+        const nx = -dz / L, nz = dx / L, side = Math.sign((t.x - p[0]) * nx + (t.z - p[1]) * nz) || 1, ox = t.x, oz = t.z;
+        t.x += nx * side * 0.6; t.z += nz * side * 0.6;
+        const nxt = intr(t, 0.3); if (nxt >= cur - 0.03) { t.x = ox; t.z = oz; break; } cur = nxt;
+      }
+      if (Math.hypot(t.x - was.x, t.z - was.z) < 0.25) continue;
+      if (cur > 0 && intr(b, 0.3) <= cur) continue;   // no better than where it stands
+      if (!b.orig) b.orig = { ...b };
+      b.x = Math.round(t.x * 10) / 10; b.z = Math.round(t.z * 10) / 10;
+      const h = near(b.x, b.z), p = h.r.line[h.i]; b.face = Math.atan2(p[1] - b.z, p[0] - b.x); b.front = h.d;
+      setGround(b); if (Math.hypot(b.x - b.data[0], b.z - b.data[1]) < 0.3) back++; else pushed++;
+    }
+    if (typeof console !== 'undefined') console.log('[layout] v1.13 houses back on their footprints', back, 'pushed off a lane', pushed);
+  }
+  // v1.13: the big cemetery's west side is the retaining wall in SV_SITES, not a low wall 15 m inside it
+  const cemeteries = (SITES.cemeteries || []).map(c => ({ ...c, open: SV_OPEN, ...(c.label === 'grave strip' ? { wallEdges: [] } : c.label === 'big cemetery' ? { wallEdges: [0] } : {}) }));
   return { roads, buildings, extra, sites: { ...SITES, cemeteries, stoneWalls, roseYard: ROSE_YARD, ownerPlot: OWNER_PLOT, sv: SV_SITES }, rnd };
+}
+
+// ---------------------------------------------------------------- v1.13: the lanes into the houses' frame
+// See road_frame.js. A road keeps its place (weight 0) when it was laid by hand in the true frame (ROAD_MOVE, ROAD_FIX,
+// the D.260) or is in ROAD_SHIFT.keep; every other road moves by the full shift (weight 1). At a junction all the
+// roads take the same weight — 0 if a hand-laid road is there, else 1 if any road there moves — and each road blends
+// from its end weights to its own over `blend` metres, so the network stays joined. The old line is kept as `orig`
+// for whatever decides how many random draws are made (pole spacing, garden walls), as in v1.11.
+function shiftRoadsToHouseFrame(roads) {
+  const RS = ROAD_SHIFT, keep = new Set(RS.keep);
+  const hard = (r) => !!r.orig || !!ROAD_FIX[r.id] || /^d260/.test(r.id);
+  const own = (r) => (hard(r) || keep.has(r.id) ? 0 : 1);
+  const live = roads.filter(r => !r.gone && r.pts.length > 1);
+  const touch = (p, q) => distToPolyline(p[0], p[1], q.line).d < 2.5 || (q.orig && q.orig.line.length > 1 && distToPolyline(p[0], p[1], q.orig.line).d < 2.5);
+  const endW = (r, p) => {
+    let anyHard = hard(r), anyMove = own(r) === 1;
+    for (const q of live) { if (q === r || !touch(p, q)) continue; if (hard(q)) anyHard = true; else if (own(q) === 1) anyMove = true; }
+    return anyHard ? 0 : anyMove ? 1 : 0;
+  };
+  const plan = [];
+  for (const r of live) {
+    if (hard(r)) continue;
+    const W = own(r), w0 = endW(r, r.pts[0]), w1 = endW(r, r.pts[r.pts.length - 1]);
+    if (!W && !w0 && !w1) continue;
+    const cum = [0]; for (let i = 1; i < r.pts.length; i++) cum.push(cum[i - 1] + Math.hypot(r.pts[i][0] - r.pts[i - 1][0], r.pts[i][1] - r.pts[i - 1][1]));
+    const L = cum[cum.length - 1], B = Math.min(RS.blend, L / 2 || 1), sm = (t) => { t = Math.max(0, Math.min(1, t)); return t * t * (3 - 2 * t); };
+    const pts = r.pts.map((p, i) => { const a = sm(cum[i] / B), b = sm((L - cum[i]) / B), w = cum[i] < L / 2 ? w0 + (W - w0) * a : w1 + (W - w1) * b; return [p[0] + RS.dx * w, p[1] + RS.dz * w]; });
+    plan.push([r, pts]);
+  }
+  for (const [r, pts] of plan) { r.orig = { line: r.line, pts: r.pts, w: r.w, kind: r.kind, kerb: r.kerb }; r.pts = pts; r.line = smoothPolyline(pts, 3); r.shifted = true; }
 }
 
 // ---------------------------------------------------------------- owner's corrections (v0.9.7)
@@ -413,7 +474,8 @@ const OWNER_FIX = [
   { xz: [648.0, 536.0], set: { x: 648.0, z: 536.0, w: 3.6, d: 3.4, ownWall: 'redWall', wall: 'none', tree: false, barn: true, plain: true }, note: 'not a house: a small red pump hut on the open ground north of the crossroads' },
   // v1.11 (Street View drive down the main road from the çarşı, 35 panoramas of Apr 2026, model 262,166 → 431,453):
   { xz: [251.6, 178.6], set: { ownWall: 'Duvar_Krem', roof: 'g', wall: 'none', tree: false }, note: 'cream single-storey house with its gable end on the road (blue fascia, a sign on the gable wall)' },
-  { xz: [256.8, 219.1], set: { ownWall: 'Duvar_Okr', wall: 'none' }, note: 'ochre render, hip tile roof, on open ground at the fork (no garden wall)' },
+  { xz: [256.8, 219.1], set: { storeys: 2, ownWall: 'Duvar_Somon', wall: 'none', tree: false, stairFix: '+z', balconyFix: true },
+    note: 'v1.13 (owner\'s screenshots 0676/0677): the salmon-pink two-storey house at the fork, outside stair up to a balcony on the lane side (was one storey, ochre)' },
   { xz: [269.2, 237.4], set: { ownWall: 'Duvar_Krem', wall: 'none' }, note: 'cream, open ground in front' },
   { xz: [285.4, 237.4], set: { ownWall: 'Duvar_Beyaz', wall: 'none', porch: { dir: [0.71, -0.71], span: [0.1, 0.9], depth: 2.4 } }, note: 'white single-storey house with a columned porch, on the kerbed corner south of the road' },
   { xz: [311.1, 207.4], set: { ownWall: 'Duvar_Beyaz', wall: 'none', tree: false }, note: 'the long white house above the road: its yard is closed by the dry-stone wall along the road (SV_SITES)' },
@@ -426,6 +488,18 @@ const OWNER_FIX = [
   { xz: [359.0, 289.4], set: { storeys: 2, ownWall: 'Duvar_Sari' }, note: 'two storeys, yellow-green render under a red roof, seen over the shed from the road' },
   { xz: [380.2, 280.5], set: { roof: 'm', barn: true, plain: true, ownWall: 'metalDark', wall: 'none', tree: false }, note: 'a dark sheet-clad shed on the road, not a white flat-roofed house' },
   { xz: [399.4, 351.3], set: { ownWall: 'Duvar_Beton', wall: 'none', tree: false, plain: true }, note: 'bare grey block walls under a tile roof, right on the road' },
+  // v1.13 (the owner's 35 Street View screenshots of 23 Nov 2026, images of Apr 2026; docs/REALISM.md)
+  { xz: [-12.4, 308.8], set: { x: -13.0, z: 308.0, w: 24.0, d: 12.0, yaw: -1.215, storeys: 2, roof: 'g', ownWall: 'woodRaw', wall: 'none', tree: false, kind: 'lokanta', faceFix: 2.785 },
+    note: 'Köprü Et Balık: the big two-storey timber restaurant on the lake road, long side on the road (was a low house turned across the plot)' },
+  { xz: [-0.9, 306.7], set: { gone: true }, note: 'part of the restaurant roof, not a house' },
+  { xz: [-23.8, 298.3], set: { gone: true }, note: 'replaced by the blue shop north of the restaurant (SV_SITES)' },
+  { xz: [-19.5, 305.4], set: { gone: true }, note: 'part of the restaurant roof, not a house' },
+  { xz: [221.7, 84.4], set: { ownWall: 'Duvar_Sari', wall: 'none', tree: false }, note: 'the yellow two-storey house with a shop on the ground floor, north-west of the square (0655)' },
+  { xz: [268.8, 69.6], set: { ownWall: 'Duvar_Beyaz', wall: 'none', tree: false, faceFix: Math.PI, plain: true }, note: 'the old row of shops on the east side of the main road north of the çarşı (blue shutters), right on the road' },
+  { xz: [273.5, 56.5], set: { ownWall: 'Duvar_Beyaz', wall: 'none', tree: false, faceFix: Math.PI, plain: true }, note: 'north half of the same row' },
+  { xz: [264.1, 97.9], set: { w: 9.5, d: 8.0, storeys: 2, ownWall: 'Duvar_Krem', wall: 'none', tree: false, faceFix: Math.PI }, note: 'two storeys with shop windows on the ground floor, east of the road at the north end of the square' },
+  { xz: [475.5, 665.3], set: { yaw: 2.05, wall: 'none', tree: false, faceFix: 0.48 }, note: 'the long workshop building west of the school road: its long axis runs NW–SE (the tracer had it mirrored)' },
+  { xz: [491.8, 698.7], set: { x: 490.5, z: 696.0, w: 22.0, d: 9.5, yaw: 2.05, wall: 'none', tree: false, faceFix: 0.48 }, note: 'the tyre shop (lastikçi) south of it: same axis, open bays on the road side' },
   { xz: [436.0, 362.8], set: { barn: true, plain: true, ownWall: 'Duvar_Okr', wall: 'none', tree: false }, note: 'the small tan hut in the park' },
 ];
 // v1.5: what the three panoramas show besides the houses. Model metres (x east, z south). Nothing here takes a draw
@@ -459,6 +533,13 @@ export const SV_SITES = {
     { pts: [[437.0, 418.0], [437.2, 428.0]], h: 1.8, t: 0.05, key: 'metalDark', cap: 'metalDark', note: 'black shade cloth on the fence east of the road' },
     { pts: [[437.2, 428.0], [437.4, 438.0]], h: 1.8, t: 0.05, key: 'greenMesh', cap: 'greenMesh', note: 'green shade cloth, the same fence further south' },
     { pts: [[437.4, 438.0], [437.8, 462.0]], h: 1.0, t: 0.22, key: 'Duvar_Beton', cap: 'Duvar_Beton', note: 'grey block garden wall with iron railings on top, east of the road' },
+    // v1.13 (owner's screenshots 0666/0667): the tall rubble retaining wall round the west corner of the big cemetery, above the lane up from the D.260
+    { pts: [[120.0, 485.0], [119.0, 476.0], [121.0, 468.5], [127.0, 461.0], [138.0, 451.0], [150.0, 441.0], [162.0, 432.0], [171.0, 426.5]], h: 2.7, t: 0.7, note: 'cemetery retaining wall' },
+    { pts: [[427.6, 468.6], [428.3, 478.3]], h: 0.4, t: 0.3, key: 'whitewash', cap: 'kerbBlue', note: 'footing of the blue and white balustrade north of the cemetery gate (0672)' },
+    { pts: [[428.9, 482.6], [430.0, 494.0], [432.5, 506.0], [435.5, 518.0]], h: 0.4, t: 0.3, key: 'whitewash', cap: 'kerbBlue', note: 'the same, south of the gate' },
+    { pts: [[253.4, 61.5], [252.8, 66.6]], h: 0.45, t: 0.3, key: 'redWall', cap: 'redWall', note: 'low red wall of the pine park on the main road, north of its arch (0652)' },
+    { pts: [[252.6, 69.4], [252.0, 76.5], [244.0, 77.0], [237.0, 76.0]], h: 0.45, t: 0.3, key: 'redWall', cap: 'redWall', note: 'the same, south of the arch and along the back' },
+    { pts: [[150.0, 250.0], [142.0, 252.0], [133.5, 254.5], [126.0, 259.5]], h: 1.0, note: 'dry-stone garden wall on the north side of the lane east of the junction (0682–0684)' },
   ],
   extra: [
     { x: 644.2, z: 636.6, yaw: 0.42, w: 6.0, d: 3.8, storeys: 1, roof: 'g', barn: true, plain: true, wallKey: 'Duvar_Beton', note: 'block outbuilding with a tile roof beside the garden gate' },
@@ -473,6 +554,13 @@ export const SV_SITES = {
     { x: 332.5, z: 219.5, yaw: -0.253, w: 10.0, d: 7.0, storeys: 1, roof: 'f', plain: true, wallKey: 'Duvar_Okr', kind: 'garage', face: Math.PI / 2,
       note: 'flat-roofed tan garage with a blue double door behind a gravel forecourt; steel frame of an unfinished storey on the roof' },
     { x: 343.6, z: 258.0, yaw: -0.145, w: 11.0, d: 10.5, storeys: 1, roof: 'h', plain: true, wallKey: 'rubble', note: 'south wing of the old stone house' },
+    // v1.13: the shops on the lake road either side of the restaurant, and the arcade of the cemetery yard
+    { x: -9.5, z: 331.0, yaw: -1.215, w: 5.0, d: 4.5, storeys: 1, roof: 'g', plain: true, barn: true, wallKey: 'woodRaw', face: 2.785, kind: 'shop', note: 'Kasap Yunus: small timber butcher\'s kiosk with a glass front' },
+    { x: -5.0, z: 340.5, yaw: -1.215, w: 9.5, d: 6.5, storeys: 1, roof: 'h', plain: true, wallKey: 'bluePaint', face: 2.785, kind: 'shop', note: 'Elçim Köylü Pazarı: blue mini-market under a tile roof' },
+    { x: -26.5, z: 296.0, yaw: -1.215, w: 6.0, d: 5.5, storeys: 1, roof: 'h', plain: true, wallKey: 'bluePaint', face: 2.785, kind: 'shop', note: 'blue shop north of the restaurant' },
+    { x: -29.5, z: 286.0, yaw: -1.215, w: 7.5, d: 6.0, storeys: 2, roof: 'g', plain: true, wallKey: 'woodRaw', face: 2.785, stairFix: null, balconyFix: false, note: 'timber fish shop on posts (open ground floor)' },
+    { x: 423.0, z: 499.5, yaw: -1.41, w: 25.0, d: 4.5, storeys: 1, roof: 'm', barn: true, plain: true, wallKey: 'Duvar_Beton', note: 'east wing of the cemetery yard\'s shelter, along the road' },
+    { x: 415.0, z: 516.0, yaw: -0.18, w: 22.0, d: 4.5, storeys: 1, roof: 'm', barn: true, plain: true, wallKey: 'Duvar_Beton', note: 'its south wing' },
     { x: 398.5, z: 338.3, yaw: -1.451, w: 9.0, d: 6.0, storeys: 1, roof: 'm', barn: true, plain: true, wallKey: 'rubble', note: 'rubble barn with a rusty sheet roof on the road, north of the grey block house' },
   ],
   gates: [{ a: [108.7, 280.9], b: [112.9, 280.3], h: 1.75 },                     // two-leaf wrought-iron gate, meter box on its west pillar
@@ -481,7 +569,20 @@ export const SV_SITES = {
     { pts: [[649.0, 638.3], [666.0, 630.9], [684.5, 625.0]], h: 1.3 },          // v1.6: wire fence of the garden along the lane
     // v1.11: white pickets between red posts on a low footing, west side of the road south of the lake lane
     { pts: [[423.6, 416.5], [424.2, 432.5], [424.6, 452.7], [425.5, 468.0]], h: 1.05, y: 0.35, key: 'trim', post: 'redPaint' },
-    { pts: [[437.4, 438.0], [437.8, 462.0]], h: 0.9, y: 1.0 }],                 // v1.11: iron railings on the block wall east of the road
+    { pts: [[437.4, 438.0], [437.8, 462.0]], h: 0.9, y: 1.0 },                  // v1.11: iron railings on the block wall east of the road
+    // v1.13: blue-white concrete balustrade along the cemetery yard; red-brown railings of the pine park
+    { pts: [[427.6, 468.6], [428.3, 478.3]], h: 0.8, y: 0.4, key: 'trim', post: 'kerbBlue' },
+    { pts: [[428.9, 482.6], [430.0, 494.0], [432.5, 506.0], [435.5, 518.0]], h: 0.8, y: 0.4, key: 'trim', post: 'kerbBlue' },
+    { pts: [[253.4, 61.5], [252.8, 66.6]], h: 0.7, y: 0.45, key: 'redWall', post: 'redWall' },
+    { pts: [[252.6, 69.4], [252.0, 76.5], [244.0, 77.0], [237.0, 76.0]], h: 0.7, y: 0.45, key: 'redWall', post: 'redWall' }],
+  // v1.13: arched gateways (two pillars and an arch): the cemetery's blue gate, the park's red arch
+  arches: [{ x: 428.6, z: 480.5, yaw: -1.47, w: 3.4, h: 3.6, key: 'kerbBlue' }, { x: 252.7, z: 68.0, yaw: -1.47, w: 2.0, h: 3.0, key: 'redWall' }],
+  // v1.13: the gate of the Çeşnigir bridge and canyon park on the lake road (0663–0665): timber gable roof on two
+  // orange piers across the road, the dark ticket kiosk in the middle
+  parkGate: { x: -95.0, z: 183.0, yaw: 0.49 },
+  // v1.13: interlocking paving in front of the shops on the lake road; `solids` = collision boxes (x, z, yaw, half w, half d)
+  paved: [{ x: -19.5, z: 318.0, w: 13.0, d: 70.0, yaw: 0.356 }, { x: -92.0, z: 196.0, w: 12.0, d: 22.0, yaw: 0.49 }],
+  solids: [[-95.0, 183.0, 0.49, 1.7, 1.4], [-88.4, 179.5, 0.49, 1.5, 1.2], [-101.6, 186.5, 0.49, 1.5, 1.2], [428.6, 480.5, -1.47, 0.3, 0.3]],
   // v1.11: the park's lawn follows the road from its north tip (the garden rectangle in SITES covers the middle)
   lawns: [{ x: 425.8, z: 343.7, w: 16, d: 64, yaw: 0.305 }],
   // v1.11: concrete posts with three wires round the lawn north of the road and the garden at the junction
@@ -512,6 +613,14 @@ export const SV_SITES = {
     ['mulberry', 411.5, 300.0, 0.95],                                                      // the big bare tree at the north tip of the park
     ['mulberry', 437.0, 367.5, 0.9], ['mulberry', 441.5, 372.0, 0.9], ['mulberry', 431.5, 386.0, 0.9],   // the old trees at the south end of the park
     ['pine', 420.6, 441.0, 1.0], ['pine', 420.0, 447.0, 1.1], ['pine', 420.4, 453.5, 1.0],   // the spruces behind the red and white fence
+    // v1.13 (owner's screenshots)
+    ['mulberry', -3.0, 325.0, 1.3], ['mulberry', 2.5, 336.0, 1.2], ['mulberry', -20.0, 291.0, 1.0],                       // the willows behind the shops on the lake road
+    ['mulberry', -56.0, 266.0, 0.8], ['mulberry', -61.0, 255.0, 0.8], ['mulberry', -66.0, 244.5, 0.8], ['mulberry', -71.0, 234.0, 0.8], ['mulberry', -76.0, 223.5, 0.8],   // the row west of the road to the gate
+    ['mulberry', -86.0, 207.5, 1.0], ['mulberry', -84.5, 214.5, 0.9],                                                     // the trees on the island before the gate
+    ['pine', 124.0, 476.0, 0.9], ['pine', 126.5, 468.0, 1.0], ['pine', 132.0, 462.5, 0.9], ['pine', 139.0, 456.0, 1.0], ['pine', 146.5, 449.5, 0.9], ['pine', 154.0, 443.0, 1.0], ['pine', 162.0, 437.0, 0.9],   // behind the cemetery's retaining wall
+    ['mulberry', 110.0, 464.0, 1.0],                                                                                       // the willow on the lane below it
+    ['mulberry', 418.0, 478.0, 1.5], ['pine', 405.0, 497.0, 0.9], ['pine', 404.5, 506.0, 0.9], ['pine', 428.0, 512.0, 0.85],   // the big tree and the pines of the cemetery yard
+    ['pine', 240.0, 65.0, 1.2], ['pine', 246.5, 71.5, 1.3], ['pine', 248.5, 63.5, 1.1], ['pine', 241.0, 73.5, 1.1],       // the pine park on the main road
   ],
   grove: { x0: 484, x1: 522, z0: 582, z1: 624, step: 6.2, species: 'pine' },     // the pine wood between the junction and the school
 };
@@ -612,6 +721,7 @@ export function carsiBoxes(sites) {
   if (sv) {
     for (const e of sv.extra) out.push(e.x, e.z, e.yaw, e.w / 2, e.d / 2);
     for (const [x0, z0, x1, z1] of [...sv.gates.map(g => [...g.a, ...g.b]), ...sv.fences.flatMap(f => fencePieces(f.pts))]) out.push((x0 + x1) / 2, (z0 + z1) / 2, Math.atan2(-(z1 - z0), x1 - x0), Math.hypot(x1 - x0, z1 - z0) / 2, 0.08);
+    for (const q of sv.solids || []) out.push(...q);
     out.push(sv.bust.x, sv.bust.z, 0, 0.6, 0.6, sv.pylon.x, sv.pylon.z, 0, 0.8, 0.8, sv.tank.x, sv.tank.z, sv.tank.yaw, 1.0, 0.7);
   }
   const op = sites.ownerPlot;   // v1.4: the owner's kamelya and chain-link fence

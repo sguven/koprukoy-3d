@@ -5,6 +5,47 @@ Two passes so far: **v0.7 "materials"** (surfaces only, nothing moved) and **v0.
 `model/koprukoy.glb` are still the v0.6 files. Terrain (SRTM 30 m), the reservoir at 724 m, the
 Çeşnigir Bridge body, D.260 and the roads outside the village are unchanged.
 
+## v1.13 — 35 Street View screenshots from the owner (Nov 2026)
+
+The owner sent 35 phone screenshots (IMG_0650–0684): a Street View frame of April 2026 (one of May 2023) above the
+satellite map with the position marker. Each map was matched to `docs/survey/satellite_mosaic_0.3m_small.jpg`
+(normalised cross-correlation over scale and position, scores 0.82–0.96), the marker's arrow gave the heading, and the
+model was rendered from the same point (`FOV=75`). Positions and headings: `tools/sv_photos_2026-11-23.json`
+(headings of 0650–0652 are read from the pictures; the marker is partly covered there).
+
+**The lanes were 8 m north of the houses.** Laying the model's plan over the phone's maps showed the house footprints
+0.75 m west and 8.25 m south of their roofs in the mosaic's georeference, the same in every part of the village
+(overlap of footprints and tile roofs 2.2 times better with that shift), while the lanes fitted the mosaic as drawn.
+The footprints, the çarşı and the Street View panoramas of v1.5–v1.11 agree with each other, so the houses' frame is
+the true one and the v0.9.5 road snapping (`tools/sat_roads.py`) worked in a frame 8 m off. `src/road_frame.js` +
+`shiftRoadsToHouseFrame` in `src/village_layout.js` move every road by (−0.75, +8.25) except the hand-laid ones
+(v0.9.2 çarşı, v1.11 main road, D.260) and 37 roads that only lie on a visible lane when read in the houses' frame
+(`tools/road_frame.py`); at junctions between the two kinds the roads blend over 18 m. Then 107 houses that v0.9.5
+had pushed off a wrongly placed lane go back to their traced footprints and 94 are pushed clear of the lane they now
+touch. The random stream is kept as in v1.11 (`orig` lines and houses are replayed).
+
+| Where (model x, z) | Screenshots | Was | Now |
+|---|---|---|---|
+| −13, 308 | 0657–0661 | four small houses | Köprü Et Balık (two-storey timber restaurant, long side on the road), Kasap Yunus kiosk, the blue Elçim Köylü Pazarı, the blue shop and the fish shop on posts north of it, paving in front, willows behind |
+| −95, 183 | 0662–0665 | open road | gate of the Çeşnigir bridge and canyon park: timber gable roof on two orange piers, dark kiosk in the middle; tree row west of the road, wire fence along the road up the hill |
+| 120, 485 → 171, 426 | 0666, 0667 | open slope, low wall 15 m inside | 2.7 m rubble retaining wall round the cemetery's west corner, pines behind it |
+| 428.6, 480.5 | 0672 | open field | blue arch of the cemetery yard, blue-white balustrade along the road, the shelter's east and south wings, the big tree |
+| 245, 69 | 0652 | a green 20 m further north, on the junction | the pine park west of the main road: low red wall with railings and an arch |
+| 268.8, 69.6 / 273.5, 56.5 | 0650, 0651 | houses behind garden walls | the old row of shops right on the road |
+| 264.1, 97.9 | 0653, 0654 | small single-storey house | two storeys, cream |
+| 256.8, 219.1 | 0676, 0677 | one storey, ochre | salmon pink, two storeys, outside stair and balcony |
+| 475.5, 665.3 / 490.5, 696 | 0669, 0670 | long buildings mirrored across the road's axis | the workshop and the tyre shop on their NW–SE axis |
+| 126 → 150, 250–260 | 0681–0684 | open | dry-stone garden wall on the north side of the lane |
+
+Comparison sheets (photograph, model): `docs/screenshots/v1.13_sv_compare_*.jpg`; plan over the phone's map after the
+shift: `docs/survey/v1.13_roads_in_house_frame.jpg`.
+
+Not corrected in this pass: the screenshot positions are good to about 3 m, so a few lanes may still sit 2–3 m to one
+side of the real one (the lane south-west of the mosque is on the lane's south edge); the yellow two-storey house
+north-west of the square (0655) is still grey; the restaurant, shops and the gate are simple blocks in the right
+places and sizes, without their signs; the 2023 picture by the D.260 (0668) shows only a field and a billboard, not added;
+SRTM ground is smoother than the real slopes at the cemetery wall and the restaurant.
+
 ## v1.11 — down the main road from the çarşı (Nov 2026)
 
 The owner linked a Street View panorama south of the market (`ptwVVBQk5vD2FGQhiYZL_w`, 39.5763985, 33.4361387 → model

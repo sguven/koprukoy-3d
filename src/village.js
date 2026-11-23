@@ -771,6 +771,34 @@ export function buildVillage(ctx, layout, M) {
           wires.push(np.x + ox * sx + dx * t0, y0 + (y1 - y0) * t0 - 0.5 * f(t0), np.z + oz * sx + dz * t0, np.x + ox * sx + dx * t1, y0 + (y1 - y0) * t1 - 0.5 * f(t1), np.z + oz * sx + dz * t1); }
       }
     }
+    // v1.13: interlocking paving on the ground
+    for (const L of V.paved || []) bat.add('paving', patch(L.x, L.z, L.w, L.d, L.yaw || 0, yAt, 0.1, 1.5));
+    // v1.13: an arched gateway — two square pillars and a round arch between them, local x across the opening
+    for (const A of V.arches || []) {
+      const { fr, bld } = mk(A.x, A.z, A.yaw), a = (k, g) => bat.add(k, g, fr, bld), hw = A.w / 2, ph = A.h - hw;
+      for (const sx of [-1, 1]) a(A.key, boxY(0.45, 0.45, -0.6, ph, sx * (hw + 0.22), 0));
+      const N = 10; for (let i = 0; i < N; i++) { const t0 = Math.PI * i / N, t1 = Math.PI * (i + 1) / N, tm = (t0 + t1) / 2, r = hw + 0.22, g = box(r * (t1 - t0) + 0.06, 0.4, 0.45, 0, 0, 0); g.rotateZ(tm + Math.PI / 2); g.translate(Math.cos(tm) * r, ph + Math.sin(tm) * r, 0); a(A.key, g); }
+    }
+    // v1.13: the gate of the Çeşnigir bridge and canyon park. Local x across the road, z along it.
+    if (V.parkGate) {
+      const G = V.parkGate, { fr, bld } = mk(G.x, G.z, G.yaw), a = (k, g) => bat.add(k, g, fr, bld), EH = 4.7, SP = 6.6;
+      for (const sx of [-1, 1]) { a('orange', boxY(3.0, 2.4, -1.0, EH, sx * SP, 0)); a('trim', box(0.9, 0.9, 0.05, sx * SP, 3.4, 1.23)); }
+      a('metalDark', boxY(3.4, 2.8, -1.0, 3.3, 0, 0)); a('plaque', box(2.7, 1.1, 0.06, 0, 2.6, 1.43)); a('trim', box(2.2, 0.5, 0.05, 0, 2.7, 1.47));
+      a('glass', box(2.6, 1.0, 0.05, 0, 1.45, 1.42)); a('step', boxY(3.8, 3.2, -0.4, 0.12, 0, 0));
+      const roof = roofGeometry(7.0, 2 * SP + 4.6, 0.6, 0.36, EH + 0.25, 'g'); roof.rotateY(Math.PI / 2); a('Cati_Kiremit', roof);
+      const rise = (SP + 2.3 + 0.6) * Math.tan(0.36);
+      for (const sz of [-3.3, 3.3]) {   // the timber truss in each gable: tie beam, rafters, king post and struts
+        a('woodRaw', box(2 * SP + 4.4, 0.3, 0.3, 0, EH + 0.15, sz)); a('woodRaw', box(0.3, rise, 0.3, 0, EH + 0.3 + rise / 2, sz));
+        for (const sx of [-1, 1]) {
+          const L = Math.hypot(SP + 2.3, rise), g = box(L, 0.28, 0.28, 0, 0, 0); g.rotateZ(-sx * Math.atan2(rise, SP + 2.3)); g.translate(sx * (SP + 2.3) / 2, EH + 0.3 + rise / 2, sz); a('woodRaw', g);
+          const st = box(3.4, 0.2, 0.2, 0, 0, 0); st.rotateZ(sx * 0.9); st.translate(sx * 1.2, EH + 1.5, sz); a('woodRaw', st);
+        }
+      }
+      for (const sx of [-SP, 0, SP]) a('woodRaw', box(0.3, 0.3, 6.6, sx, EH + 0.15, 0));
+      for (const sx of [-1, 1]) {   // boarded underside of each roof slope
+        const L = Math.hypot(SP + 2.9, rise), g = box(L, 0.06, 7.6, 0, 0, 0); g.rotateZ(-sx * Math.atan2(rise, SP + 2.9)); g.translate(sx * (SP + 2.9) / 2, EH + 0.2 + rise / 2, 0); a('woodRaw', g);
+      }
+    }
     for (const [species, x, z, size] of V.trees || []) treeSpots.push({ x, z, species, size, force: true });
     if (V.grove) { // a planted wood: a loose grid, skipping roads and houses
       const G = V.grove, hsh = (u, v) => { const t = Math.sin(u * 12.9898 + v * 78.233) * 43758.5453; return t - Math.floor(t); };
@@ -956,6 +984,16 @@ export function buildVillage(ctx, layout, M) {
       add('bluePaint', box(2.2, 0.9, 1.0, -L / 2 + 1.5, y0 + 0.45, 1.3), fm);     // the ice-cream freezer by the door
       add('redPaint', box(0.8, 1.7, 0.7, L / 2 - 1.2, y0 + 0.85, 0.6), fm);       // the red drinks fridge
       add('beton', boxY(L + 0.6, 2.4, b.yLow - b.yTop - 0.3, y0 + 0.02, 0, 1.2), fm);   // the shop's own step of pavement
+    }
+    // v1.13: Köprü Et Balık — a glazed gallery on the upper floor behind a timber balcony over the road side, a
+    // rubble wall with planters along the foot, the dark sign board on the south end
+    if (b.kind === 'lokanta') {
+      const fm = faceMatrix(front, w, d), L = front === '+z' || front === '-z' ? w : d, fy = y0 + FLOOR;
+      add('woodRaw', box(L + 0.4, 0.16, 1.5, 0, fy - 0.05, 0.75), fm); add('woodRaw', box(L + 0.4, 0.08, 0.08, 0, fy + 1.0, 1.45), fm);
+      for (let u = -L / 2; u <= L / 2 + 0.01; u += L / 8) { add('woodRaw', boxY(0.16, 0.16, y0 - 0.4, y1, u, 1.45), fm); }
+      for (let u = -L / 2 + 0.2; u < L / 2; u += 0.35) add('woodRaw', box(0.05, 0.95, 0.05, u, fy + 0.5, 1.45), fm);
+      add('glass', box(L - 1.0, 1.2, 0.05, 0, fy + 1.7, 0.05), fm); add('rubble', boxY(L * 0.7, 0.5, y0 - 0.5, y0 + 0.9, -L * 0.1, 2.6), fm);
+      add('navy', box(3.6, 1.2, 0.1, L / 2 - 2.2, fy + 0.2, 1.6), fm);
     }
     if (b.kind === 'garage') {
       const fm = faceMatrix(front, w, d), L = front === '+z' || front === '-z' ? w : d;
