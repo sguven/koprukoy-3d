@@ -79,6 +79,7 @@ canvas { display: block; touch-action: none; }
 
 .hud { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); display: none; align-items: flex-end; gap: 14px; pointer-events: none; }
 .hud.show { display: flex; }
+.hud.show.cockpit { display: none; }   /* the Toros's own speedometer is in view */
 .speedo { background: rgba(30, 27, 23, 0.82); color: #fff; border-radius: 12px; padding: 8px 16px 10px; text-align: center; min-width: 120px; }
 .speedo b { font: 700 40px/1 var(--display); font-variant-numeric: tabular-nums; display: block; }
 .speedo span { font: 600 12px var(--body); opacity: 0.8; letter-spacing: 0.06em; }
@@ -332,7 +333,7 @@ import { tagBuildings } from './src/buildings.js';
 import { buildVillageLayout, buildCentreLayout, roadSamples, squareSamples, carsiBoxes, buildingBoxes, inRegion, inCentreZone } from './src/village_layout.js';
 import { pruneOldVillage, pruneRocks, LIFT } from './src/village.js';
 import { createGame } from './src/game.js';
-import { buildToros, COLORS, WB, TRACK, WR } from './src/toros.js';
+import { buildToros, COLORS, WB, TRACK, WR, EYE as DRIVER_EYE } from './src/toros.js';
 import { createEngine } from './src/engine.js';
 import { PERF, DistanceCuller, createPerfMeter } from './src/perf.js';
 import { parseBench, createBench } from './src/bench.js';
@@ -656,7 +657,7 @@ function placeLabels() {
 }
 
 // ---------- Toros (Renault 12 Toros saloon, modelled on the owner's reference picture: src/toros.js) ----------
-const { car, paint, rack, wheels, setLights: torosLights } = buildToros();
+const { car, paint, rack, wheels, setLights: torosLights, cabin } = buildToros();
 function setLights(on) { document.getElementById('optLights').checked = on; torosLights(on); }
 document.getElementById('optLights').addEventListener('change', e => setLights(e.target.checked));
 document.getElementById('optRack').addEventListener('change', e => { rack.visible = e.target.checked; sun.shadow.needsUpdate = true; });
@@ -985,6 +986,53 @@ for (const [id, key, lab, fmt, set] of [
 const shadowFocus = new THREE.Vector3(1e9, 0, 0), shadowCentre = new THREE.Vector3(); let shadowExt = 0, mmT = 0;
 setSun(15);
 const camTarget = new THREE.Vector3(), camPos = new THREE.Vector3();
+// ---------- v1.9: the driver's seat ----------
+// The view sits at the driver's eye in the car's own frame, so it pitches and rolls with the body over the ground; on
+// top of that the head moves like a real one: pushed forward under braking and back when accelerating, out of the bend
+// in a turn, a short shake over rough ground and a faint engine tremor. It also glances a little into the bend.
+const hudEl = document.getElementById('hud');
+const HEAD = { v: 0, ax: 0, lat: 0, t: 0, look: 0 }, _hq = new THREE.Quaternion(), _he = new THREE.Euler(0, 0, 0, 'YXZ'), _hp = new THREE.Vector3();
+function driverCam(dt) {
+  if (dt <= 0) return;
+  const kf = 1 - Math.exp(-dt * 7), clamp = (v, a) => Math.max(-a, Math.min(a, v));
+  const ax = clamp((CS.v - HEAD.v) / dt, 12); HEAD.v = CS.v;
+  const lat = clamp(CS.v * CS.v * Math.tan(CS.steer) / WB, 10);   // m/s², > 0 when turning left
+  HEAD.ax += (ax - HEAD.ax) * kf; HEAD.lat += (lat - HEAD.lat) * kf; HEAD.t += dt;
+  const sp = Math.min(1, Math.abs(CS.v) / 14), rough = surfaceAt(CS.x, CS.z, CS.y).road ? 0.25 : 1;
+  const shake = (Math.sin(HEAD.t * 23.1) * 0.6 + Math.sin(HEAD.t * 37.7 + 1.3) * 0.4) * 0.006 * sp * rough + Math.sin(HEAD.t * CS.rpm / 60 * 2 * Math.PI * 0.5) * 0.0004;
+  _hp.set(DRIVER_EYE.x - HEAD.ax * 0.004, DRIVER_EYE.y + shake - Math.abs(HEAD.ax) * 0.0015, DRIVER_EYE.z + HEAD.lat * 0.005);
+  car.updateMatrixWorld(); camera.position.copy(_hp.applyMatrix4(car.matrixWorld));
+  HEAD.look += (CS.steer * 0.55 * Math.min(1, Math.abs(CS.v) / 4) - HEAD.look) * (1 - Math.exp(-dt * 3));
+  // camera looks down -Z; turning it -90° about Y points it along the car's +X (forward)
+  _he.set(-0.07 - carPitchOff * 0.9 + HEAD.ax * 0.0035 + shake * 0.6, -Math.PI / 2 + carYawOff + HEAD.look, HEAD.lat * 0.006);
+  camera.quaternion.copy(car.quaternion).multiply(_hq.setFromEuler(_he));
+}
+// live mirrors: each one is drawn from the driver's eye reflected in its glass, small and only every few frames
+const mirrorViews = cabin.mirrors.map((m, i) => {
+  const rt = new THREE.WebGLRenderTarget(i === 0 ? 384 : 160, i === 0 ? 106 : 104, { type: THREE.HalfFloatType });
+  rt.texture.wrapS = THREE.RepeatWrapping; rt.texture.repeat.x = -1;   // a mirror shows left and right swapped
+  const cam = new THREE.PerspectiveCamera(10, m.w / m.h, 0.3, i === 0 ? 400 : 250);
+  m.glass.material.map = rt.texture; m.glass.material.color.setHex(0xd8dde0); m.glass.material.needsUpdate = true;
+  return { m, rt, cam };
+});
+const _me = new THREE.Vector3(), _mc = new THREE.Vector3(), _mn = new THREE.Vector3(), _mt = new THREE.Vector3();
+let mirrorTick = 0;
+function renderMirrors() {
+  if (mode !== 'car' || CS.cam !== 1) return;
+  const every = isTouch ? 4 : 2; mirrorTick = (mirrorTick + 1) % (every * mirrorViews.length);
+  if (mirrorTick % every) return;
+  const v = mirrorViews[mirrorTick / every | 0], { m, cam } = v;
+  _me.copy(camera.position); _mc.copy(m.centre).applyMatrix4(car.matrixWorld); _mn.copy(m.n).transformDirection(car.matrixWorld);
+  const dist = _me.clone().sub(_mc).dot(_mn);
+  cam.position.copy(_me).addScaledVector(_mn, -2 * dist);                 // the eye seen in the glass
+  const d = cam.position.distanceTo(_mc); cam.near = d + 0.01; cam.fov = 2 * Math.atan(m.h / 2 / d) * 180 / Math.PI * 1.05;
+  cam.up.set(0, 1, 0).transformDirection(car.matrixWorld); cam.lookAt(_mt.copy(_mc).multiplyScalar(2).sub(cam.position)); cam.updateProjectionMatrix();
+  for (const o of mirrorViews) o.m.glass.visible = false;
+  const shadowWas = sun.shadow.needsUpdate, au = renderer.shadowMap.autoUpdate; renderer.shadowMap.autoUpdate = false; sun.shadow.needsUpdate = false;
+  renderer.setRenderTarget(v.rt); renderer.render(scene, cam); renderer.setRenderTarget(null);
+  renderer.shadowMap.autoUpdate = au; sun.shadow.needsUpdate = shadowWas;
+  for (const o of mirrorViews) o.m.glass.visible = true;
+}
 let last = performance.now(), last0 = last;
 if (LITE) window.__dbg = { CS, carStep, keys, touchIn, P, walkStep, surfaceAt, get mode() { return mode; } };
 // bots on the minimap, in the frame drawMinimap uses (heading up, player in the middle); returns a shared [x, y]
@@ -1029,7 +1077,10 @@ renderer.setAnimationLoop(now => {
     const n = Math.ceil(dt / 0.008); for (let i = 0; i < n; i++) carStep(dt / n);
     const c = Math.cos(CS.h + carYawOff), s = Math.sin(CS.h + carYawOff);
     if (CS.cam === 0) { camPos.set(CS.x - c * 7.2, CS.y + 2.6 + carPitchOff * 6, CS.z + s * 7.2); const minY = terrH(camPos.x, camPos.z) + 1; camPos.y = Math.max(camPos.y, minY); if (camera.position.distanceTo(camPos) > 40) camera.position.copy(camPos); else camera.position.lerp(camPos, 1 - Math.exp(-dt * 6)); camTarget.set(CS.x + Math.cos(CS.h) * 3, CS.y + 1.1, CS.z - Math.sin(CS.h) * 3); camera.lookAt(camTarget); }
-    else { const local = CS.cam === 1 ? new THREE.Vector3(-0.25, 1.25, -0.36) : new THREE.Vector3(0.75, 1.5, 0); car.updateMatrixWorld(); camera.position.copy(local.applyMatrix4(car.matrixWorld)); const fwd = new THREE.Vector3(Math.cos(carYawOff) * 10, -0.6 - carPitchOff * 6, -Math.sin(carYawOff) * 10).applyMatrix4(car.matrixWorld); camera.lookAt(fwd); }
+    else if (CS.cam === 1) driverCam(dt);
+    else { const local = new THREE.Vector3(0.75, 1.5, 0); car.updateMatrixWorld(); camera.position.copy(local.applyMatrix4(car.matrixWorld)); const fwd = new THREE.Vector3(Math.cos(carYawOff) * 10, -0.6 - carPitchOff * 6, -Math.sin(carYawOff) * 10).applyMatrix4(car.matrixWorld); camera.lookAt(fwd); }
+    cabin.update(Math.abs(CS.v) * 3.6, CS.rpm, CS.steer, !radio.paused);
+    { const cockpit = CS.cam === 1; if (hudEl.classList.contains('cockpit') !== cockpit) hudEl.classList.toggle('cockpit', cockpit); }
     focus = car.position; if (mmDue) drawMinimap(CS.x, CS.z, Math.PI / 2 - CS.h);
     carYawOff *= Math.exp(-dt * (lookId === null ? 2 : 0)); carPitchOff *= Math.exp(-dt * (lookId === null ? 2 : 0));
   }
@@ -1057,7 +1108,7 @@ renderer.setAnimationLoop(now => {
   }
   const shadowRedrawn = sun.shadow.needsUpdate; if (shadowRedrawn) perf.shadowRedrawn();
   const tRender = performance.now();
-  renderer.info.reset(); renderer.render(scene, camera); if (inGame && game) game.renderOverlay(renderer); placeLabels();
+  renderer.info.reset(); renderer.render(scene, camera); if (inGame && game) game.renderOverlay(renderer); renderMirrors(); placeLabels();
   if (bench && bench.active) bench.post(frameMs, tFrame, tRender, shadowRedrawn, cullChanged);
 });
 </script>
