@@ -87,6 +87,11 @@ canvas { display: block; touch-action: none; }
 .toast { position: fixed; z-index: 35; top: 40%; left: 50%; transform: translate(-50%, -50%); max-width: 86vw; text-align: center; background: rgba(30, 27, 23, 0.86); color: #fff; font: 700 22px var(--display); padding: 12px 20px; border-radius: 10px; display: none; letter-spacing: 0.03em; }
 #minimap { position: fixed; right: 16px; top: 74px; width: 170px; height: 170px; border-radius: 50%; border: 3px solid var(--paper); box-shadow: 0 4px 16px rgba(0,0,0,0.2); display: none; }
 #minimap.show { display: block; }
+/* v1.12: the map is moved and turned by the compositor (a CSS transform every frame) instead of being redrawn into a canvas 30 times a second */
+#minimap .mmClip { position: absolute; inset: 0; border-radius: 50%; overflow: hidden; clip-path: circle(50%); background: #d6c8aa; }
+#mmMap { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
+#mmTop { position: absolute; inset: 0; width: 100%; height: 100%; }
+#mmN { position: absolute; left: 0; top: 0; font-weight: bold; font-family: sans-serif; color: #2b2620; line-height: 1; will-change: transform; }
 /* v1.0: frame-time meter (Settings › Show FPS) */
 #perf { position: fixed; z-index: 30; left: 12px; bottom: 12px; font: 600 12px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; background: rgba(30, 27, 23, 0.72); color: #fff; padding: 4px 8px; border-radius: 6px; pointer-events: none; white-space: nowrap; }
 body:not(.is-touch)[data-mode="game"] #perf { bottom: auto; top: 64px; }
@@ -207,12 +212,12 @@ body:not(.is-touch)[data-mode="game"] .hint { right: auto; left: 50%; transform:
 <div id="scene"></div>
 <div id="labels"></div>
 <div class="crosshair" id="cross" aria-hidden="true"><i class="ct"></i><i class="cb"></i><i class="cl"></i><i class="cr"></i><i class="cd"></i></div>
-<canvas id="minimap" width="340" height="340"></canvas>
+<div id="minimap"><div class="mmClip"><canvas id="mmMap"></canvas><canvas id="mmTop" width="340" height="340"></canvas><span id="mmN">K</span></div></div>
 <div class="toast" id="toast"></div>
 <div id="perf" aria-live="off">– FPS</div>
 
 <div class="topbar">
-  <div class="brand"><h1>Köprüköy</h1><div class="sub">Keskin · Kırıkkale, Türkiye — 3D v1.11</div></div>
+  <div class="brand"><h1>Köprüköy</h1><div class="sub">Keskin · Kırıkkale, Türkiye — 3D v1.12</div></div>
   <div class="modes" id="modes" role="tablist" aria-label="Navigation mode">
     <button data-mode="orbit" class="on">Orbit</button>
     <button data-mode="walk" title="Walk through the village">Walk</button>
@@ -338,6 +343,7 @@ import { createGame } from './src/game.js';
 import { buildToros, COLORS, WB, TRACK, WR, EYE as DRIVER_EYE } from './src/toros.js';
 import { createEngine } from './src/engine.js';
 import { PERF, DistanceCuller, createPerfMeter } from './src/perf.js';
+import { createCarShadow } from './src/carshadow.js';
 import { parseBench, createBench } from './src/bench.js';
 
 const POIS = [{"id": "kopru", "label": "Çeşnigir Bridge", "kind": "tarihi", "pos": [-377, 16, -277]}, {"id": "viyaduk", "label": "D.260 viaduct", "kind": "yol", "pos": [-539, 22, -105]}, {"id": "d260a", "label": "D.260", "kind": "yon", "pos": [-951, 35, -319]}, {"id": "d260b", "label": "D.260", "kind": "yon", "pos": [154, 36, 568]}, {"id": "karakecili", "label": "To Karakeçili", "kind": "yon", "pos": [-825, 21, -209]}, {"id": "gezi", "label": "Promenade", "kind": "yer", "pos": [-267, 14, -57]}, {"id": "seyir", "label": "Viewpoint rock", "kind": "yer", "pos": [-292, 24, -338]}, {"id": "iskele", "label": "Boat pier", "kind": "yer", "pos": [-262, 9, -393]}, {"id": "cennet", "label": "Çeşnigir park", "kind": "yer", "pos": [-262, 12, -340]}, {"id": "kanyon", "label": "Çeşnigir Canyon", "kind": "yer", "pos": [-277, 55, -602]}, {"id": "nehir", "label": "Kızılırmak · Kapulukaya Reservoir", "kind": "su", "pos": [-318, 8, 331]}];
@@ -626,6 +632,7 @@ function warmScene() {
   renderer.render(scene, wc);
   for (const pr of renderer.info.programs) { pr.getUniforms(); pr.getAttributes(); }
   if (game) game.warm(false);
+  carShadow.warm();
   culler.scale = 1; culler.update(camera.position, true);
   shadowExt = 0; shadowFocus.set(1e9, 0, 0); sun.shadow.needsUpdate = true;   // the loop sets the shadow camera up again
 }
@@ -667,6 +674,8 @@ function setLights(on) { document.getElementById('optLights').checked = on; toro
 document.getElementById('optLights').addEventListener('change', e => setLights(e.target.checked));
 document.getElementById('optRack').addEventListener('change', e => { rack.visible = e.target.checked; sun.shadow.needsUpdate = true; });
 scene.add(car);
+// v1.12: the car is drawn into the shadow map on its own, on top of a cached map of the still world (src/carshadow.js)
+const carShadow = createCarShadow({ renderer, scene, light: sun, car });
 const colorsEl = document.getElementById('colors');
 COLORS.forEach(([n, c], i) => { const b = document.createElement('button'); b.className = 'swatch' + (i ? '' : ' on'); b.style.background = '#' + c.toString(16).padStart(6, '0'); b.title = n; b.setAttribute('aria-label', 'Colour: ' + n); b.onclick = () => { paint.color.setHex(c); colorsEl.querySelectorAll('.swatch').forEach(s => s.classList.remove('on')); b.classList.add('on'); }; colorsEl.appendChild(b); });
 
@@ -742,8 +751,13 @@ function updateCarTransform() {
   car.position.set(CS.x, CS.y, CS.z);
   carEuler.set(CS.roll, CS.h, CS.pitch, 'YZX'); car.rotation.copy(carEuler);
   for (const w of wheels) { w.spin.rotation.z = -CS.spin; w.pivot.rotation.y = w.front ? CS.steer : 0; }
-  document.getElementById('spd').textContent = Math.round(Math.abs(CS.v) * 3.6);
-  document.getElementById('gearTxt').textContent = `km/h · ${CS.v < -0.3 ? 'R' : Math.abs(CS.v) < 0.3 ? 'N' : CS.gear}`;
+}
+// the speed box: once a frame and only when it changes (v1.12: it was written in every physics sub-step)
+const spdEl = document.getElementById('spd'), gearEl = document.getElementById('gearTxt'); let hudSpd = -1, hudGear = '';
+function updateHud() {
+  const v = Math.round(Math.abs(CS.v) * 3.6), g = CS.v < -0.3 ? 'R' : Math.abs(CS.v) < 0.3 ? 'N' : String(CS.gear);
+  if (v !== hudSpd) { hudSpd = v; spdEl.textContent = v; }
+  if (g !== hudGear) { hudGear = g; gearEl.textContent = `km/h · ${g}`; }
 }
 // motor sesi (v1.8: src/engine.js — firing pulses, exhaust rasp and pipe resonances instead of the muffled v1.7 hum)
 let audio = null;
@@ -864,7 +878,7 @@ function setMode(m) {
   document.getElementById('hint').textContent = HINTS[m];
   document.getElementById('hud').classList.toggle('show', m === 'car');
   document.getElementById('carGroup').hidden = m !== 'car';   // Toros settings only appear inside the Toros
-  document.getElementById('minimap').classList.toggle('show', m !== 'orbit');
+  document.getElementById('minimap').classList.toggle('show', m !== 'orbit'); mmD = 0; drawMinimapTop();   // size is read again on the next draw
   document.body.dataset.mode = m;
   document.getElementById('cross').style.display = m === 'walk' || m === 'fly' || m === 'game' ? 'block' : 'none';
   document.getElementById('gameGroup').hidden = m !== 'game';
@@ -941,24 +955,35 @@ gearBtn.addEventListener('click', () => { const h = panel.classList.toggle('hidd
 if (!isTouch && innerWidth > 900) { panel.classList.remove('hidden'); gearBtn.setAttribute('aria-expanded', 'true'); }
 
 // ---------- mini harita ----------
-const mm = document.getElementById('minimap'), mctx = mm.getContext('2d'); let mmBase = null;
+// v1.12: the map image is a canvas inside the round frame, placed with a CSS transform every frame (smooth, and done
+// by the compositor); the arrow and, in the Game, the bots are drawn on a small canvas on top (mm / mctx, 340 units)
+const mmEl = document.getElementById('minimap'), mmBase = document.getElementById('mmMap'), mmN = document.getElementById('mmN');
+const mm = document.getElementById('mmTop'), mctx = mm.getContext('2d'); let mmReady = false, mmD = 0;
 const MMR = 0.5; // px / m
 function buildMinimapBase() {
-  const n = Math.round(TSZ * MMR); mmBase = document.createElement('canvas'); mmBase.width = mmBase.height = n; const c = mmBase.getContext('2d');
+  const n = Math.round(TSZ * MMR); mmBase.width = mmBase.height = n; const c = mmBase.getContext('2d');
   const img = c.createImageData(n, n);
   for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) { const x = X0 + i / MMR, z = Z0 + j / MMR, h = terrH(x, z), k = (j * n + i) * 4; if (h < 0.15) { img.data[k] = 70; img.data[k + 1] = 140; img.data[k + 2] = 150; } else { const s = Math.min(1, h / 120); img.data[k] = 214 - s * 40; img.data[k + 1] = 200 - s * 40; img.data[k + 2] = 170 - s * 40; } img.data[k + 3] = 255; }
   c.putImageData(img, 0, 0);
   c.fillStyle = '#7a7268'; const R = D.roads; for (let k = 0; k < R.length; k += 4) { c.beginPath(); c.arc((R[k] - X0) * MMR, (R[k + 1] - Z0) * MMR, Math.max(1, R[k + 3] * MMR), 0, 6.283); c.fill(); }
   c.fillStyle = '#b4532f'; const B = D.buildings; for (let k = 0; k < B.length; k += 5) { c.save(); c.translate((B[k] - X0) * MMR, (B[k + 1] - Z0) * MMR); c.rotate(-B[k + 2]); c.fillRect(-B[k + 3] * MMR, -B[k + 4] * MMR, B[k + 3] * 2 * MMR, B[k + 4] * 2 * MMR); c.restore(); }
+  mmReady = true; drawMinimapTop();
 }
-function drawMinimap(x, z, heading) {
-  if (!mmBase) return; const W = mm.width, s = 1.6;
-  mctx.save(); mctx.clearRect(0, 0, W, W); mctx.beginPath(); mctx.arc(W / 2, W / 2, W / 2, 0, 6.283); mctx.clip();
-  mctx.fillStyle = '#d6c8aa'; mctx.fillRect(0, 0, W, W);
-  mctx.translate(W / 2, W / 2); mctx.rotate(-heading); mctx.scale(s, s); mctx.translate(-(x - X0) * MMR, -(z - Z0) * MMR);
-  mctx.drawImage(mmBase, 0, 0); mctx.restore();
+/** The overlay: the player's arrow (and, after it, the Game's bots). Drawn once, and again whenever the bots are. */
+function drawMinimapTop() {
+  const W = mm.width; mctx.clearRect(0, 0, W, W);
   mctx.fillStyle = '#a2482f'; mctx.strokeStyle = '#fff'; mctx.lineWidth = 2; mctx.beginPath(); mctx.moveTo(W / 2, W / 2 - 14); mctx.lineTo(W / 2 + 9, W / 2 + 10); mctx.lineTo(W / 2, W / 2 + 5); mctx.lineTo(W / 2 - 9, W / 2 + 10); mctx.closePath(); mctx.fill(); mctx.stroke();
-  mctx.fillStyle = '#2b2620'; mctx.font = 'bold 22px sans-serif'; mctx.textAlign = 'center'; const nx = W / 2 + Math.sin(-heading) * (W / 2 - 18), ny = W / 2 - Math.cos(-heading) * (W / 2 - 18); mctx.fillText('K', nx, ny + 8);
+}
+/** Size of the round frame in CSS px: read again after a resize or a mode change (reading it every frame would force a layout). */
+function measureMinimap() { mmD = mmEl.clientWidth; mmN.style.fontSize = (22 * mmD / mm.width).toFixed(2) + 'px'; }
+// Same frame as before (heading up, the player in the middle, 1.6× the base image's 0.5 px/m in 340 units), now as
+// one transform: centre · turn · scale · move the player's spot to the origin. Every frame, so it turns as smoothly as the view.
+function drawMinimap(x, z, heading) {
+  if (!mmReady) return; if (!mmD) measureMinimap(); if (!mmD) return;
+  const k = mmD / mm.width, s = 1.6 * k, h = mmD / 2;
+  mmBase.style.transform = `translate(${h}px,${h}px) rotate(${-heading}rad) scale(${s}) translate(${(-(x - X0) * MMR).toFixed(2)}px,${(-(z - Z0) * MMR).toFixed(2)}px)`;
+  const r = h - 18 * k, nx = h + Math.sin(-heading) * r, ny = h - Math.cos(-heading) * r;
+  mmN.style.transform = `translate(${nx.toFixed(1)}px,${ny.toFixed(1)}px) translate(-50%,-50%)`;
 }
 
 // ---------- loop ----------
@@ -968,7 +993,7 @@ function fit(force) {
   camera.updateProjectionMatrix(); renderer.setSize(VP.w, VP.h);
 }
 // phones report the new size late after a turn or when the browser bars slide away: listen widely, and look again shortly after
-const fitSoon = () => { fit(); setTimeout(fit, 120); setTimeout(fit, 500); };
+const fitSoon = () => { fit(); mmD = 0; setTimeout(fit, 120); setTimeout(fit, 500); setTimeout(() => { mmD = 0; }, 520); };
 for (const ev of ['resize', 'orientationchange', 'pageshow']) addEventListener(ev, fitSoon);
 if (window.visualViewport) visualViewport.addEventListener('resize', fitSoon);
 fitSoon();
@@ -991,7 +1016,7 @@ for (const [id, key, lab, fmt, set] of [
 }
 const shadowFocus = new THREE.Vector3(1e9, 0, 0), shadowCentre = new THREE.Vector3(); let shadowExt = 0, mmT = 0;
 setSun(15);
-const camTarget = new THREE.Vector3(), camPos = new THREE.Vector3();
+const camTarget = new THREE.Vector3(), camPos = new THREE.Vector3(), carAhead = new THREE.Vector3();
 // ---------- v1.9: the driver's seat ----------
 // The view sits at the driver's eye in the car's own frame, so it pitches and rolls with the body over the ground; on
 // top of that the head moves like a real one: pushed forward under braking and back when accelerating, out of the bend
@@ -1060,7 +1085,7 @@ renderer.setAnimationLoop(now => {
   // real elapsed time (capped at 0.25 s): on slow devices a 0.05 s cap made walking crawl at low frame rates
   const frameMs = now - last0, dt = bench && bench.step ? bench.step : Math.min(0.25, (now - last) / 1000); last = now;
   perf.frame(now, frameMs / 1000); last0 = now;
-  // the minimap is redrawn ~30 times a second, not every frame (a 340 px canvas rotate + clip + drawImage)
+  // the minimap moves every frame (a CSS transform); only the Game's bots on it are redrawn ~30 times a second
   mmT -= dt; const mmDue = mmT <= 0; if (mmDue) mmT = 1 / 30;
   if (waterMat) { waterMat.normalMap.offset.x = now * 0.000006; waterMat.normalMap.offset.y = now * 0.000004; }
   if (realism) realism.update(now);
@@ -1070,13 +1095,13 @@ renderer.setAnimationLoop(now => {
   if (mode === 'orbit') {
     if (anim) { const k = Math.min(1, (now - anim.t0) / anim.dur), e = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2; camera.position.lerpVectors(anim.from.p, anim.to.p, e); controls.target.lerpVectors(anim.from.t, anim.to.t, e); if (k >= 1) anim = null; }
     controls.update(); focus = controls.target;
-  } else if (mode === 'walk' || mode === 'fly') { const n = Math.ceil(dt / 0.05); for (let i = 0; i < n; i++) walkStep(dt / n, mode === 'fly'); focus = camera.position; if (mmDue) drawMinimap(P.x, P.z, -P.yaw); }
+  } else if (mode === 'walk' || mode === 'fly') { const n = Math.ceil(dt / 0.05); for (let i = 0; i < n; i++) walkStep(dt / n, mode === 'fly'); focus = camera.position; drawMinimap(P.x, P.z, -P.yaw); }
   else if (mode === 'game') {
     if (bench) bench.pre(dt);
     const n = Math.ceil(dt / 0.05); for (let i = 0; i < n; i++) walkStep(dt / n, false);
     game.update(dt, now); focus = camera.position;
-    if (mmDue) { drawMinimap(P.x, P.z, -P.yaw);
-    game.drawMinimap(mctx, botToMinimap); }
+    drawMinimap(P.x, P.z, -P.yaw);
+    if (mmDue) { drawMinimapTop(); game.drawMinimap(mctx, botToMinimap); }
   }
   else if (mode === 'car') {
     // physics sub-steps
@@ -1087,7 +1112,7 @@ renderer.setAnimationLoop(now => {
     else { const local = new THREE.Vector3(0.75, 1.5, 0); car.updateMatrixWorld(); camera.position.copy(local.applyMatrix4(car.matrixWorld)); const fwd = new THREE.Vector3(Math.cos(carYawOff) * 10, -0.6 - carPitchOff * 6, -Math.sin(carYawOff) * 10).applyMatrix4(car.matrixWorld); camera.lookAt(fwd); }
     cabin.update(Math.abs(CS.v) * 3.6, CS.rpm, CS.steer, !radio.paused);
     { const cockpit = CS.cam === 1; if (hudEl.classList.contains('cockpit') !== cockpit) hudEl.classList.toggle('cockpit', cockpit); }
-    focus = car.position; if (mmDue) drawMinimap(CS.x, CS.z, Math.PI / 2 - CS.h);
+    focus = car.position; drawMinimap(CS.x, CS.z, Math.PI / 2 - CS.h); updateHud();
     carYawOff *= Math.exp(-dt * (lookId === null ? 2 : 0)); carPitchOff *= Math.exp(-dt * (lookId === null ? 2 : 0));
   }
   // small village details and far grass patches: shown / hidden by distance (re-checked every 4 m of camera movement)
@@ -1096,23 +1121,26 @@ renderer.setAnimationLoop(now => {
   // or something else asked for it (time of day, layers, culling). Light, camera and map always change together.
   // v1.1, Game mode: the map covers 150 m around the player and is redrawn every 24 m (about every 3 s at a run, it
   // was every 6 m = 0.75 s), and its camera moves in whole texels, so the shadow edges do not crawl when it is redrawn.
-  const inGame = mode === 'game';
-  const ext = mode === 'orbit' ? Math.min(900, Math.max(150, camera.position.distanceTo(focus) * 1.2)) : inGame ? 150 : 140;
-  const step = mode === 'orbit' ? ext * 0.04 : inGame ? 24 : 6;
+  const inGame = mode === 'game', driving = mode === 'car';
+  // v1.12, Toros: the map covers 150 m around a point up to 35 m ahead of the car and is redrawn every 24 m (it was
+  // redrawn every frame: the car is now added on top of a cached map, src/carshadow.js), snapped to whole texels
+  if (driving) { const ahead = Math.max(-15, Math.min(35, CS.v * 1.5)); focus = carAhead.set(CS.x + Math.cos(CS.h) * ahead, CS.y, CS.z - Math.sin(CS.h) * ahead); }
+  const ext = mode === 'orbit' ? Math.min(900, Math.max(150, camera.position.distanceTo(focus) * 1.2)) : inGame || driving ? 150 : 140;
+  const step = mode === 'orbit' ? ext * 0.04 : inGame || driving ? 24 : 6;
   // small village details and far grass patches: shown / hidden by distance (re-checked every 4 m of camera movement);
   // the shadow map only needs a refresh when something inside it appeared or went
   const cullChanged = culler.update(camera.position, false, inGame && !GAME_PRESETS[gamePreset].shadowOnCull ? 0 : ext); if (cullChanged) sun.shadow.needsUpdate = true;
-  if (sun.shadow.needsUpdate || mode === 'car' || shadowFocus.distanceToSquared(focus) > step * step || Math.abs(ext - shadowExt) > shadowExt * 0.08) {
+  if (sun.shadow.needsUpdate || shadowFocus.distanceToSquared(focus) > step * step || Math.abs(ext - shadowExt) > shadowExt * 0.08) {
     const sc = sun.shadow.camera; if (sc.right !== ext) { sc.left = -ext; sc.right = ext; sc.top = ext; sc.bottom = -ext; sc.near = 1; sc.far = 4000; sc.updateProjectionMatrix(); }
     shadowCentre.copy(focus);
-    if (inGame) {   // snap the centre to the texel grid of the light (its right / up axes)
+    if (inGame || driving) {   // snap the centre to the texel grid of the light (its right / up axes)
       const texel = 2 * ext / sun.shadow.mapSize.x, a = focus.dot(lightRight), b = focus.dot(lightUp);
       shadowCentre.addScaledVector(lightRight, Math.round(a / texel) * texel - a).addScaledVector(lightUp, Math.round(b / texel) * texel - b);
     }
     sun.target.position.copy(shadowCentre); sun.position.copy(shadowCentre).addScaledVector(sunDir, 1500);
     shadowFocus.copy(focus); shadowExt = ext; sun.shadow.needsUpdate = true;
   }
-  const shadowRedrawn = sun.shadow.needsUpdate; if (shadowRedrawn) perf.shadowRedrawn();
+  const shadowRedrawn = carShadow.plan(driving); if (shadowRedrawn) perf.shadowRedrawn();
   const tRender = performance.now();
   renderer.info.reset(); renderer.render(scene, camera); if (inGame && game) game.renderOverlay(renderer); renderMirrors(); placeLabels();
   if (bench && bench.active) bench.post(frameMs, tFrame, tRender, shadowRedrawn, cullChanged);

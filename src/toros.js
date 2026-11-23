@@ -175,6 +175,9 @@ export function buildToros() {
     const cap = new THREE.Mesh(capG, capM); cap.position.z = s * 0.086; if (s < 0) cap.rotation.y = Math.PI; spin.add(cap);
     wheels.push({ pivot, spin, front: x > 0 });
   }
+  // v1.12: the body's rigid exterior pieces (panels, bumpers, lamps, badges, trim …) were ~150 separate meshes, one draw
+  // call each in every pass. They never move relative to the car, so they are merged per material.
+  mergeRigid(car, new Set([rack, ...wheels.map(w => w.pivot)]));
   // the cabin only receives shadows (the roof and doors already shade it; casting would add draw calls to every shadow pass)
   car.traverse(o => { if (o.isMesh) { const inside = o.userData.cabin; o.castShadow = !inside; o.receiveShadow = o.material !== glassM; } });
 
@@ -184,6 +187,44 @@ export function buildToros() {
   function setLights(on) { lights.forEach(l => { l.intensity = on ? 60 : 0; l.visible = on; }); headM.emissive.setHex(on ? 0xfff0c0 : 0x000000); tailM.emissive.setHex(on ? 0x600000 : 0x200000); cabin.setPanelLights(on); }
 
   return { car, paint, rack, wheels, setLights, cabin };
+}
+
+/**
+ * Merge the car's rigid exterior meshes per material into one mesh each, in the car's frame. Left alone: cabin parts
+ * (already merged; some move), anything under the `keep` groups (wheels, roof rack), meshes with children, multi-material
+ * meshes, and a material's pieces whose vertex attributes do not match (a texture needs uvs on all of them).
+ */
+function mergeRigid(car, keep) {
+  car.updateMatrixWorld(true);
+  const inv = new THREE.Matrix4().copy(car.matrixWorld).invert(), m = new THREE.Matrix4(), buckets = new Map();
+  car.traverse(o => {
+    if (!o.isMesh || o.userData.cabin || o.children.length || Array.isArray(o.material) || o.isInstancedMesh) return;
+    for (let a = o.parent; a && a !== car; a = a.parent) if (keep.has(a) || !a.visible) return;
+    if (!o.visible) return;
+    const k = o.material.uuid + '|' + o.renderOrder; let b = buckets.get(k); if (!b) buckets.set(k, b = []); b.push(o);
+  });
+  for (const list of buckets.values()) {
+    if (list.length < 2) continue;
+    const mat = list[0].material, all = (n) => list.every(o => o.geometry.attributes[n]);
+    const names = ['position', 'normal'];
+    if (all('uv')) names.push('uv'); else if (mat.map || mat.normalMap || mat.roughnessMap || mat.alphaMap || mat.aoMap) continue;
+    if (mat.vertexColors) { if (!all('color')) continue; names.push('color'); }
+    if (!all('normal')) continue;
+    const geos = list.map(o => {
+      const g = new THREE.BufferGeometry();
+      for (const n of names) g.setAttribute(n, o.geometry.attributes[n].clone());
+      if (o.geometry.index) g.setIndex(o.geometry.index.clone()); else g.setIndex([...Array(g.attributes.position.count).keys()]);
+      m.copy(inv).multiply(o.matrixWorld); g.applyMatrix4(m);
+      if (m.determinant() < 0) { const ix = g.index.array; for (let i = 0; i < ix.length; i += 3) { const t = ix[i + 1]; ix[i + 1] = ix[i + 2]; ix[i + 2] = t; } }
+      return g;
+    });
+    const merged = mergeGeometries(geos, false); geos.forEach(g => g.dispose());
+    if (!merged) continue;
+    merged.computeBoundingSphere();
+    const mesh = new THREE.Mesh(merged, mat); mesh.name = 'Toros_' + (mat.name || 'part'); mesh.renderOrder = list[0].renderOrder;
+    for (const o of list) o.parent.remove(o);
+    car.add(mesh);
+  }
 }
 
 // ======================================================================================================================

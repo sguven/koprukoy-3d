@@ -192,6 +192,45 @@ density. The preset sets the base; the automatic resolution still steps down fro
 Smooth saves is pixels (1× instead of up to 1.5× density is 56 % fewer on a high-DPI screen) and shadow-map texels,
 which this machine cannot time.
 
+## v1.12 the Toros
+
+Driving was the slowest mode by far, and it was not the car: the loop redrew the sun's shadow map **every frame**
+in the Toros (`|| mode === 'car'`), because the car casts a shadow and moves. That is the whole still world within
+the shadow box drawn a second time each frame — the cost v1.0 had removed everywhere else — plus the car itself in
+~150 separate meshes, in both passes.
+
+- **The car's shadow on its own** ([`src/carshadow.js`](../src/carshadow.js)). The car's meshes no longer cast
+  shadows in three.js's pass. That pass now runs only when the shadow box has to move: in the Toros the box is 150 m
+  around a point up to 35 m ahead of the car, redrawn every 24 m and snapped to whole texels (as in the Game). Right
+  after it, inside the same `renderer.render()` (from `onBeforeRender` of a hidden mesh drawn first, the Reflector
+  pattern), the map is copied into a cache and the car is drawn into the map from depth-only proxies. On the frames
+  in between only a scissored square around the car's old and new place is put back from the cache (colour and depth,
+  with `gl_FragDepth`, so the car is still depth-tested against trees over it) and the car drawn again: a few hundred
+  texels instead of the whole map. The main pass reads the same map as before.
+- **Fewer pieces.** The proxies are merged per rigid part (body, each wheel's steering pivot, the roof rack) and
+  depth material: 11 draw calls. The car's rigid exterior is merged per material (`mergeRigid` in
+  [`src/toros.js`](../src/toros.js)): 181 → 81 meshes, most of what is left being the wheels, the hidden roof rack
+  and the cabin's moving parts.
+- **Minimap.** It was a 340 px canvas into which the whole map image was drawn turned and scaled, 30 times a second;
+  next to a 60 fps view that reads as stutter. The map image is now a canvas inside the round frame, placed with one
+  CSS transform per frame (the compositor does the turning); only the Game's bots are still drawn at 30 Hz.
+
+Driving the same 570 frames along the village lanes (chase camera, 14 m/s, fixed 1/60 s steps, draw calls stubbed out
+so the main thread is measured on its own, as in `tools/bench.mjs`):
+
+| | before | after | walking, for reference |
+|---|---|---|---|
+| Shadow-map redraws | 570 | 5 | 13 |
+| Draw calls per frame | 594 | 240 | 164 |
+| Triangles per frame | 1.31 M | 0.73 M | 0.70 M |
+| Main thread, desktop profile (mean / p95) | 8.7 / 16.9 ms | 4.8 / 8.0 ms | 3.4 / 7.4 ms |
+| Main thread, phone emulation, CPU 4× slower (mean) | 19.0 ms | 10.8 ms | |
+
+Screenshots of the chase and driver's-seat views before and after differ in under 0.3 % of the pixels (JPEG noise);
+the car's shadow, the roof's shade in the cabin and the live mirrors are unchanged. As before, no real GPU was
+available: the GPU side is one shadow pass of the still world every 24 m instead of every frame, which is the larger
+part of the saving on a phone.
+
 ## Tried and not kept
 
 - **B. Shorter view distance by default.** With `camera.far` at 1500 m the street-level average falls from 598 k
