@@ -363,35 +363,67 @@ export function buildVillageLayout(terrH, existingRoads = []) {
   }
   shiftRoadsToHouseFrame(roads);   // v1.13
   // v1.13: the houses had been pushed off the lanes where the lanes were drawn (up to 8 m). With the lanes in the
-  // houses' frame a house goes back to its traced footprint when that is clear of every road, and is otherwise pushed
-  // off the road it now touches. Houses the owner or a panorama corrected stay where they were put.
-  {
-    const live = roads.filter(r => !r.gone && r.line.length > 1);
-    const intr = (b, margin) => { let worst = 0; for (const c of rectCorners({ ...b, w: b.w + 2 * margin, d: b.d + 2 * margin }).concat([[b.x, b.z]])) for (const r of live) { if (Math.abs(r.line[0][0] - c[0]) > 400) continue; worst = Math.max(worst, r.w / 2 + 0.3 - distToPolyline(c[0], c[1], r.line).d); } return worst; };
-    const near = (x, z) => { let bestR = null, best = { d: Infinity }; for (const r of live) { const h = distToPolyline(x, z, r.line); if (h.d < best.d) { best = h; bestR = r; } } return { r: bestR, ...best }; };
-    let back = 0, pushed = 0;
-    for (const b of buildings) {
-      if (!b.sat || b.kind || b.fixed || b.ownerFix || !b.data) continue;
-      const was = { x: b.x, z: b.z }, t = { ...b, x: b.data[0], z: b.data[1] };
-      let cur = intr(t, 0.3);
-      for (let it = 0; it < 10 && cur > 0; it++) {
-        const h = near(t.x, t.z), p = h.r.line[h.i], q = h.r.line[Math.min(h.r.line.length - 1, h.i + 1)], dx = q[0] - p[0], dz = q[1] - p[1], L = Math.hypot(dx, dz) || 1;
-        const nx = -dz / L, nz = dx / L, side = Math.sign((t.x - p[0]) * nx + (t.z - p[1]) * nz) || 1, ox = t.x, oz = t.z;
-        t.x += nx * side * 0.6; t.z += nz * side * 0.6;
-        const nxt = intr(t, 0.3); if (nxt >= cur - 0.03) { t.x = ox; t.z = oz; break; } cur = nxt;
+  // houses' frame a house goes back to its traced footprint when that is clear of every road.
+  // v1.14 (owner, 23 Nov 2026: nothing may stand on a road — move the houses, parks and trees, keep the roads): a
+  // house whose footprint still touches a road is moved to the nearest spot within 16 m that is clear of every road
+  // (0.5 m to spare) and of the other houses; the parks, the small green and the football pitch likewise.
+  const live = roads.filter(r => !r.gone && r.line.length > 1);
+  for (const r of live) { let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity; for (const p of r.line) { x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); z0 = Math.min(z0, p[1]); z1 = Math.max(z1, p[1]); } r.bb = [x0, x1, z0, z1]; }
+  const roadIn = (x, z, m) => { let worst = 0; for (const r of live) { const h = r.w / 2 + m; if (x < r.bb[0] - h || x > r.bb[1] + h || z < r.bb[2] - h || z > r.bb[3] + h) continue; worst = Math.max(worst, h - distToPolyline(x, z, r.line).d); } return worst; };
+  const rectPts = (b) => { const cs = rectCorners(b), pts = [[b.x, b.z]]; for (let i = 0; i < 4; i++) { const a = cs[i], c = cs[(i + 1) % 4], n = Math.max(2, Math.ceil(Math.hypot(c[0] - a[0], c[1] - a[1]) / 2.5)); for (let k = 0; k < n; k++) pts.push([a[0] + (c[0] - a[0]) * k / n, a[1] + (c[1] - a[1]) * k / n]); } return pts; };
+  // a 0.5 m raster of the road surfaces grown by 0.5 m: the search below asks it some hundred thousand times
+  const MX0 = REGION.x0 - 20, MZ0 = REGION.z0 - 20, MW = Math.ceil((REGION.x1 - REGION.x0 + 40) * 2), MH = Math.ceil((REGION.z1 - REGION.z0 + 40) * 2), mask = new Uint8Array(MW * MH);
+  for (const r of live) {
+    const R = (r.w / 2 + 0.5) * 2, Ri = Math.ceil(R);
+    for (let i = 0; i + 1 < r.line.length; i++) {
+      const [ax, az] = r.line[i], [bx, bz] = r.line[i + 1], n = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) * 2));
+      for (let k = 0; k <= n; k++) {
+        const cx = (ax + (bx - ax) * k / n - MX0) * 2, cz = (az + (bz - az) * k / n - MZ0) * 2, ix = Math.round(cx), iz = Math.round(cz);
+        for (let dz = -Ri; dz <= Ri; dz++) { const zz = iz + dz; if (zz < 0 || zz >= MH) continue; for (let dx = -Ri; dx <= Ri; dx++) { const xx = ix + dx; if (xx < 0 || xx >= MW) continue; if ((xx - cx) ** 2 + (zz - cz) ** 2 <= R * R) mask[zz * MW + xx] = 1; } }
       }
-      if (Math.hypot(t.x - was.x, t.z - was.z) < 0.25) continue;
-      if (cur > 0 && intr(b, 0.3) <= cur) continue;   // no better than where it stands
-      if (!b.orig) b.orig = { ...b };
-      b.x = Math.round(t.x * 10) / 10; b.z = Math.round(t.z * 10) / 10;
-      const h = near(b.x, b.z), p = h.r.line[h.i]; b.face = Math.atan2(p[1] - b.z, p[0] - b.x); b.front = h.d;
-      setGround(b); if (Math.hypot(b.x - b.data[0], b.z - b.data[1]) < 0.3) back++; else pushed++;
     }
-    if (typeof console !== 'undefined') console.log('[layout] v1.13 houses back on their footprints', back, 'pushed off a lane', pushed);
   }
+  const onMask = (x, z) => { const ix = Math.round((x - MX0) * 2), iz = Math.round((z - MZ0) * 2); return ix >= 0 && iz >= 0 && ix < MW && iz < MH && mask[iz * MW + ix] === 1; };
+  const intr = (b) => { for (const p of rectPts(b)) if (onMask(p[0], p[1])) return 1; return 0; };
+  const nearRoad = (x, z) => { let bestR = null, best = { d: Infinity }; for (const r of live) { const h = distToPolyline(x, z, r.line); if (h.d < best.d) { best = h; bestR = r; } } return { r: bestR, ...best }; };
+  /** nearest position of rectangle b (from x0, z0) that is clear of roads and of `others`; null when there is none within 16 m */
+  const clearSpot = (b, x0, z0, others, m = 0.5) => {
+    for (let R = 0; R <= 16; R += 1) for (let k = 0; k < (R ? 16 : 1); k++) {
+      const a = k * Math.PI / 8, t = { ...b, x: x0 + Math.cos(a) * R, z: z0 + Math.sin(a) * R };
+      if (intr(t) > 0) continue;
+      if (others.some(o => o !== b && !o.gone && Math.abs(o.x - t.x) < 45 && Math.abs(o.z - t.z) < 45 && rectsOverlap(t, o, 0.4))) continue;
+      return [t.x, t.z];
+    }
+    return null;
+  };
+  {
+    let back = 0, moved = 0, stuck = 0;
+    const solid = buildings.concat(extra);
+    for (const b of solid) {
+      if (b.gone || b.kind === 'minaret' || b.kind === 'mosque' || b.fixed) continue;
+      const here = intr(b);
+      const start = b.sat && !b.kind && !b.ownerFix && b.data ? b.data : [b.x, b.z];
+      if (here <= 0 && Math.hypot(start[0] - b.x, start[1] - b.z) < 0.25) continue;
+      if (here <= 0 && (b.ownerFix || !b.sat || b.kind)) continue;
+      const spot = clearSpot(b, start[0], start[1], solid);
+      if (!spot) { if (here > 0) { stuck++; if (!b.orig && buildings.includes(b)) b.orig = { ...b }; b.gone = true; } continue; }   // no room beside the road: the house is left out
+      if (Math.hypot(spot[0] - b.x, spot[1] - b.z) < 0.25) continue;
+      if (!b.orig && buildings.includes(b)) b.orig = { ...b };
+      b.x = Math.round(spot[0] * 10) / 10; b.z = Math.round(spot[1] * 10) / 10;
+      if (!b.ownerFix && !b.kind && buildings.includes(b)) { const h = nearRoad(b.x, b.z), p = h.r.line[h.i]; b.face = Math.atan2(p[1] - b.z, p[0] - b.x); b.front = h.d; }
+      setGround(b); if (b.data && Math.hypot(b.x - b.data[0], b.z - b.data[1]) < 0.3) back++; else moved++;
+    }
+    if (typeof console !== 'undefined') console.log('[layout] v1.14 houses back on their footprints', back, 'moved clear of a road', moved, 'no clear spot', stuck);
+  }
+  // parks, the small green and the pitch: the whole rectangle moves off the roads, with what stands on it
+  const offRoadRect = (g, m = 0.3) => { const t = { yaw: 0, ...g }; if (intr(t) <= 0) return [0, 0]; const sp = clearSpot(t, t.x, t.z, [], m); return sp ? [sp[0] - t.x, sp[1] - t.z] : [0, 0]; };
+  const gardens = SITES.gardens.map(g => { if (g.der) return g; const [dx, dz] = offRoadRect(g); if (!dx && !dz) return g;
+    return { ...g, x: g.x + dx, z: g.z + dz, ...(g.playAt ? { playAt: [g.playAt[0] + dx, g.playAt[1] + dz, g.playAt[2]] } : {}), ...(g.cardak ? { cardak: { ...g.cardak, x: g.cardak.x + dx, z: g.cardak.z + dz } } : {}) }; });
+  const g1 = offRoadRect({ x: SITES.green1.x, z: SITES.green1.z, w: 9, d: 8 }), green1 = { x: SITES.green1.x + g1[0], z: SITES.green1.z + g1[1] };
+  const pt = SITES.pitch ? offRoadRect(SITES.pitch) : [0, 0], pitch = SITES.pitch ? { ...SITES.pitch, x: SITES.pitch.x + pt[0], z: SITES.pitch.z + pt[1] } : SITES.pitch;
   // v1.13: the big cemetery's west side is the retaining wall in SV_SITES, not a low wall 15 m inside it
   const cemeteries = (SITES.cemeteries || []).map(c => ({ ...c, open: SV_OPEN, ...(c.label === 'grave strip' ? { wallEdges: [] } : c.label === 'big cemetery' ? { wallEdges: [0] } : {}) }));
-  return { roads, buildings, extra, sites: { ...SITES, cemeteries, stoneWalls, roseYard: ROSE_YARD, ownerPlot: OWNER_PLOT, sv: SV_SITES }, rnd };
+  return { roads, buildings, extra, sites: { ...SITES, gardens, green1, pitch, cemeteries, stoneWalls, roseYard: ROSE_YARD, ownerPlot: OWNER_PLOT, sv: SV_SITES }, rnd };
 }
 
 // ---------------------------------------------------------------- v1.13: the lanes into the houses' frame

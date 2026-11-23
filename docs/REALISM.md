@@ -5,6 +5,35 @@ Two passes so far: **v0.7 "materials"** (surfaces only, nothing moved) and **v0.
 `model/koprukoy.glb` are still the v0.6 files. Terrain (SRTM 30 m), the reservoir at 724 m, the
 Çeşnigir Bridge body, D.260 and the roads outside the village are unchanged.
 
+## v1.14 — clear roads, sensible walls (Nov 2026)
+
+Owner's rules (23 Nov 2026): house walls, parks and trees must not lie on a road — move them and keep the roads
+clean, on every road; and walls must be drawn sensibly: no wall running alongside another.
+
+- **Houses** (`buildVillageLayout`, after the v1.13 road shift): a 0.5 m raster of all road surfaces grown by 0.5 m.
+  A house whose footprint touches it is moved to the nearest position (searched outwards from its traced footprint,
+  16 directions, up to 16 m) that is clear of the raster and of every other building: 136 moved, 87 are back on
+  their traced footprints, 9 had no room and are left out (`gone`, draws still made). Street View additions
+  (`SV_SITES.extra`) and owner-corrected houses move the same way if they touch a road; the çarşı buildings and the
+  mosque are measured and stay.
+- **Parks, the small green, the pitch:** the rectangle moves like a house when a clear spot exists; otherwise (the
+  long park by the main road) the lawn is cut at the road's edge (`clipPatch`).
+- **Trees and props:** a hand-placed tree on a road (within 1.2 m of its edge) moves sideways to the roadside
+  (`offRoad`), random ones are dropped as before; poles move to the roadside; benches, bins and the like on a road
+  are dropped.
+- **Walls** (`wallOK`): garden walls are placed 1.6 m back from the edge of the nearest road as it lies now (they
+  were placed from the pre-v1.13 lines) and built in pieces of about 2 m. A piece is left out if it would stand on
+  a road or run nearly parallel within 2.8 m of a wall belonging to something else. Walls placed from photographs
+  (`STONE_WALLS`, `SV_SITES.walls`) are registered first, so a house's own wall gives way to them. Stone walls,
+  iron and wire fences and cemetery walls are cut where they cross a road. The gate of the Çeşnigir park stands
+  across its road on purpose.
+
+The random draws of every house are made as before, so colours and details do not change. Aerial views:
+`docs/screenshots/v1.14_roads_clear_*.jpg`.
+
+Not done: walls are only removed, not re-joined, so a few garden walls end as short L-shaped pieces; the roads
+themselves were not re-surveyed in this pass (a road drawn through a real house's plot moves the house, not the road).
+
 ## v1.13 — 35 Street View screenshots from the owner (Nov 2026)
 
 The owner sent 35 phone screenshots (IMG_0650–0684): a Street View frame of April 2026 (one of May 2023) above the

@@ -109,6 +109,39 @@ export function buildVillage(ctx, layout, M) {
   // rest of the village keeps its colours, trees and details.
   const asWas = (r) => (r.orig ? { ...r, ...r.orig } : r);
   const roadDistWas = (x, z) => { let best = Infinity, bw = 0; for (const r0 of roads) { const r = asWas(r0), h = distToPolyline(x, z, r.line); if (h.d < best) { best = h.d; bw = r.w; } } return { d: best, w: bw }; };
+  // v1.14 (owner: nothing on the roads, walls drawn sensibly). roadHit = inside any road's surface grown by `m`;
+  // offRoad = the point moved sideways off the roads; wallOK = may a piece of wall or fence stand here: not on a
+  // road, and not alongside (within 2.8 m, nearly parallel) a wall that belongs to something else.
+  const liveRoads = roads.filter(r => !r.gone && r.line.length > 1);
+  for (const r of liveRoads) if (!r.bb) { let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity; for (const p of r.line) { x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); z0 = Math.min(z0, p[1]); z1 = Math.max(z1, p[1]); } r.bb = [x0, x1, z0, z1]; }
+  const roadAt = (x, z, m = 0.3) => { let worst = 0, hit = null; for (const r of liveRoads) { const h = r.w / 2 + m; if (x < r.bb[0] - h || x > r.bb[1] + h || z < r.bb[2] - h || z > r.bb[3] + h) continue; const q = distToPolyline(x, z, r.line); if (h - q.d > worst) { worst = h - q.d; hit = { r, i: q.i, over: worst }; } } return hit; };
+  const roadHit = (x, z, m = 0.3) => !!roadAt(x, z, m);
+  const offRoad = (x, z, m = 1.2) => {
+    for (let it = 0; it < 5; it++) {
+      const h = roadAt(x, z, m); if (!h) return [x, z];
+      const L = h.r.line, p = L[h.i], q = L[Math.min(L.length - 1, h.i + 1)], o = h.i + 1 < L.length ? p : L[Math.max(0, h.i - 1)], dx = (h.i + 1 < L.length ? q[0] - p[0] : p[0] - o[0]), dz = (h.i + 1 < L.length ? q[1] - p[1] : p[1] - o[1]), len = Math.hypot(dx, dz) || 1;
+      const nx = -dz / len, nz = dx / len, side = Math.sign((x - p[0]) * nx + (z - p[1]) * nz) || 1; x += nx * side * (h.over + 0.3); z += nz * side * (h.over + 0.3);
+    }
+    return roadHit(x, z, m) ? null : [x, z];
+  };
+  const wallSegs = [];
+  const wallOK = (ax, az, bx, bz, own, reg = true) => {
+    const mx = (ax + bx) / 2, mz = (az + bz) / 2; if (roadHit(mx, mz, 0.25) || roadHit(ax, az, 0.1) || roadHit(bx, bz, 0.1)) return false;
+    const L = Math.hypot(bx - ax, bz - az) || 1, ux = (bx - ax) / L, uz = (bz - az) / L;
+    for (const w of wallSegs) {
+      if (w[4] === own || Math.abs(w[0] - mx) > 40 || Math.abs(w[1] - mz) > 40) continue;
+      if (Math.abs(ux * w[5] + uz * w[6]) < 0.75) continue;
+      const t = Math.max(0, Math.min(1, ((mx - w[0]) * (w[2] - w[0]) + (mz - w[1]) * (w[3] - w[1])) / w[7])), d = Math.hypot(mx - w[0] - t * (w[2] - w[0]), mz - w[1] - t * (w[3] - w[1]));
+      if (d < 2.8) return false;
+    }
+    if (reg) wallSegs.push([ax, az, bx, bz, own, ux, uz, L * L]);
+    return true;
+  };
+  const clipPatch = (g) => {   // a ground patch without the triangles that lie on a road
+    const pos = g.attributes.position, idx = g.index.array, keep = [];
+    for (let t = 0; t < idx.length; t += 3) { const a = idx[t], b = idx[t + 1], c = idx[t + 2]; if (!roadHit((pos.getX(a) + pos.getX(b) + pos.getX(c)) / 3, (pos.getZ(a) + pos.getZ(b) + pos.getZ(c)) / 3, 0.6)) keep.push(a, b, c); }
+    g.setIndex(keep); return g;
+  };
   const onRoad = (x, z, margin = 0) => { const h = roadDist(x, z); return h.d < h.w / 2 + margin; };
   let bid = 5000;
 
@@ -231,12 +264,14 @@ export function buildVillage(ctx, layout, M) {
   const S = layout.sites;
   bat.add('square', patch(S.square.x, S.square.z, S.square.w, S.square.d, S.square.yaw || 0, yAt, LIFT.square, 2.0));
   if (!centreOnly) {
-    const green = S.green1; bat.add('lawn', patch(green.x, green.z, 7, 6, 0, yAt, 0.07, 1.5));
+    const green = S.green1; bat.add('lawn', clipPatch(patch(green.x, green.z, 7, 6, 0, yAt, 0.07, 1.5)));
     props.push({ kind: 'bench', x: green.x - 1.5, z: green.z + 1.0, yaw: 0.2 }, { kind: 'bin', x: green.x + 2.2, z: green.z + 1.5 }, { kind: 'tree', species: 'mulberry', x: green.x + 1.0, z: green.z - 1.5, size: 1.1 });
   }
   // the big old tree on the pavement in front of Güvendioğlu Market (Street View 01, satellite crown)
   if (S.marketTree) props.push({ kind: 'tree', species: 'mulberry', x: S.marketTree.x, z: S.marketTree.z, size: 1.6 });
 
+  // v1.14: the walls placed from photographs come first: a house's own garden wall gives way to them
+  (S.stoneWalls || []).forEach((sw, wi) => { for (const [ax, az, bx, bz] of wallPieces(sw)) wallOK(ax, az, bx, bz, 'sw' + wi); });
   // ================================================================= buildings
   for (const b of layout.buildings) {
     if (b.kind === 'mosque') { buildMosque(b); continue; }
@@ -248,7 +283,7 @@ export function buildVillage(ctx, layout, M) {
   }
   // v1.5: buildings added from Street View, each on a random stream of its own (the village's stream is not touched)
   for (const b of layout.extra || []) { rnd = mulberry32(Math.round(b.x * 100) ^ Math.round(b.z * 100)); buildHouse(b); rnd = baseRnd; }
-  for (const w of S.stoneWalls || []) buildStoneWall(w);
+  (S.stoneWalls || []).forEach((w, wi) => buildStoneWall(w, 'sw' + wi));
   if (S.sv && !centreOnly) buildStreetViewSites(S.sv);
   if (S.roseYard && !centreOnly) buildRoseYard(S.roseYard);
   if (S.ownerPlot && !centreOnly) buildOwnerPlot(S.ownerPlot);
@@ -260,7 +295,7 @@ export function buildVillage(ctx, layout, M) {
       // v0.9.8: the green by the çarşı is the ÇEŞNİGİR-DER garden terrace; its nine draws are still made so the
       // rest of the village keeps its random trees and details
       if (gd.der && S.der) { for (let i = 0; i < 9; i++) rnd(); buildDer(S.der, S.plot); continue; }
-      bat.add('lawn', patch(gd.x, gd.z, gd.w, gd.d, 0, yAt, 0.07, 1.5));
+      bat.add('lawn', clipPatch(patch(gd.x, gd.z, gd.w, gd.d, 0, yAt, 0.07, 1.5)));
       for (let i = 0; i < 3; i++) treeSpots.push({ x: gd.x + (rnd() - 0.5) * (gd.w - 5), z: gd.z + (rnd() - 0.5) * (gd.d - 5), species: i < 2 ? 'pine' : 'mulberry', size: 1.1 + rnd() * 0.4, force: true });
       props.push({ kind: 'bench', x: gd.x + gd.w / 2 - 2, z: gd.z - 3, yaw: Math.PI / 2 }, { kind: 'bench', x: gd.x + gd.w / 2 - 2, z: gd.z + 4, yaw: Math.PI / 2 }, { kind: 'bin', x: gd.x + gd.w / 2 - 1.5, z: gd.z + 7 });
       // v1.11: the playground and the park's wooden çardak where Street View shows them
@@ -271,7 +306,7 @@ export function buildVillage(ctx, layout, M) {
       const [a, b] = row.pts, L = Math.hypot(b[0] - a[0], b[1] - a[1]), tx = (b[0] - a[0]) / L, tz = (b[1] - a[1]) / L;
       for (let s = 3; s < L; s += row.step) for (const side of [-1, 1]) treeSpots.push({ x: a[0] + tx * s - tz * row.offset * side, z: a[1] + tz * s + tx * row.offset * side, species: row.species, size: 1.1 + rnd() * 0.4, force: true });
     }
-    if (S.pitch) { bat.add('lawn', patch(S.pitch.x, S.pitch.z, S.pitch.w, S.pitch.d, 0, yAt, 0.07, 1.0)); for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) props.push({ kind: 'pole', x: S.pitch.x + sx * S.pitch.w / 2, z: S.pitch.z + sz * S.pitch.d / 2, prev: null }); }
+    if (S.pitch) { bat.add('lawn', clipPatch(patch(S.pitch.x, S.pitch.z, S.pitch.w, S.pitch.d, 0, yAt, 0.07, 1.0))); for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) props.push({ kind: 'pole', x: S.pitch.x + sx * S.pitch.w / 2, z: S.pitch.z + sz * S.pitch.d / 2, prev: null }); }
   }
   /** Children's playground (Street View 77, S park): orange/yellow slide with ladder, a two-seat swing frame, a sandpit kerb. */
   function buildPlayground(x, z, yaw = 0) {
@@ -411,6 +446,7 @@ export function buildVillage(ctx, layout, M) {
       const [ax, az] = P[e], [bx, bz] = P[(e + 1) % nP], L = Math.hypot(bx - ax, bz - az), k = Math.max(1, Math.round(L / 6));
       for (let s = 0; s < k; s++) {
         const px = ax + (bx - ax) * (s + 0.5) / k, pz = az + (bz - az) * (s + 0.5) / k, dy = yAt(px, pz) - yG;
+        if (!wallOK(ax + (bx - ax) * s / k, az + (bz - az) * s / k, ax + (bx - ax) * (s + 1) / k, az + (bz - az) * (s + 1) / k, 'cem' + id)) continue;   // v1.14
         const g = box(L / k + 0.3, wh + 2, 0.55, 0, dy + (wh - 2) / 2, 0); g.rotateY(Math.atan2(-(bz - az), bx - ax)); g.translate(px - cx, 0, pz - cz); add('rubble', g);
       }
     }
@@ -502,12 +538,13 @@ export function buildVillage(ctx, layout, M) {
     }
   }
   /** Dry-stone wall along a lane (owner), stepping with the ground in pieces of at most 2.5 m. */
-  function buildStoneWall(sw) {
+  function buildStoneWall(sw, own) {
     const [x0, z0] = sw.pts[0], yG = yAt(x0, z0), id = bid++, frame = { x: x0, y: yG, z: z0, yaw: 0 }, bld = { id, base: yG - 3, top: yG + 3, yaw: 0, cx: x0, cz: z0 };
     for (const [ax, az, bx, bz] of wallPieces(sw)) {
       const L = Math.hypot(bx - ax, bz - az), k = Math.max(1, Math.ceil(L / 2.5));
       for (let i = 0; i < k; i++) {
         const px = ax + (bx - ax) * (i + 0.5) / k, pz = az + (bz - az) * (i + 0.5) / k, dy = yAt(px, pz) - yG;
+        if (roadHit(px, pz, 0.3)) continue;   // v1.14: no wall across a road
         const h = sw.h + 0.08 * Math.sin(px * 1.7 + pz * 2.3);
         const t = sw.t || 0.55;   // v1.5: sw.key / sw.cap / sw.t = another wall (bare brick, whitewash) instead of dry stone
         const g = boxY(L / k + 0.12, t, dy - 0.8, dy + h); g.rotateY(Math.atan2(-(bz - az), bx - ax)); g.translate(px - x0, 0, pz - z0); bat.add(sw.key || 'rubble', g, frame, bld);
@@ -720,15 +757,16 @@ export function buildVillage(ctx, layout, M) {
       const tk = new THREE.CylinderGeometry(0.62, 0.62, 1.8, 16); tk.rotateZ(Math.PI / 2); tk.translate(0, 1.82, 0); a('metal', tk);
       for (const sx of [-0.92, 0.92]) a('metal', new THREE.SphereGeometry(0.62, 12, 8).scale(0.25, 1, 1).translate(sx, 1.82, 0));
     }
-    for (const f of V.fences || []) along(f.pts, 2.4, (x, z, yaw, len) => ironPanel(x, z, yaw, len, f.h, true, f));
-    for (const L of V.lawns || []) bat.add('lawn', patch(L.x, L.z, L.w, L.d, L.yaw || 0, yAt, 0.07, 1.5));   // v1.11
+    for (const f of V.fences || []) along(f.pts, 2.4, (x, z, yaw, len) => { if (!roadHit(x, z, 0.3)) ironPanel(x, z, yaw, len, f.h, true, f); });
+    for (const L of V.lawns || []) bat.add('lawn', clipPatch(patch(L.x, L.z, L.w, L.d, L.yaw || 0, yAt, 0.07, 1.5)));   // v1.11
     // v1.11: concrete posts every ~2.5 m carrying three wires
     for (const f of V.wireFences || []) for (let i = 0; i + 1 < f.pts.length; i++) {
       const [ax, az] = f.pts[i], [bx, bz] = f.pts[i + 1], L = Math.hypot(bx - ax, bz - az), n = Math.max(1, Math.round(L / 2.5));
       for (let k = 0; k <= n; k++) {
         if (k === 0 && i > 0) continue;
-        const x = ax + (bx - ax) * k / n, z = az + (bz - az) * k / n, { fr, bld } = mk(x, z, 0); bat.add('beton', boxY(0.11, 0.11, -0.4, f.h), fr, bld);
-        if (k < n) { const x1 = ax + (bx - ax) * (k + 1) / n, z1 = az + (bz - az) * (k + 1) / n; for (const h of [0.4, 0.8, f.h - 0.15]) wires.push(x, yAt(x, z) + h, z, x1, yAt(x1, z1) + h, z1); }
+        const x = ax + (bx - ax) * k / n, z = az + (bz - az) * k / n; if (roadHit(x, z, 0.3)) continue;
+        const { fr, bld } = mk(x, z, 0); bat.add('beton', boxY(0.11, 0.11, -0.4, f.h), fr, bld);
+        if (k < n && !roadHit(ax + (bx - ax) * (k + 1) / n, az + (bz - az) * (k + 1) / n, 0.3)) { const x1 = ax + (bx - ax) * (k + 1) / n, z1 = az + (bz - az) * (k + 1) / n; for (const h of [0.4, 0.8, f.h - 0.15]) wires.push(x, yAt(x, z) + h, z, x1, yAt(x1, z1) + h, z1); }
       }
     }
     // clipped hedge: overlapping leafy blocks of slightly different height
@@ -1112,21 +1150,35 @@ export function buildVillage(ctx, layout, M) {
       const hwRoad = roadDistWas(b.x, b.z).w / 2;
       const off = Math.min(b.front - hwRoad - 1.6, depth / 2 + 9);
       if (off > depth / 2 + 1.8) {
-        const fm = faceMatrix(front, w, d), zf = off - depth / 2;   // distance from the façade plane
-        const len = L + 6, gate = (rnd() - 0.5) * (len - 4), gw = 1.4;
+        // v1.14: the random draws are made as before; the wall itself stands 1.6 m back from the edge of the road as
+        // it now lies, in pieces of about 2 m, and a piece is left out where it would stand on a road or run
+        // alongside a wall that is already there (a neighbour's, or one placed from a photograph)
+        const fm = faceMatrix(front, w, d), len = L + 6, gate = (rnd() - 0.5) * (len - 4), gw = 1.4;
         const stone = b.wall === 'stone', wallH = b.wall === 'wall' ? 1.25 + rnd() * 0.5 : stone ? 0.9 + rnd() * 0.4 : 0, wb = b.yLow - b.yTop - 0.3, wk = stone ? 'rubble' : 'garden', wt = stone ? 0.55 : 0.3;   // walls reach below the lowest plot corner
-        const segs = [[-len / 2, gate - gw / 2], [gate + gw / 2, len / 2]];
-        for (const [a0, a1] of segs) {
-          if (b.wall === 'wall' || stone) add(wk, box(a1 - a0, wallH - wb, wt, (a0 + a1) / 2, (wallH + wb) / 2, zf), fm);
-          else { for (let x = a0; x <= a1; x += 2.2) add('beton', box(0.1, 1.45 - wb, 0.1, x, (1.45 + wb) / 2, zf), fm); fenceWires(a0, a1, zf, fm); }
+        const gateDoor = rnd() < 0.7, solid = b.wall === 'wall' || stone;
+        const cy = Math.cos(b.yaw), sy = Math.sin(b.yaw), v3 = new THREE.Vector3();
+        const W = (xl, zl) => { v3.set(xl, 0, zl).applyMatrix4(fm); return [b.x + v3.x * cy + v3.z * sy, b.z - v3.x * sy + v3.z * cy]; };
+        const fc = W(0, 0), rn = roadAt(fc[0], fc[1], 60), dNow = rn ? rn.r.w / 2 + 60 - rn.over : 99, zf = Math.min(dNow - (rn ? rn.r.w / 2 : 0) - 1.6, 9);   // from the façade plane
+        const own = 'h' + id, ok = (x0, z0, x1, z1) => { const p = W(x0, z0), q = W(x1, z1); return wallOK(p[0], p[1], q[0], q[1], own); };
+        if (zf > 1.8) {
+          const run = (a0, a1, alongX, fixed) => {   // a straight run in pieces; alongX: along the street (z = fixed), else a return (x = fixed)
+            const n = Math.max(1, Math.round(Math.abs(a1 - a0) / 2.1)); let built = 0;
+            for (let k = 0; k < n; k++) {
+              const u0 = a0 + (a1 - a0) * k / n, u1 = a0 + (a1 - a0) * (k + 1) / n;
+              if (!(alongX ? ok(u0, fixed, u1, fixed) : ok(fixed, u0, fixed, u1))) continue; built++;
+              if (solid) add(wk, alongX ? box(u1 - u0 + 0.02, wallH - wb, wt, (u0 + u1) / 2, (wallH + wb) / 2, fixed) : box(wt, wallH - wb, u1 - u0 + 0.02, fixed, (wallH + wb) / 2, (u0 + u1) / 2), fm);
+              else { add('beton', alongX ? box(0.1, 1.45 - wb, 0.1, u0, (1.45 + wb) / 2, fixed) : box(0.1, 1.45 - wb, 0.1, fixed, (1.45 + wb) / 2, u0), fm); if (alongX) fenceWires(u0, u1, fixed, fm); else fenceWiresZ(fixed, u0, u1, fm); }
+            }
+            return built;
+          };
+          const nFront = run(-len / 2, gate - gw / 2, true, zf) + run(gate + gw / 2, len / 2, true, zf);
+          for (const sx of [-len / 2, len / 2]) run(0, zf, false, sx);
+          const gp = W(gate, zf);
+          if (nFront && !roadHit(gp[0], gp[1], 0.6)) {
+            for (const gx of [gate - gw / 2 - 0.2, gate + gw / 2 + 0.2]) add(stone ? 'rubble' : 'garden', box(0.45, (stone ? wallH + 0.3 : 1.9) - wb, 0.45, gx, ((stone ? wallH + 0.3 : 1.9) + wb) / 2, zf), fm);
+            if (gateDoor) add('greenPaint', box(gw, 1.6, 0.04, gate, 0.85, zf), fm);
+          }
         }
-        // returns on both sides, back to the house line
-        for (const sx of [-len / 2, len / 2]) {
-          if (b.wall === 'wall' || stone) add(wk, box(wt, wallH - wb, zf + wt, sx, (wallH + wb) / 2, zf / 2), fm);
-          else { for (let z = 0; z <= zf; z += 2.2) add('beton', box(0.1, 1.45 - wb, 0.1, sx, (1.45 + wb) / 2, z), fm); fenceWiresZ(sx, 0, zf, fm); }
-        }
-        for (const gx of [gate - gw / 2 - 0.2, gate + gw / 2 + 0.2]) add(stone ? 'rubble' : 'garden', box(0.45, (stone ? wallH + 0.3 : 1.9) - wb, 0.45, gx, ((stone ? wallH + 0.3 : 1.9) + wb) / 2, zf), fm);
-        if (rnd() < 0.7) add('greenPaint', box(gw, 1.6, 0.04, gate, 0.85, zf), fm);
       }
     }
     if (b.tree && !isBarn) {
@@ -1553,14 +1605,24 @@ export function buildVillage(ctx, layout, M) {
   const blds = layout.buildings;
   const inAnyBuilding = (x, z, m) => { for (const b of blds) { if (b.gone) continue; const c = Math.cos(b.yaw), s = Math.sin(b.yaw), dx = x - b.x, dz = z - b.z, lx = dx * c - dz * s, lz = dx * s + dz * c; if (Math.abs(lx) < b.w / 2 + m && Math.abs(lz) < b.d / 2 + m) return true; } return false; };
   const okSpot = (t) => t.force || (!onRoad(t.x, t.z, 1.2) && !inAnyBuilding(t.x, t.z, 1.0) && !inCarsi(S, t.x, t.z, 1.5) && terrH(t.x, t.z) > 2);
-  const trees = treeSpots.filter(okSpot);
+  // v1.14: no tree on a road. A tree placed by hand (force) that stands on one moves to the roadside; the others
+  // are dropped as before. Every trunk ends at least 1.2 m clear of the road's edge.
+  const trees = [];
+  for (const t of treeSpots) {
+    if (!okSpot(t)) continue;
+    if (roadHit(t.x, t.z, 1.2)) { const q = t.force ? offRoad(t.x, t.z, 1.4) : null; if (!q || inAnyBuilding(q[0], q[1], 0.8)) continue; t.x = q[0]; t.z = q[1]; }
+    trees.push(t);
+  }
   // stone piles and a few fences out in the plots
   if (!centreOnly) {
     for (let i = 0; i < 14; i++) { const b = blds[Math.floor(rnd() * blds.length)]; if (!b.barn) continue; props.push({ kind: 'stones', x: b.x + (rnd() - 0.5) * 12, z: b.z + (rnd() - 0.5) * 12 }); }
     props.push({ kind: 'bench', x: S.market.x + 7.5, z: S.market.z + 2, yaw: Math.PI / 2 }, { kind: 'bin', x: S.market.x + 7.5, z: S.market.z - 1.5 });
   }
 
-  const propsOut = buildProps(ctx, M, { props: props.filter(p => p.kind === 'tree' || p.force || !onRoad(p.x, p.z, 0.4)), trees, wires }, bat);
+  const propsOut = buildProps(ctx, M, { props: props.filter(p => {   // v1.14: trees and poles on a road move to the roadside, other things on a road are left out
+      const m = p.kind === 'tree' ? 1.2 : 0.4; if (!roadHit(p.x, p.z, m)) return true;
+      if (p.kind !== 'tree' && p.kind !== 'pole' && !p.force) return false;
+      const q = offRoad(p.x, p.z, m + 0.2); if (!q) return false; p.x = q[0]; p.z = q[1]; return true; }), trees, wires }, bat);
   bat.build(M, group, { culler: ctx.culler });
   if (propsOut.wireMesh) group.add(propsOut.wireMesh);
   for (const m of propsOut.meshes) group.add(m);
