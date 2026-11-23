@@ -10,6 +10,7 @@ import { canopyMaterials, trunkMaterial, groundCover } from './vegetation.js';
 import { villageMaterials } from './village_materials.js';
 import { buildVillage } from './village.js';
 import { detailBridge } from './bridge.js';
+import { buildCesnigir } from './cesnigir.js';
 import { splitMeshByCell, cellSizeFor } from './perf.js';
 
 export async function setupRealism(ctx) {
@@ -82,8 +83,9 @@ export async function setupRealism(ctx) {
   log('vegetation');
 
   // ---- the rebuilt village centre (v0.8) ----------------------------------------------------
+  const VM = (ctx.village || !off.has('no-park')) ? villageMaterials(lib, { quality }) : null;
   if (ctx.village && !off.has('no-village')) {
-    const M = villageMaterials(lib, { quality });
+    const M = VM;
     const v = buildVillage(ctx, ctx.village, M);
     ctx.scene.add(v.group);
     v.group.traverse(o => {
@@ -93,6 +95,18 @@ export async function setupRealism(ctx) {
       else ctx.layers.bina.push(o);
     });
     log('village');
+  }
+  // ---- v1.10: Çeşnigir park at the bridge's east end (owner's photo from the wooden stairs) ----------------------------
+  if (VM && !off.has('no-park')) {
+    const p = buildCesnigir(ctx, VM);
+    ctx.scene.add(p.group);
+    p.group.traverse(o => {
+      if (!o.isMesh) return;
+      if (/^V_(lawn|csPavers|coping)$/.test(o.name)) ctx.layers.yol.push(o);
+      else if (/^Koy_Agac/.test(o.name)) ctx.layers.agac.push(o);
+      else ctx.layers.bina.push(o);
+    });
+    log('park');
   }
   // ---- bridge detail: voussoirs, cutwater caps, parapet stones ------------------------------
   if (off.has('bridge-detail')) { const br = detailBridge(model, lib, pick); if (br) { ctx.scene.add(br); ctx.layers.bina.push(br); } log('bridge'); }   // opt-in: #bridge-detail

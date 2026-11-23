@@ -132,10 +132,12 @@ export function waterMaterial(lib, grid, { quality = 2 } = {}) {
       tN1: { value: n1 }, tN2: { value: n2 }, tHeight: { value: heightTex }, uTime: { value: 0 },
       uGrid: { value: new THREE.Vector4(grid.x0, grid.z0, grid.size, 0) },
       uShallow: { value: new THREE.Color(0x4e6e5a) }, uDeep: { value: new THREE.Color(0x12302f) },
+      // v1.10: north of the Çeşnigir Bridge the canyon water is bright algae green (owner's photo, autumn)
+      uGreenShallow: { value: new THREE.Color(0x5f9a3a) }, uGreenDeep: { value: new THREE.Color(0x2f6a26) },
     });
     addWorldVaryings(shader);
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', `#include <common>\nuniform sampler2D tN1, tN2, tHeight; uniform float uTime; uniform vec4 uGrid; uniform vec3 uShallow, uDeep;`)
+      .replace('#include <common>', `#include <common>\nuniform sampler2D tN1, tN2, tHeight; uniform float uTime; uniform vec4 uGrid; uniform vec3 uShallow, uDeep, uGreenShallow, uGreenDeep;`)
       .replace('#include <map_fragment>', /* glsl */`
         vec2 guv = (vWPos.xz - uGrid.xy) / uGrid.z;
         float ground = texture2D(tHeight, guv).r;
@@ -153,6 +155,10 @@ export function waterMaterial(lib, grid, { quality = 2 } = {}) {
         // colour: turbid green-brown shallows, dark blue-green deep water (an inland reservoir, not the sea)
         float dk = 1.0 - exp(-depth * 0.35);
         vec3 wcol = mix(uShallow, uDeep, dk);
+        // the canyon north of the bridge line (W -432,-268 to E -322,-296): green, fading in over ~25 m
+        float north = (-28.0 * (vWPos.x + 432.0) - 110.0 * (vWPos.z + 268.0)) / 113.5;
+        float green = smoothstep(2.0, 28.0, north);
+        wcol = mix(wcol, mix(uGreenShallow, uGreenDeep, dk), green);
         // ground tint showing through in the shallows
         vec3 sediment = vec3(0.36, 0.31, 0.22);
         wcol = mix(sediment, wcol, smoothstep(0.0, 1.6, depth));

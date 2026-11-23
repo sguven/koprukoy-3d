@@ -70,6 +70,17 @@ export function buildProps(ctx, M, { props, trees, wires }, bat) {
         for (let k = 0; k < 5; k++) canopies.push(cone((2.3 - k * 0.42) * s, 2.9 * s, t.x, y + (2.4 + k * 2.0) * s + 1.45 * s, t.z, k % 2 ? 0x2e4a2a : 0x34532d, seed + k));
         break;
       }
+      case 'autumn': {    // v1.10 Çeşnigir park: broad deciduous tree turning yellow (ash, elm, wild pear in October)
+        trunks.push(cyl(0.18 * s, 0.3 * s, 2.8 * s, t.x, y + 1.4 * s, t.z, 7));
+        canopies.push(canopy(3.0 * s, 2.6 * s, 2.9 * s, t.x, y + 2.6 * s + 2.2 * s, t.z, 0xc4a43a, seed));
+        canopies.push(canopy(1.9 * s, 1.6 * s, 1.8 * s, t.x + 0.9 * s, y + 3.4 * s + 2.6 * s, t.z - 0.6 * s, 0xa89a38, seed + 5));
+        break;
+      }
+      case 'poplarY': {   // v1.10: poplar in autumn yellow
+        const h = 12 * s; trunks.push(cyl(0.14 * s, 0.26 * s, h * 0.55, t.x, y + h * 0.275, t.z, 7));
+        canopies.push(canopy(1.6 * s, h * 0.42, 1.6 * s, t.x, y + 2.2 * s + h * 0.42, t.z, 0xd0b043, seed));
+        break;
+      }
       case 'redshrub': {  // red-leaved shrub (barberry / photinia) in the statue bed
         canopies.push(canopy(0.75 * s, 0.6 * s, 0.7 * s, t.x, y + 0.65 * s, t.z, 0x8e2c24, seed));
         break;
