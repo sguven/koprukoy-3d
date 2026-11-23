@@ -5,6 +5,23 @@ Two passes so far: **v0.7 "materials"** (surfaces only, nothing moved) and **v0.
 `model/koprukoy.glb` are still the v0.6 files. Terrain (SRTM 30 m), the reservoir at 724 m, the
 Çeşnigir Bridge body, D.260 and the roads outside the village are unchanged.
 
+## v1.15 — the old shops and Güvendioğlu Market (Nov 2026)
+
+Owner's screenshots IMG_0685–0687 ("these three places are not realistic"), located like the v1.13 ones: 0687 at model
+257.2, 35.8 looking south-east along the old shops; 0685/0686 at 249.7, 120.2 on the square looking east.
+
+- **Old row of shops** (east side of the main road, 45–76 south): added the taller flat-roofed block at its north end
+  (275.6, 49.6; three bays, two rows of grilles) and the steel lattice pylon beside it (268.6, 43.6); the two
+  tile-roofed parts (`kind: 'dukkan'`) carry a painted shutter in each bay, pilasters and a narrow sheet canopy.
+- **Güvendioğlu Market:** the satellite roof is 257.5–268.7 east, 114–127 south, and the photographs show two joined
+  two-storey halves on the square: the salmon-red old house on the north (shop under a canopy, four upper windows)
+  and the cream market on the south. The market was one 10 × 8 m block at 266.6, 115.8; it is now the southern half
+  at 263.2, 123.7 (11 × 6.5 m) with the red half at 263.2, 117.2. The big tree moved from the pavement in front to
+  the grass south of the market (259.5, 131.8).
+
+Model views: `docs/screenshots/v1.15_shops_and_market.jpg`. Still simple: no shop signs or goods on the pavement, the
+row's bays are evenly spaced, the red half's canopy is concrete, not corrugated sheet.
+
 ## v1.14 — clear roads, sensible walls (Nov 2026)
 
 Owner's rules (23 Nov 2026): house walls, parks and trees must not lie on a road — move them and keep the roads

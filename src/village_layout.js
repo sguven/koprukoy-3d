@@ -108,7 +108,10 @@ const T = [
 //  - kahve: single-storey, tile roof, long axis north-south, just north of the municipality (photo 02 right)
 const CARSI_FIX = {
   municipality: { x: 233.75, z: 125.4, w: 17.6, d: 7.6, fixed: true },
-  market: { x: 266.6, z: 115.8, yaw: 0, w: 10.4, d: 7.8, floorAtFront: true, fixed: true },   // shop floor at street level, dug into the slope behind
+  // v1.15 (owner's screenshots 0685/0686 and their satellite view): Güvendioğlu Market is the cream southern half of a
+  // two-storey pair on the east side of the square (roof 257.5–268.7 east, 114–127 south); the salmon-red northern
+  // half with the second shop is in SV_SITES.extra. It was a single 10 × 8 m block 6 m further north-east.
+  market: { x: 263.2, z: 123.7, yaw: 0, w: 11.0, d: 6.5, floorAtFront: true, fixed: true, faceFix: Math.PI },   // shop floor at street level, dug into the slope behind
   kahve: { x: 233.4, z: 108.2, yaw: 0, w: 6.0, d: 10.6, roof: 'h', wallKey: 'Duvar_Krem', faceFix: 0, fixed: true },
 };
 export const TRACED = T.filter(t => t[7] === 'municipality' || t[7] === 'market' || t[7] === 'kahve').map(([cx, cy, w, d, ang, st, roof, kind]) => {
@@ -143,7 +146,7 @@ export function carsiSites(muni) {
       P(23.5, 5.0, { species: 'mulberry', size: 1.35 }),     // big trees in front of the kahve (photo 02 right, photo 05)
       P(27.5, 3.5, { species: 'mulberry', size: 1.2 }),
     ],
-    marketTree: { x: 258.2, z: 123.6 },                      // the old tree on the pavement in front of the market (SV01, satellite crown)
+    marketTree: { x: 259.5, z: 131.8 },                      // v1.15: the big tree stands on the grass south of the market (0685), not in front of it                      // the old tree on the pavement in front of the market (SV01, satellite crown)
     // v0.9.8 (owner's photos, Nov 2026): the plot south of the lane is the paved forecourt of the ÇEŞNİGİR-DER
     // association building on its west side — grey interlocking pavers, low wall with blue-white kerb stones on the
     // lane and road sides, the big wooden çardak just in front of the building's north half, the notice board by
@@ -528,8 +531,8 @@ const OWNER_FIX = [
   { xz: [-23.8, 298.3], set: { gone: true }, note: 'replaced by the blue shop north of the restaurant (SV_SITES)' },
   { xz: [-19.5, 305.4], set: { gone: true }, note: 'part of the restaurant roof, not a house' },
   { xz: [221.7, 84.4], set: { ownWall: 'Duvar_Sari', wall: 'none', tree: false }, note: 'the yellow two-storey house with a shop on the ground floor, north-west of the square (0655)' },
-  { xz: [268.8, 69.6], set: { ownWall: 'Duvar_Beyaz', wall: 'none', tree: false, faceFix: Math.PI, plain: true }, note: 'the old row of shops on the east side of the main road north of the çarşı (blue shutters), right on the road' },
-  { xz: [273.5, 56.5], set: { ownWall: 'Duvar_Beyaz', wall: 'none', tree: false, faceFix: Math.PI, plain: true }, note: 'north half of the same row' },
+  { xz: [268.8, 69.6], set: { ownWall: 'Duvar_Krem', wall: 'none', tree: false, faceFix: Math.PI, plain: true, kind: 'dukkan' }, note: 'the old row of shops on the east side of the main road north of the çarşı (blue shutters), right on the road' },
+  { xz: [273.5, 56.5], set: { ownWall: 'Duvar_Krem', wall: 'none', tree: false, faceFix: Math.PI, plain: true, kind: 'dukkan' }, note: 'north half of the same row' },
   { xz: [264.1, 97.9], set: { w: 9.5, d: 8.0, storeys: 2, ownWall: 'Duvar_Krem', wall: 'none', tree: false, faceFix: Math.PI }, note: 'two storeys with shop windows on the ground floor, east of the road at the north end of the square' },
   { xz: [475.5, 665.3], set: { yaw: 2.05, wall: 'none', tree: false, faceFix: 0.48 }, note: 'the long workshop building west of the school road: its long axis runs NW–SE (the tracer had it mirrored)' },
   { xz: [491.8, 698.7], set: { x: 490.5, z: 696.0, w: 22.0, d: 9.5, yaw: 2.05, wall: 'none', tree: false, faceFix: 0.48 }, note: 'the tyre shop (lastikçi) south of it: same axis, open bays on the road side' },
@@ -596,6 +599,11 @@ export const SV_SITES = {
     { x: 415.0, z: 516.0, yaw: -0.18, w: 22.0, d: 4.5, storeys: 1, roof: 'm', barn: true, plain: true, wallKey: 'Duvar_Beton', note: 'its south wing' },
     { x: 261.95, z: 219.85, yaw: -0.308, w: 5.5, d: 6.0, storeys: 1, roof: 'h', wallKey: 'Duvar_Somon', face: 1.263, porch: { dir: [0.953, 0.303], span: [0.0, 1.0], depth: 2.2 },
       note: 'north wing of the salmon-pink L-shaped house: single storey, doors onto the yard in the corner of the L, a columned porch on its east end towards the mosque' },
+    // v1.15 (owner's screenshots 0685–0687)
+    { x: 263.2, z: 117.2, yaw: 0, w: 11.0, d: 6.5, storeys: 2, roof: 'h', wallKey: 'Duvar_Visne', kind: 'shop', face: Math.PI, stairFix: null, balconyFix: false,
+      note: 'the salmon-red old two-storey house joined to the north side of Güvendioğlu Market, a shop under a sheet canopy on its ground floor' },
+    { x: 275.6, z: 49.6, yaw: -1.85, w: 10.5, d: 7.0, storeys: 2, roof: 'f', plain: true, wallKey: 'Duvar_Krem', kind: 'dukkan', tall: true, face: Math.PI,
+      note: 'the taller flat-roofed block at the north end of the old row of shops: three bays with two rows of grilles' },
     { x: 398.5, z: 338.3, yaw: -1.451, w: 9.0, d: 6.0, storeys: 1, roof: 'm', barn: true, plain: true, wallKey: 'rubble', note: 'rubble barn with a rusty sheet roof on the road, north of the grey block house' },
   ],
   gates: [{ a: [108.7, 280.9], b: [112.9, 280.3], h: 1.75 },                     // two-leaf wrought-iron gate, meter box on its west pillar
@@ -617,6 +625,7 @@ export const SV_SITES = {
   parkGate: { x: -95.0, z: 183.0, yaw: 0.49 },
   // v1.13: interlocking paving in front of the shops on the lake road; `solids` = collision boxes (x, z, yaw, half w, half d)
   paved: [{ x: -19.5, z: 318.0, w: 13.0, d: 70.0, yaw: 0.356 }, { x: -92.0, z: 196.0, w: 12.0, d: 22.0, yaw: 0.49 }],
+  pylons: [{ x: 268.6, z: 43.6 }],   // v1.15: the lattice pylon at the north end of the old shops (0687)
   solids: [[-95.0, 183.0, 0.49, 1.7, 1.4], [-88.4, 179.5, 0.49, 1.5, 1.2], [-101.6, 186.5, 0.49, 1.5, 1.2], [428.6, 480.5, -1.47, 0.3, 0.3]],
   // v1.11: the park's lawn follows the road from its north tip (the garden rectangle in SITES covers the middle)
   lawns: [{ x: 425.8, z: 343.7, w: 16, d: 64, yaw: 0.305 }],

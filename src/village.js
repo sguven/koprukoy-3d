@@ -786,8 +786,8 @@ export function buildVillage(ctx, layout, M) {
       a('beton', boxY(0.5, 0.5, -0.5, 0.2)); a('trim', cyl(0.035, 0.05, 7.6, 0, 3.9, 0, 8)); a('metal', new THREE.SphereGeometry(0.07, 8, 6).translate(0, 7.74, 0));
       const g = new THREE.PlaneGeometry(1.5, 1.0, 6, 1), p = g.attributes.position; for (let i = 0; i < p.count; i++) p.setZ(i, 0.09 * Math.sin((p.getX(i) + 0.75) * 3.0)); g.computeVertexNormals(); g.translate(0.8, 7.1, 0); bat.add('flagTR', g, fr);
     }
-    if (V.pylon) { // steel lattice pylon: four tapering legs, horizontal rings, zig-zag bracing, two cross-arms
-      const P = V.pylon, { fr, bld } = mk(P.x, P.z, 0.35), a = (k, g) => bat.add(k, g, fr, bld), H = 11, b0 = 0.75, b1 = 0.22;
+    for (const P of [V.pylon, ...(V.pylons || [])].filter(Boolean)) { // steel lattice pylon: four tapering legs, horizontal rings, zig-zag bracing, two cross-arms
+      const { fr, bld } = mk(P.x, P.z, 0.35), a = (k, g) => bat.add(k, g, fr, bld), H = 11, b0 = 0.75, b1 = 0.22;
       const half = (y) => b0 + (b1 - b0) * y / H, bar = (x0, y0, z0, x1, y1, z1, t = 0.045) => {
         const d = new THREE.Vector3(x1 - x0, y1 - y0, z1 - z0), len = d.length(), g = box(t, len, t, 0, 0, 0);
         g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize())); g.translate((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2); a('rust', g);
@@ -1032,6 +1032,19 @@ export function buildVillage(ctx, layout, M) {
       for (let u = -L / 2 + 0.2; u < L / 2; u += 0.35) add('woodRaw', box(0.05, 0.95, 0.05, u, fy + 0.5, 1.45), fm);
       add('glass', box(L - 1.0, 1.2, 0.05, 0, fy + 1.7, 0.05), fm); add('rubble', boxY(L * 0.7, 0.5, y0 - 0.5, y0 + 0.9, -L * 0.1, 2.6), fm);
       add('navy', box(3.6, 1.2, 0.1, L / 2 - 2.2, fy + 0.2, 1.6), fm);
+    }
+    // v1.15: the old row of shops north of the çarşı — bay after bay of painted shutters and grilles under a narrow
+    // sheet canopy, each bay its own colour; the tall block has a second row of grilles above
+    if (b.kind === 'dukkan') {
+      const fm = faceMatrix(front, w, d), L = front === '+z' || front === '-z' ? w : d, nb = Math.max(2, Math.round(L / 3.4)), cols = ['bluePaint', 'greenPaint', 'trim', 'bluePaint', 'Duvar_Okr'];
+      for (let i = 0; i < nb; i++) {
+        const x = -L / 2 + L * (i + 0.5) / nb, bw = L / nb - 0.5, k = cols[(i + Math.round(b.x)) % cols.length];
+        add(k, box(bw, 2.3, 0.08, x, y0 + 1.2, 0.06), fm); add('metalDark', box(bw * 0.55, 1.2, 0.03, x, y0 + 1.5, 0.11), fm);
+        if (b.tall) { add(k, box(bw, 1.5, 0.08, x, y0 + FLOOR + 1.25, 0.06), fm); add('metalDark', box(bw * 0.8, 1.1, 0.03, x, y0 + FLOOR + 1.25, 0.11), fm); }
+        add('trim', box(0.3, y1 - y0, 0.14, x + L / nb / 2, (y0 + y1) / 2, 0.07), fm);
+      }
+      if (!b.tall) { const aw = box(L, 0.05, 1.1, 0, y0 + 2.55, 0.55); add('Cati_Sac_Gri', aw, fm); }
+      add('beton', boxY(L + 0.4, 1.6, b.yLow - b.yTop - 0.3, y0 + 0.02, 0, 0.8), fm);
     }
     if (b.kind === 'garage') {
       const fm = faceMatrix(front, w, d), L = front === '+z' || front === '-z' ? w : d;
