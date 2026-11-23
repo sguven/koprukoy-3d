@@ -190,10 +190,10 @@ export function buildToros() {
 // v1.9 cabin. Everything is in the car frame (front +X, up +Y, right +Z; the driver sits on the left, z < 0).
 // Static parts are merged into one mesh per material (about a dozen draw calls for the whole interior); the moving
 // parts (steering wheel, gauge needles) and the mirror glasses stay separate.
-// Proportions follow the real car: floor 0.30 m above the ground, seat cushion top ~0.52, driver's eye ~1.16,
-// headliner 1.335, 380 mm two-spoke wheel ~0.56 m in front of the eye, instruments under a hood behind it.
+// Proportions follow the real car: floor 0.30 m above the ground, seat cushion top ~0.52, driver's eye ~1.16 and
+// just behind the B pillar, headliner 1.335, 380 mm two-spoke wheel ~0.52 m in front of the eye, instruments under a hood behind it.
 // ======================================================================================================================
-export const EYE = new THREE.Vector3(-0.34, 1.16, -0.36);
+export const EYE = new THREE.Vector3(-0.12, 1.16, -0.36);   // just behind the B pillar, as in the real car
 const UP = new THREE.Vector3(0, 1, 0);
 
 function noiseTex(w, h, base, draw) {
@@ -295,15 +295,15 @@ function buildCabin(car, { chrome, rubberM, darkM }) {
   // ---- front seats (buckets with headrests) and the rear bench ----
   for (const s of [-1, 1]) {
     const z = s * 0.36;
-    bx(0.42, 0.1, 0.36, darkM, -0.36, 0.36, z);                                    // runners
-    rbox(0.5, 0.13, 0.48, 0.045, fabricM, -0.34, 0.47, z, 0, 0, 0.07);              // cushion (front edge a little higher)
-    for (const o of [-1, 1]) rbox(0.46, 0.08, 0.07, 0.03, boltM, -0.35, 0.53, z + o * 0.215, 0, 0, 0.07);
-    rbox(0.12, 0.6, 0.48, 0.045, fabricM, -0.64, 0.82, z, 0, 0, 0.22);              // backrest, leaning back
-    for (const o of [-1, 1]) rbox(0.1, 0.5, 0.07, 0.03, boltM, -0.6, 0.81, z + o * 0.215, 0, 0, 0.22);
-    rbox(0.13, 0.62, 0.5, 0.03, plasticM, -0.71, 0.81, z, 0, 0, 0.22);              // shell on the back
-    rbox(0.09, 0.17, 0.27, 0.04, fabricM, -0.74, 1.2, z, 0, 0, 0.15);               // headrest
-    for (const o of [-0.08, 0.08]) cyl([-0.725, 1.08, z + o], [-0.71, 1.13, z + o], 0.006, 0.006, chrome, 6);
-    rbox(0.08, 0.06, 0.04, 0.015, darkM, -0.44, 0.41, s * 0.61);                    // recline lever
+    bx(0.42, 0.1, 0.36, darkM, -0.14, 0.36, z);                                    // runners
+    rbox(0.5, 0.13, 0.48, 0.045, fabricM, -0.12, 0.47, z, 0, 0, 0.07);              // cushion (front edge a little higher)
+    for (const o of [-1, 1]) rbox(0.46, 0.08, 0.07, 0.03, boltM, -0.13, 0.53, z + o * 0.215, 0, 0, 0.07);
+    rbox(0.12, 0.6, 0.48, 0.045, fabricM, -0.42, 0.82, z, 0, 0, 0.22);              // backrest, leaning back
+    for (const o of [-1, 1]) rbox(0.1, 0.5, 0.07, 0.03, boltM, -0.38, 0.81, z + o * 0.215, 0, 0, 0.22);
+    rbox(0.13, 0.62, 0.5, 0.03, plasticM, -0.49, 0.81, z, 0, 0, 0.22);              // shell on the back
+    rbox(0.09, 0.17, 0.27, 0.04, fabricM, -0.52, 1.2, z, 0, 0, 0.15);               // headrest
+    for (const o of [-0.08, 0.08]) cyl([-0.505, 1.08, z + o], [-0.49, 1.13, z + o], 0.006, 0.006, chrome, 6);
+    rbox(0.08, 0.06, 0.04, 0.015, darkM, -0.22, 0.41, s * 0.61);                    // recline lever
   }
   rbox(0.52, 0.18, 1.4, 0.05, fabricM, -1.03, 0.47, 0, 0, 0, 0.05);                 // rear bench cushion
   rbox(0.13, 0.46, 1.4, 0.05, fabricM, -1.34, 0.76, 0, 0, 0, 0.32);                 // rear backrest
@@ -335,10 +335,10 @@ function buildCabin(car, { chrome, rubberM, darkM }) {
   cyl([0.26, 0.52, 0], [0.2, 0.69, 0], 0.075, 0.018, rubberM, 12);
   cyl([0.2, 0.69, 0], [0.17, 0.76, 0], 0.007, 0.007, chrome, 8);
   put(new THREE.SphereGeometry(0.027, 14, 10), wheelM, 0.165, 0.78, 0, 0, 0, 0);
-  bx(0.32, 0.1, 0.1, plasticM, -0.1, 0.48, 0); rod([0.0, 0.53, 0], [-0.25, 0.6, 0], 0.035, 0.04, plasticM); rbox(0.12, 0.045, 0.05, 0.02, wheelM, -0.22, 0.6, 0, 0, 0, -0.27);
+  bx(0.32, 0.1, 0.1, plasticM, 0.0, 0.48, 0); rod([0.1, 0.53, 0], [-0.15, 0.6, 0], 0.035, 0.04, plasticM); rbox(0.12, 0.045, 0.05, 0.02, wheelM, -0.12, 0.6, 0, 0, 0, -0.27);
   // steering column shroud and stalks (the wheel itself is separate: it turns)
-  const WC = new THREE.Vector3(0.2, 0.93, -0.36), COL = new THREE.Vector3(Math.cos(0.44), -Math.sin(0.44), 0);   // column runs forward and down
-  { const a = WC.clone().addScaledVector(COL, 0.05), b = WC.clone().addScaledVector(COL, 0.3); rod(a.toArray(), b.toArray(), 0.09, 0.1, plasticM);
+  const WC = new THREE.Vector3(0.38, 0.91, -0.36), COL = new THREE.Vector3(Math.cos(0.44), -Math.sin(0.44), 0);   // column runs forward and down
+  { const a = WC.clone().addScaledVector(COL, 0.05), b = WC.clone().addScaledVector(COL, 0.19); rod(a.toArray(), b.toArray(), 0.09, 0.1, plasticM);
     for (const s of [-1, 1]) rod(a.clone().addScaledVector(COL, 0.05).toArray(), [a.x + 0.06, a.y - 0.02, -0.36 + s * 0.17], 0.012, 0.012, darkM); }
 
   // ---- merge ----
