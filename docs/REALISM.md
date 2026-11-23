@@ -20,6 +20,8 @@ photographs were never checked against each other.
 - Where a photographed wall stops because another carries on, a short piece joins the two; a garden-wall stub
   shorter than about 6 m beside a gap is dropped.
 - The collision boxes use the same pieces, so there is no invisible wall in Walk mode.
+- The yards with a wall of their own (mosque courtyard, walled cemeteries, the raised plot on the square, the
+  association's garden terrace) are in the book as well; no garden wall ran beside them, so nothing moved.
 - `tools/wall_audit.mjs` loads the model and lists every place where two walls still run side by side: 0.
 
 Before / after: `docs/screenshots/v1.16_school_lane_walls.jpg`.

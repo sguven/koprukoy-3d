@@ -269,7 +269,17 @@ export function buildVillage(ctx, layout, M) {
 
   // v1.14: the walls placed from photographs come first: a house's own garden wall gives way to them
   // v1.16: what was placed from photographs comes first, as the layout settled it: a house's own wall gives way
-  if (!centreOnly) registerPhotoWalls(book, S);
+  if (!centreOnly) {
+    registerPhotoWalls(book, S);
+    // v1.16 (owner: "other gardens like this"): the yards with a wall of their own are in the book too — the mosque
+    // courtyard, the walled cemeteries, the raised plot on the square and the association's garden terrace — so a
+    // house's garden wall no longer runs along the outside of them. They are built as before.
+    const yard = (x0, z0, x1, z1, own) => { for (const [ax, az, bx, bz] of [[x0, z0, x1, z0], [x1, z0, x1, z1], [x1, z1, x0, z1], [x0, z1, x0, z0]]) { const n = Math.max(1, Math.round(Math.hypot(bx - ax, bz - az) / 3)); for (let i = 0; i < n; i++) book.reg(ax + (bx - ax) * i / n, az + (bz - az) * i / n, ax + (bx - ax) * (i + 1) / n, az + (bz - az) * (i + 1) / n, own); } };
+    const mq = layout.buildings.find(b => b.kind === 'mosque'); if (mq) yard(mq.x - 31, mq.z - 29.5, mq.x + 19, mq.z + 26.5, 'mosque');   // the courtyard in buildMosque
+    (S.cemeteries || []).forEach((c, i) => { if (!c.poly) yard(c.x - c.w / 2, c.z - c.d / 2, c.x + c.w / 2, c.z + c.d / 2, 'cemR' + i); });
+    if (S.plot) yard(S.plot.x0, S.plot.z0, S.plot.x1, S.plot.z1, 'carsi');
+    if (S.der && S.der.terrace) yard(S.der.terrace.x0, S.der.terrace.z0, S.der.terrace.x1, S.der.terrace.z1, 'carsi');
+  }
   // ================================================================= buildings
   for (const b of layout.buildings) {
     if (b.kind === 'mosque') { buildMosque(b); continue; }
