@@ -55,7 +55,7 @@ const ROAD_MOVE = {
   local_319: { pts: [[277.4, 206.4], [277.9, 206.9]], gone: true },
   secondary_325: { pts: [[277.4, 206.4], [277.9, 206.9]], gone: true },
   local_327: { pts: [[277.4, 206.4], [277.9, 206.9]], gone: true },
-  local_326: { pts: [[326.2, 222.6], [325.4, 228.0], [324.6, 233.0]] },                 // the gravel forecourt of the garage
+  local_326: { pts: [[326.2, 222.6], [326.6, 223.0]], gone: true },                      // a stub into the long house's yard: the garage's gravel forecourt is open ground
   local_312: { pts: [[222.8, 179.1], [240.0, 188.5], [252.0, 196.0], [263.0, 197.4], [271.2, 194.9]] },   // the lane west passes south of the shop
 };
 
@@ -482,6 +482,8 @@ export const SV_SITES = {
     // v1.11: white pickets between red posts on a low footing, west side of the road south of the lake lane
     { pts: [[423.6, 416.5], [424.2, 432.5], [424.6, 452.7], [425.5, 468.0]], h: 1.05, y: 0.35, key: 'trim', post: 'redPaint' },
     { pts: [[437.4, 438.0], [437.8, 462.0]], h: 0.9, y: 1.0 }],                 // v1.11: iron railings on the block wall east of the road
+  // v1.11: the park's lawn follows the road from its north tip (the garden rectangle in SITES covers the middle)
+  lawns: [{ x: 425.8, z: 343.7, w: 16, d: 64, yaw: 0.305 }],
   // v1.11: concrete posts with three wires round the lawn north of the road and the garden at the junction
   wireFences: [
     { pts: [[337.5, 229.6], [352.0, 232.6], [364.0, 234.6]], h: 1.4 },
@@ -500,17 +502,16 @@ export const SV_SITES = {
     ['mulberry', 667.5, 538.0, 1.0], ['mulberry', 674.0, 536.5, 0.95],             // v1.6: the old trees north-east of the crossroads
     ['mulberry', 447.2, 568.5, 1.3],                                              // the big tree on the south-west corner
     ['mulberry', 447.0, 556.0, 1.0], ['poplar', 442.6, 541.0, 1.0], ['mulberry', 438.2, 527.0, 0.9], ['mulberry', 433.2, 512.0, 1.0],   // the row along the road's west side
-    // v1.11: the trees that stand out along the main road
-    ['mulberry', 276.6, 187.0, 1.2], ['mulberry', 280.8, 201.0, 1.3],                      // on the lawn strip under the mosque garden wall
-    ['mulberry', 266.0, 207.5, 1.0],                                                       // the tree on the little island at the fork
-    ['mulberry', 291.0, 218.6, 1.3], ['mulberry', 301.5, 222.4, 1.2],                      // the two old mulberries in front of the stone wall
-    ['mulberry', 281.0, 231.0, 1.1], ['fruit', 275.5, 229.0, 0.8],                         // by the porch house
-    ['fruit', 341.0, 226.5, 0.8], ['fruit', 347.5, 224.0, 0.8], ['mulberry', 356.5, 228.0, 1.0], ['fruit', 344.0, 218.0, 0.8],   // the lawn north of the road
-    ['mulberry', 367.0, 233.5, 1.3],                                                       // the big tree at the junction
-    ['fruit', 388.5, 250.0, 0.8], ['fruit', 393.0, 256.0, 0.8], ['fruit', 396.0, 263.0, 0.8],   // the fenced garden at the junction
-    ['mulberry', 409.5, 300.5, 1.4],                                                       // the big bare tree at the north tip of the park
-    ['mulberry', 436.0, 366.5, 1.3], ['mulberry', 441.0, 371.0, 1.3], ['mulberry', 430.5, 387.0, 1.3],   // the old trees at the south end of the park
-    ['pine', 421.0, 441.0, 1.2], ['pine', 420.4, 447.0, 1.3], ['pine', 420.8, 453.5, 1.2],   // the spruces behind the red and white fence
+    // v1.11: the trees that stand out along the main road (kept small: the model's crowns are fuller than the bare April trees)
+    ['mulberry', 277.6, 186.0, 0.75],                                                      // on the lawn strip under the mosque garden wall
+    ['mulberry', 289.6, 216.6, 0.8], ['mulberry', 302.0, 220.6, 0.75],                     // the two old mulberries in front of the stone wall
+    ['fruit', 276.0, 231.5, 0.7],                                                          // by the porch house
+    ['fruit', 341.0, 226.5, 0.7], ['fruit', 347.5, 224.0, 0.7], ['fruit', 356.5, 227.0, 0.75], ['fruit', 344.0, 218.0, 0.7],   // the lawn north of the road
+    ['mulberry', 367.5, 232.0, 0.9],                                                       // the big tree at the junction
+    ['fruit', 389.5, 250.0, 0.7], ['fruit', 394.0, 256.0, 0.7], ['fruit', 397.0, 263.0, 0.7],   // the fenced garden at the junction
+    ['mulberry', 411.5, 300.0, 0.95],                                                      // the big bare tree at the north tip of the park
+    ['mulberry', 437.0, 367.5, 0.9], ['mulberry', 441.5, 372.0, 0.9], ['mulberry', 431.5, 386.0, 0.9],   // the old trees at the south end of the park
+    ['pine', 420.6, 441.0, 1.0], ['pine', 420.0, 447.0, 1.1], ['pine', 420.4, 453.5, 1.0],   // the spruces behind the red and white fence
   ],
   grove: { x0: 484, x1: 522, z0: 582, z1: 624, step: 6.2, species: 'pine' },     // the pine wood between the junction and the school
 };

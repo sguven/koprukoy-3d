@@ -721,6 +721,7 @@ export function buildVillage(ctx, layout, M) {
       for (const sx of [-0.92, 0.92]) a('metal', new THREE.SphereGeometry(0.62, 12, 8).scale(0.25, 1, 1).translate(sx, 1.82, 0));
     }
     for (const f of V.fences || []) along(f.pts, 2.4, (x, z, yaw, len) => ironPanel(x, z, yaw, len, f.h, true, f));
+    for (const L of V.lawns || []) bat.add('lawn', patch(L.x, L.z, L.w, L.d, L.yaw || 0, yAt, 0.07, 1.5));   // v1.11
     // v1.11: concrete posts every ~2.5 m carrying three wires
     for (const f of V.wireFences || []) for (let i = 0; i + 1 < f.pts.length; i++) {
       const [ax, az] = f.pts[i], [bx, bz] = f.pts[i + 1], L = Math.hypot(bx - ax, bz - az), n = Math.max(1, Math.round(L / 2.5));

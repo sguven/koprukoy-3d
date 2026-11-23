@@ -18,7 +18,7 @@ the Google satellite view (zoom 19, 0.23 m/px) to place what the panoramas show.
 the junction by the blue house (371, 243) the traced road ran 8–12 m north of them, along the wall of the long white
 house and through its yard. It is re-laid through the panoramas (`ROAD_MOVE` in `src/village_layout.js`); three traced
 stubs that doubled it at the fork are no longer drawn, the lane west of the fork passes south of the shop, and the stub
-north of the road is the garage's forecourt. Houses keep the fronts and positions they had, and the old line is kept
+north of the road into the long house's yard is gone (the garage's forecourt is open gravel). Houses keep the fronts and positions they had, and the old line is kept
 as `orig` for everything that decides how many random draws are made (pole spacing, garden walls), so the village's
 random stream ends on the same value as in v1.10 — no other house, tree or detail changes.
 
@@ -41,13 +41,15 @@ random stream ends on the same value as in v1.10 — no other house, tree or det
 | west side, 423.6, 416.5 → 425.5, 468 | open | white pickets between red posts on a low footing, three spruces behind |
 | east side, 437, 418 → 437.8, 462 | open | shade-cloth fences, then a grey block wall with railings |
 
+Model views after the corrections: `docs/screenshots/v1.11_*.jpg`.
+
 Also added: wire fences on concrete posts round the lawn and the garden at the junction, the blue sheet-metal yard gate
 and the green shade cloth west of the road, and the trees that stand out in the panoramas (the mulberries in front of
 the stone wall, the big tree at the junction, the old trees in the park).
 
 New options: `balconyFix`, `stairFix` (a balcony or outside stair seen in a panorama replaces the draw), `kind: 'shop'`
 and `kind: 'garage'` in `buildHouse`; `key` / `post` / `y` on `SV_SITES.fences`; `SV_SITES.wireFences`; `playAt` and
-`cardak` on a garden; `gone` on a road.
+`cardak` on a garden; `SV_SITES.lawns`; `gone` on a road.
 
 Not corrected in this pass: the mosque garden wall is higher in the model than in the photographs; house footprints
 keep the traced sizes even where a panorama suggests a slightly different one; south of the lake lane only the fences
