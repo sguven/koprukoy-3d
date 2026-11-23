@@ -5,6 +5,54 @@ Two passes so far: **v0.7 "materials"** (surfaces only, nothing moved) and **v0.
 `model/koprukoy.glb` are still the v0.6 files. Terrain (SRTM 30 m), the reservoir at 724 m, the
 Çeşnigir Bridge body, D.260 and the roads outside the village are unchanged.
 
+## v1.11 — down the main road from the çarşı (Nov 2026)
+
+The owner linked a Street View panorama south of the market (`ptwVVBQk5vD2FGQhiYZL_w`, 39.5763985, 33.4361387 → model
+262.1, 165.9) and asked for the model to be corrected from there down. The main road was driven in Street View from
+that point to the lake lane: 35 panoramas of April 2026 about 10 m apart, ending at `K88K2v8nSlv2yjrv9hbIow`
+(39.5738055, 33.4381102 → model 431.3, 452.7), about 360 m of road. Each panorama was looked at in four directions,
+the model was rendered from the same points (`FOV=70`, as in v1.5), and the model's roads and footprints were laid over
+the Google satellite view (zoom 19, 0.23 m/px) to place what the panoramas show.
+
+**The road itself.** The panorama positions are the carriageway. Between the junction south of the shop (271, 195) and
+the junction by the blue house (371, 243) the traced road ran 8–12 m north of them, along the wall of the long white
+house and through its yard. It is re-laid through the panoramas (`ROAD_MOVE` in `src/village_layout.js`); three traced
+stubs that doubled it at the fork are no longer drawn, the lane west of the fork passes south of the shop, and the stub
+north of the road is the garage's forecourt. Houses keep the fronts and positions they had, and the old line is kept
+as `orig` for everything that decides how many random draws are made (pole spacing, garden walls), so the village's
+random stream ends on the same value as in v1.10 — no other house, tree or detail changes.
+
+| Where (model x, z) | Was | Now |
+|---|---|---|
+| 271.6, 151.6 and 288.8, 152.4 | open ground north of the mosque garden | the two-storey white house with the outside stair, and the two-storey mint-green building behind it |
+| 251.6, 178.6 | pink house, hip roof | cream, gable end on the road |
+| 256.9, 188.6 | nothing | the two-storey shop: canopy and yellow sign on the road side, outside stair on the south |
+| 256.8, 219.1 / 269.2, 237.4 | grey / ochre | ochre at the fork / cream behind it (the colours were swapped) |
+| 285.4, 237.4 | plain house behind a wall | white, with the porch on the road corner, no wall |
+| 311.1, 207.4 | cream house on the road's edge | white, above a dry-stone wall that runs along the road to the garage forecourt |
+| 339.4, 206.6 | two-storey blue house | gone: a fenced lawn with young trees; the flat-roofed tan garage with the blue door stands west of it (332.5, 219.5) |
+| 360.2, 206.5 | one storey, grey | two storeys, cream, balcony |
+| 387.3, 214.3 | one storey | the two-storey pale blue house at the junction |
+| 341.7, 253.5 + 328.5, 247.7 | two-storey white house turned 45°, and a hut | one old fieldstone house, single storey, long side on the road, with its south wing |
+| 359.0, 289.4 | one storey | two storeys, yellow |
+| 380.2, 280.5 | white flat-roofed house | dark sheet-clad shed; rubble wall and rusty sheet fence along the road north of it |
+| 399.4, 351.3 | white house behind a wall | bare grey block walls, right on the road; rubble barn with a sheet roof north of it |
+| 418.9, 328.4 (the green with the playground) | lay across the main road, the slide on the carriageway | the kerbed lawn east of the road (432.5, 338); playground, wooden çardak and the tan hut at its south end |
+| west side, 423.6, 416.5 → 425.5, 468 | open | white pickets between red posts on a low footing, three spruces behind |
+| east side, 437, 418 → 437.8, 462 | open | shade-cloth fences, then a grey block wall with railings |
+
+Also added: wire fences on concrete posts round the lawn and the garden at the junction, the blue sheet-metal yard gate
+and the green shade cloth west of the road, and the trees that stand out in the panoramas (the mulberries in front of
+the stone wall, the big tree at the junction, the old trees in the park).
+
+New options: `balconyFix`, `stairFix` (a balcony or outside stair seen in a panorama replaces the draw), `kind: 'shop'`
+and `kind: 'garage'` in `buildHouse`; `key` / `post` / `y` on `SV_SITES.fences`; `SV_SITES.wireFences`; `playAt` and
+`cardak` on a garden; `gone` on a road.
+
+Not corrected in this pass: the mosque garden wall is higher in the model than in the photographs; house footprints
+keep the traced sizes even where a panorama suggests a slightly different one; south of the lake lane only the fences
+and trees on the road were checked, not the houses behind them.
+
 ## v1.6 — two more panoramas on the east side (Nov 2026)
 
 Panoramas `ytP1TTnTz8jcXYDGrAvd-Q` (39.5720705, 33.4407201 → model 655.2, 644.5, looking north) and

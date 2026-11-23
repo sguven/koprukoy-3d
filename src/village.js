@@ -104,6 +104,11 @@ export function buildVillage(ctx, layout, M) {
   const roads = layout.roads, centreOnly = !!layout.centreOnly;
   const yAt = (x, z) => terrH(x, z);
   const roadDist = (x, z) => { let best = Infinity, bw = 0; for (const r of roads) { const h = distToPolyline(x, z, r.line); if (h.d < best) { best = h.d; bw = r.w; } } return { d: best, w: bw }; };
+  // v1.11: a road moved onto its real line (ROAD_MOVE in village_layout.js) keeps the line it had as `orig`. Whatever
+  // decides how many random draws are made (pole spacing, a house's garden wall) still reads the old line, so the
+  // rest of the village keeps its colours, trees and details.
+  const asWas = (r) => (r.orig ? { ...r, ...r.orig } : r);
+  const roadDistWas = (x, z) => { let best = Infinity, bw = 0; for (const r0 of roads) { const r = asWas(r0), h = distToPolyline(x, z, r.line); if (h.d < best) { best = h.d; bw = r.w; } } return { d: best, w: bw }; };
   const onRoad = (x, z, margin = 0) => { const h = roadDist(x, z); return h.d < h.w / 2 + margin; };
   let bid = 5000;
 
@@ -124,6 +129,7 @@ export function buildVillage(ctx, layout, M) {
   };
   for (const r of roads) {
     if (centreOnly) break;
+    if (r.gone) continue;   // v1.11: a traced piece that doubled the main road
     const hw = r.w / 2, L = lift(r);
     const prof = [{ u: -hw - 1.0, dy: L * 0.25 }, { u: -hw, dy: L }, { u: -hw * 0.5, dy: L }, { u: 0, dy: L + 0.04 }, { u: hw * 0.5, dy: L }, { u: hw, dy: L }, { u: hw + 1.0, dy: L * 0.25 }];
     const j0 = endJoin(r, 0), j1 = endJoin(r, r.line.length - 1);
@@ -156,7 +162,7 @@ export function buildVillage(ctx, layout, M) {
         const p = r.line[pi], q = r.line[Math.min(r.line.length - 1, pi + 1)], o = r.line[Math.max(0, pi - 1)];
         const tl = Math.hypot(q[0] - o[0], q[1] - o[1]) || 1, kx = p[0] - (q[1] - o[1]) / tl * (hw + 0.9) * side, kz = p[1] + (q[0] - o[0]) / tl * (hw + 0.9) * side;   // where this kerb runs
         let near = false;
-        for (const o of roads) { if (o === r) continue; if (distToPolyline(p[0], p[1], o.line).d < o.w / 2 + hw + 1.5) { near = true; break; } }
+        for (const o of roads) { if (o === r || o.gone) continue; if (distToPolyline(p[0], p[1], o.line).d < o.w / 2 + hw + 1.5) { near = true; break; } }
         // and keep clear of the mosque courtyard wall and the square
         if (near || (!r.kerbSide && inCarsi(layout.sites, kx, kz))) flush(); else run.push(p);
       }
@@ -178,9 +184,8 @@ export function buildVillage(ctx, layout, M) {
     }
   }
   // utility poles along the main streets, with three sagging cables between them
-  for (const r of roads) {
-    if (!r.poles || centreOnly) continue;
-    const side = roads.indexOf(r) % 2 ? 1 : -1, off = r.w / 2 + (r.kerb ? 2.2 : 1.4);
+  const polesAlong = (r, ri, rnd, real) => {
+    const side = ri % 2 ? 1 : -1, off = r.w / 2 + (r.kerb ? 2.2 : 1.4);
     let s = 12 + rnd() * 10, prev = null, acc = 0, i = 0;
     const total = r.line.reduce((a, p, k) => k ? a + Math.hypot(p[0] - r.line[k - 1][0], p[1] - r.line[k - 1][1]) : 0, 0);
     while (s < total - 5) {
@@ -192,13 +197,20 @@ export function buildVillage(ctx, layout, M) {
       for (const [ds, sd] of [[0, side], [4, side], [-4, side], [8, side], [-8, side], [0, -side], [4, -side], [-4, -side]]) {
         const tt = Math.max(0, Math.min(1, (s + ds - acc) / len));
         const x = p[0] + dx * tt + (-dz / len) * off * sd, z = p[1] + dz * tt + (dx / len) * off * sd;
-        if (!onRoad(x, z, 0.6) && !inCarsi(layout.sites, x, z, 2)) { props.push({ kind: 'pole', x, z, prev }); prev = { x, z }; placed = true; break; }
+        if (!onRoad(x, z, 0.6) && !inCarsi(layout.sites, x, z, 2)) { if (real) props.push({ kind: 'pole', x, z, prev }); prev = { x, z }; placed = true; break; }
       }
       if (!placed) prev = null;
       s += 32 + rnd() * 10;
     }
+  };
+  for (const r of roads) {
+    if (!r.poles || centreOnly) continue;
+    const ri = roads.indexOf(r);
+    // v1.11: a moved road makes its draws along the old line (nothing is placed), then stands its poles along the
+    // new one on a stream of its own
+    if (r.orig) { polesAlong(asWas(r), ri, rnd, false); polesAlong(r, ri, mulberry32(7919 + ri * 131), true); }
+    else polesAlong(r, ri, rnd, true);
   }
-
   // v1.5.1: the main street is traced in many pieces and each piece strings its own run of poles, so the cables used
   // to stop in mid-air at every joint (owner's report). A pole that starts a run is now tied to the nearest pole of
   // another run (or the pole before a skipped one), so the line runs unbroken through the village.
@@ -251,7 +263,9 @@ export function buildVillage(ctx, layout, M) {
       bat.add('lawn', patch(gd.x, gd.z, gd.w, gd.d, 0, yAt, 0.07, 1.5));
       for (let i = 0; i < 3; i++) treeSpots.push({ x: gd.x + (rnd() - 0.5) * (gd.w - 5), z: gd.z + (rnd() - 0.5) * (gd.d - 5), species: i < 2 ? 'pine' : 'mulberry', size: 1.1 + rnd() * 0.4, force: true });
       props.push({ kind: 'bench', x: gd.x + gd.w / 2 - 2, z: gd.z - 3, yaw: Math.PI / 2 }, { kind: 'bench', x: gd.x + gd.w / 2 - 2, z: gd.z + 4, yaw: Math.PI / 2 }, { kind: 'bin', x: gd.x + gd.w / 2 - 1.5, z: gd.z + 7 });
-      if (gd.play) buildPlayground(gd.x - gd.w / 4, gd.z);
+      // v1.11: the playground and the park's wooden çardak where Street View shows them
+      if (gd.play) { if (gd.playAt) buildPlayground(gd.playAt[0], gd.playAt[1], gd.playAt[2] || 0); else buildPlayground(gd.x - gd.w / 4, gd.z); }
+      if (gd.cardak) buildKamelya(gd.cardak);
     }
     for (const row of S.treeRows || []) {
       const [a, b] = row.pts, L = Math.hypot(b[0] - a[0], b[1] - a[1]), tx = (b[0] - a[0]) / L, tz = (b[1] - a[1]) / L;
@@ -260,8 +274,8 @@ export function buildVillage(ctx, layout, M) {
     if (S.pitch) { bat.add('lawn', patch(S.pitch.x, S.pitch.z, S.pitch.w, S.pitch.d, 0, yAt, 0.07, 1.0)); for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) props.push({ kind: 'pole', x: S.pitch.x + sx * S.pitch.w / 2, z: S.pitch.z + sz * S.pitch.d / 2, prev: null }); }
   }
   /** Children's playground (Street View 77, S park): orange/yellow slide with ladder, a two-seat swing frame, a sandpit kerb. */
-  function buildPlayground(x, z) {
-    const id = bid++, yG = yAt(x, z), frame = { x, y: yG, z, yaw: 0 }, bld = { id, base: yG - 1, top: yG + 3, yaw: 0, cx: x, cz: z };
+  function buildPlayground(x, z, yaw = 0) {
+    const id = bid++, yG = yAt(x, z), frame = { x, y: yG, z, yaw }, bld = { id, base: yG - 1, top: yG + 3, yaw, cx: x, cz: z };
     const add = (key, geo) => bat.add(key, geo, frame, bld);
     // slide: platform on 4 legs, ladder, sloping chute
     for (const [sx, sz] of [[-0.6, -0.6], [0.6, -0.6], [-0.6, 0.6], [0.6, 0.6]]) add('metalDark', box(0.08, 2.0, 0.08, sx, 1.0, sz));
@@ -681,11 +695,12 @@ export function buildVillage(ctx, layout, M) {
     const mk = (x, z, yaw = 0) => { const y = yAt(x, z), id = bid++; return { fr: { x, y, z, yaw }, bld: { id, base: y - 3, top: y + 12, yaw, cx: x, cz: z }, y }; };
     const along = (pts, step, fn) => { for (let i = 0; i + 1 < pts.length; i++) { const [ax, az] = pts[i], [bx, bz] = pts[i + 1], L = Math.hypot(bx - ax, bz - az), n = Math.max(1, Math.round(L / step)); for (let k = 0; k < n; k++) fn(ax + (bx - ax) * (k + 0.5) / n, az + (bz - az) * (k + 0.5) / n, Math.atan2(-(bz - az), bx - ax), L / n); } };
     // wrought-iron panel: rails top and bottom, bars with spear tips, posts at both ends
-    const ironPanel = (x, z, yaw, len, h, posts = true) => {
-      const { fr, bld } = mk(x, z, yaw), a = (k, g) => bat.add(k, g, fr, bld);
-      a('railing', box(len, 0.05, 0.04, 0, h - 0.18, 0)); a('railing', box(len, 0.05, 0.04, 0, 0.22, 0));
-      for (let u = -len / 2 + 0.07; u <= len / 2 - 0.05; u += 0.14) a('railing', box(0.022, h - 0.12, 0.022, u, h / 2 + 0.06, 0));
-      if (posts) for (const u of [-len / 2, len / 2]) a('railing', box(0.07, h + 0.5, 0.07, u, h / 2 - 0.2, 0));
+    // v1.11: f.key / f.post = painted pickets and posts instead of dark iron, f.y = the panel stands on a wall or footing
+    const ironPanel = (x, z, yaw, len, h, posts = true, f = {}) => {
+      const { fr, bld } = mk(x, z, yaw), y = f.y || 0, K = f.key || 'railing', PK = f.post || K, a = (k, g) => { g.translate(0, y, 0); bat.add(k, g, fr, bld); };
+      a(K, box(len, 0.05, 0.04, 0, h - 0.18, 0)); a(K, box(len, 0.05, 0.04, 0, 0.22, 0));
+      for (let u = -len / 2 + 0.07; u <= len / 2 - 0.05; u += f.key ? 0.11 : 0.14) a(K, box(f.key ? 0.045 : 0.022, h - 0.12, 0.022, u, h / 2 + 0.06, 0));
+      if (posts) for (const u of [-len / 2, len / 2]) a(PK, box(f.post ? 0.11 : 0.07, h + (y ? 0.12 : 0.5), f.post ? 0.11 : 0.07, u, y ? h / 2 + 0.06 : h / 2 - 0.2, 0));
     };
     for (const G of V.gates) { // a gate: two leaves with an arched top rail, a rendered pillar with the electricity meter on the west side
       const [ax, az] = G.a, [bx, bz] = G.b, L = Math.hypot(bx - ax, bz - az), yaw = Math.atan2(-(bz - az), bx - ax);
@@ -705,7 +720,16 @@ export function buildVillage(ctx, layout, M) {
       const tk = new THREE.CylinderGeometry(0.62, 0.62, 1.8, 16); tk.rotateZ(Math.PI / 2); tk.translate(0, 1.82, 0); a('metal', tk);
       for (const sx of [-0.92, 0.92]) a('metal', new THREE.SphereGeometry(0.62, 12, 8).scale(0.25, 1, 1).translate(sx, 1.82, 0));
     }
-    for (const f of V.fences || []) along(f.pts, 2.4, (x, z, yaw, len) => ironPanel(x, z, yaw, len, f.h));
+    for (const f of V.fences || []) along(f.pts, 2.4, (x, z, yaw, len) => ironPanel(x, z, yaw, len, f.h, true, f));
+    // v1.11: concrete posts every ~2.5 m carrying three wires
+    for (const f of V.wireFences || []) for (let i = 0; i + 1 < f.pts.length; i++) {
+      const [ax, az] = f.pts[i], [bx, bz] = f.pts[i + 1], L = Math.hypot(bx - ax, bz - az), n = Math.max(1, Math.round(L / 2.5));
+      for (let k = 0; k <= n; k++) {
+        if (k === 0 && i > 0) continue;
+        const x = ax + (bx - ax) * k / n, z = az + (bz - az) * k / n, { fr, bld } = mk(x, z, 0); bat.add('beton', boxY(0.11, 0.11, -0.4, f.h), fr, bld);
+        if (k < n) { const x1 = ax + (bx - ax) * (k + 1) / n, z1 = az + (bz - az) * (k + 1) / n; for (const h of [0.4, 0.8, f.h - 0.15]) wires.push(x, yAt(x, z) + h, z, x1, yAt(x1, z1) + h, z1); }
+      }
+    }
     // clipped hedge: overlapping leafy blocks of slightly different height
     for (const h of V.hedges || []) along(h.pts, 0.8, (x, z, yaw, len) => {
       const { fr, bld } = mk(x, z, yaw), k = Math.sin(x * 3.1 + z * 1.7), g = new THREE.IcosahedronGeometry(1, 1); g.scale(len * 0.85, h.h * 0.55 + 0.1 * k, h.t * 0.5); g.translate(0, h.h * 0.5 + 0.06 * k, 0); bat.add('vine', g, fr, bld);
@@ -829,8 +853,11 @@ export function buildVillage(ctx, layout, M) {
       }
     }
     // façades with window / door holes
-    const balcony = n === 2 && !isBarn && rnd() < 0.5, stair = n === 2 && !isBarn && rnd() < 0.3;
-    const stairSide = stair ? (front === '+z' || front === '-z' ? (rnd() < 0.5 ? '+x' : '-x') : (rnd() < 0.5 ? '+z' : '-z')) : null;
+    const balcony0 = n === 2 && !isBarn && rnd() < 0.5, stair = n === 2 && !isBarn && rnd() < 0.3;
+    const stairSide0 = stair ? (front === '+z' || front === '-z' ? (rnd() < 0.5 ? '+x' : '-x') : (rnd() < 0.5 ? '+z' : '-z')) : null;
+    // v1.11: a balcony or an outside stair seen in Street View (balconyFix: true / false, stairFix: the side or null)
+    // replaces the draw; the draws themselves are still made
+    const balcony = b.balconyFix !== undefined ? b.balconyFix : balcony0, stairSide = b.stairFix !== undefined ? b.stairFix : stairSide0;
     const acPlaced = { n: 0 };
     for (const side of ['+z', '-z', '+x', '-x']) {
       const L = side === '+z' || side === '-z' ? w : d, fm = faceMatrix(side, w, d), isFront = side === front;
@@ -917,6 +944,26 @@ export function buildVillage(ctx, layout, M) {
         const g = new THREE.PlaneGeometry(p.w, p.h); g.translate(p.x, p.y, -0.15); g.applyMatrix4(fm);
         bat.add(p.door && !p.glassDoor ? 'door' : 'glass', g, frame, bld, p.door && !p.glassDoor ? null : [p.w, p.h]);
       }
+    }
+    // v1.11 (Street View, main road): the shop's front — a concrete canopy over the shop floor with a yellow sign
+    // board, crates on the pavement — and the garage's blue double door with the steel frame of a storey never built
+    if (b.kind === 'shop') {
+      const fm = faceMatrix(front, w, d), L = front === '+z' || front === '-z' ? w : d, cy = y0 + FLOOR - 0.25;
+      add('beton', box(L + 0.4, 0.14, 2.0, 0, cy, 1.0), fm); add('trim', box(L + 0.4, 0.16, 0.05, 0, cy, 2.02), fm);
+      for (const sx of [-L / 2 + 0.2, L / 2 - 0.2]) add('metalDark', boxY(0.08, 0.08, y0 - 0.3, cy, sx, 1.9), fm);
+      add('yellowSign', box(L * 0.62, 0.55, 0.06, -L * 0.1, cy + 0.42, 2.0), fm);
+      add('bluePaint', box(2.2, 0.9, 1.0, -L / 2 + 1.5, y0 + 0.45, 1.3), fm);     // the ice-cream freezer by the door
+      add('redPaint', box(0.8, 1.7, 0.7, L / 2 - 1.2, y0 + 0.85, 0.6), fm);       // the red drinks fridge
+      add('beton', boxY(L + 0.6, 2.4, b.yLow - b.yTop - 0.3, y0 + 0.02, 0, 1.2), fm);   // the shop's own step of pavement
+    }
+    if (b.kind === 'garage') {
+      const fm = faceMatrix(front, w, d), L = front === '+z' || front === '-z' ? w : d;
+      for (const sx of [-0.82, 0.82]) add('bluePaint', box(1.6, 2.35, 0.05, -L * 0.12 + sx, y0 + 1.2, 0.04), fm);
+      add('metalDark', box(3.4, 0.08, 0.07, -L * 0.12, y0 + 2.42, 0.05), fm);
+      for (const sx of [-w / 2 + 0.3, 0, w / 2 - 0.3]) for (const sz of [-d / 2 + 0.3, d / 2 - 0.3]) add('rust', boxY(0.09, 0.09, y1, y1 + 2.5, sx, sz));
+      for (const sz of [-d / 2 + 0.3, d / 2 - 0.3]) add('rust', box(w - 0.5, 0.09, 0.09, 0, y1 + 2.5, sz));
+      for (const sx of [-w / 2 + 0.3, 0, w / 2 - 0.3]) add('rust', box(0.09, 0.09, d - 0.5, sx, y1 + 2.5, 0));
+      for (const sz of [-d / 2 + 0.3, d / 2 - 0.3]) add('rust', box(w - 0.5, 0.05, 0.05, 0, y1 + 1.2, sz));
     }
     // roof
     const e = isBarn ? 0.35 : 0.55;
@@ -1023,7 +1070,7 @@ export function buildVillage(ctx, layout, M) {
     if (!isBarn && b.wall && b.wall !== 'none' && b.front) {
       const add = b.wallGone ? () => {} : add0;   // v1.2: a wall the owner removed still takes its random draws
       const L = front === '+z' || front === '-z' ? w : d, depth = front === '+z' || front === '-z' ? d : w;
-      const hwRoad = roadDist(b.x, b.z).w / 2;
+      const hwRoad = roadDistWas(b.x, b.z).w / 2;
       const off = Math.min(b.front - hwRoad - 1.6, depth / 2 + 9);
       if (off > depth / 2 + 1.8) {
         const fm = faceMatrix(front, w, d), zf = off - depth / 2;   // distance from the façade plane

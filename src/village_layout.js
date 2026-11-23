@@ -39,6 +39,25 @@ const ROAD_FIX = {
   local_283: { pts: [[253, 134.5], [246, 137.2], [236, 137.6], [226, 137.0], [217, 138], [214, 141]] },
 };
 export const ROADS = DATA_ROADS.filter(r => ROAD_FIX[r.id] !== null).map(r => ({ ...r, ...(ROAD_FIX[r.id] || {}), poles: /^main_/.test(r.id) }));
+// v1.11 (Street View drive from the çarşı down the main road, panoramas of Apr 2026; docs/REALISM.md): between the
+// junction south of the market and the junction by the blue house the traced road ran 8–12 m north of the real one,
+// through the yard of the long white house. The panorama positions are the carriageway itself, so the main road is
+// re-laid through them. Applied at the very end of buildVillageLayout: houses keep the positions, fronts and random
+// draws they had, and village.js reads the old line (`orig`) wherever a road decides how many draws are made.
+// `gone` = a traced piece that doubled the main road (kept in the list so that no other road changes its index).
+const ROAD_MOVE = {
+  local_320: { pts: [[271.2, 194.9], [273.9, 205.5], [282.5, 213.8]], kind: 'asphalt', w: 6.5, kerb: true },
+  secondary_324: { pts: [[282.5, 213.8], [294.6, 223.1]], w: 6.5 },
+  secondary_332: { pts: [[294.6, 223.1], [304.2, 226.8], [314.9, 230.6]], w: 6.5 },
+  main_339: { pts: [[314.9, 230.6], [336.3, 236.1], [352.2, 238.6], [362.9, 240.4], [371.5, 243.0]] },
+  main_354: { pts: [[371.5, 243.0], [377.3, 249.6], [383.5, 262.5], [388.7, 274.0], [391.9, 283.9]] },
+  secondary_340: { pts: [[378.5, 223.5], [380.2, 225.8], [377.5, 237.9], [375.5, 240.8], [371.5, 243.0]] },
+  local_319: { pts: [[277.4, 206.4], [277.9, 206.9]], gone: true },
+  secondary_325: { pts: [[277.4, 206.4], [277.9, 206.9]], gone: true },
+  local_327: { pts: [[277.4, 206.4], [277.9, 206.9]], gone: true },
+  local_326: { pts: [[326.2, 222.6], [325.4, 228.0], [324.6, 233.0]] },                 // the gravel forecourt of the garage
+  local_312: { pts: [[222.8, 179.1], [240.0, 188.5], [252.0, 196.0], [263.0, 197.4], [271.2, 194.9]] },   // the lane west passes south of the shop
+};
 
 // ---------------------------------------------------------------- buildings traced from the photo
 // [cx_px, cy_px, w_px, d_px, angle_rad (long axis, image frame), storeys, roof, kind]
@@ -169,7 +188,10 @@ export const SITES = {
   green1: { x: img(403, 541)[0], z: img(403, 541)[1] },  // small green with a bench and a bin (docs/reference/04)
   ...DATA_SITES,                                          // cemeteries, football pitch, school (satellite / Street View, v0.9)
   // v0.9.8: the green south of the çarşı plot is the ÇEŞNİGİR-DER garden terrace (built from DER_SITE)
-  gardens: (DATA_SITES.gardens || []).map(g => (Math.hypot(g.x - 239.9, g.z - 161.4) < 1 ? { ...g, der: true } : g)),
+  // v1.11: the green with the playground lay across the main road. It is the kerbed lawn east of the road (Street
+  // View from the road, satellite): the playground and a wooden çardak stand at its south end.
+  gardens: (DATA_SITES.gardens || []).map(g => (Math.hypot(g.x - 239.9, g.z - 161.4) < 1 ? { ...g, der: true }
+    : g.play ? { ...g, x: 432.5, z: 338.0, w: 21, d: 44, playAt: [433.5, 357.0, -0.25], cardak: { x: 425.6, z: 351.0, w: 3.6, d: 3.6, yaw: -0.25 } } : g)),
 };
 
 // ---------------------------------------------------------------- geometry helpers
@@ -331,6 +353,12 @@ export function buildVillageLayout(terrH, existingRoads = []) {
   for (const w of SV_SITES.walls) stoneWalls.push({ gaps: [], ...w });
   // v1.5: buildings added from Street View are kept out of `buildings` (its length and order feed the random stream)
   const extra = SV_SITES.extra.map(e => { const b = { ...e }; setGround(b); return b; });
+  // v1.11: roads moved onto the line the Street View car drove (see ROAD_MOVE)
+  for (const r of roads) {
+    const mv = ROAD_MOVE[r.id]; if (!mv) continue;
+    r.orig = { line: r.line, pts: r.pts, w: r.w, kind: r.kind, kerb: r.kerb };
+    Object.assign(r, mv); r.line = mv.gone ? mv.pts.map(q => q.slice()) : smoothPolyline(mv.pts, 3);
+  }
   const cemeteries = (SITES.cemeteries || []).map(c => ({ ...c, open: SV_OPEN, ...(c.label === 'grave strip' ? { wallEdges: [] } : {}) }));
   return { roads, buildings, extra, sites: { ...SITES, cemeteries, stoneWalls, roseYard: ROSE_YARD, ownerPlot: OWNER_PLOT, sv: SV_SITES }, rnd };
 }
@@ -383,6 +411,22 @@ const OWNER_FIX = [
   { xz: [654.9, 569.5], set: { storeys: 2, ownWall: 'Duvar_Beyaz', wall: 'none', tree: false },
     note: 'clearly two storeys, white (the single-storey rule had lowered it); a stone wall with a gate on the road side' },
   { xz: [648.0, 536.0], set: { x: 648.0, z: 536.0, w: 3.6, d: 3.4, ownWall: 'redWall', wall: 'none', tree: false, barn: true, plain: true }, note: 'not a house: a small red pump hut on the open ground north of the crossroads' },
+  // v1.11 (Street View drive down the main road from the çarşı, 35 panoramas of Apr 2026, model 262,166 → 431,453):
+  { xz: [251.6, 178.6], set: { ownWall: 'Duvar_Krem', roof: 'g', wall: 'none', tree: false }, note: 'cream single-storey house with its gable end on the road (blue fascia, a sign on the gable wall)' },
+  { xz: [256.8, 219.1], set: { ownWall: 'Duvar_Okr', wall: 'none' }, note: 'ochre render, hip tile roof, on open ground at the fork (no garden wall)' },
+  { xz: [269.2, 237.4], set: { ownWall: 'Duvar_Krem', wall: 'none' }, note: 'cream, open ground in front' },
+  { xz: [285.4, 237.4], set: { ownWall: 'Duvar_Beyaz', wall: 'none', porch: { dir: [0.71, -0.71], span: [0.1, 0.9], depth: 2.4 } }, note: 'white single-storey house with a columned porch, on the kerbed corner south of the road' },
+  { xz: [311.1, 207.4], set: { ownWall: 'Duvar_Beyaz', wall: 'none', tree: false }, note: 'the long white house above the road: its yard is closed by the dry-stone wall along the road (SV_SITES)' },
+  { xz: [339.4, 206.6], set: { gone: true }, note: 'no two-storey blue house here: a lawn with young trees; the blue house is the one east of the junction (387, 214)' },
+  { xz: [360.2, 206.5], set: { storeys: 2, ownWall: 'Duvar_Krem', balconyFix: true }, note: 'two storeys, cream, a balcony on the upper floor (seen across the lawn from the road)' },
+  { xz: [387.3, 214.3], set: { storeys: 2, ownWall: 'Duvar_Mavi', balconyFix: true, wall: 'none' }, note: 'the two-storey pale blue house with white trim at the junction' },
+  { xz: [341.7, 253.5], set: { x: 337.6, z: 248.6, yaw: -0.145, w: 23.0, d: 8.0, storeys: 1, ownWall: 'rubble', wall: 'none', tree: false, plain: true, barn: true },
+    note: 'old single-storey fieldstone house, long side on the road, low tile roof, one small window (was two storeys of white render, turned 45°); its south wing is in SV_SITES' },
+  { xz: [328.5, 247.7], set: { gone: true }, note: 'not a separate house: the west end of the stone house' },
+  { xz: [359.0, 289.4], set: { storeys: 2, ownWall: 'Duvar_Sari' }, note: 'two storeys, yellow-green render under a red roof, seen over the shed from the road' },
+  { xz: [380.2, 280.5], set: { roof: 'm', barn: true, plain: true, ownWall: 'metalDark', wall: 'none', tree: false }, note: 'a dark sheet-clad shed on the road, not a white flat-roofed house' },
+  { xz: [399.4, 351.3], set: { ownWall: 'Duvar_Beton', wall: 'none', tree: false, plain: true }, note: 'bare grey block walls under a tile roof, right on the road' },
+  { xz: [436.0, 362.8], set: { barn: true, plain: true, ownWall: 'Duvar_Okr', wall: 'none', tree: false }, note: 'the small tan hut in the park' },
 ];
 // v1.5: what the three panoramas show besides the houses. Model metres (x east, z south). Nothing here takes a draw
 // from the village's random stream, so every other house, tree and detail stays where it was.
@@ -402,16 +446,47 @@ export const SV_SITES = {
     { pts: [[654.4, 561.6], [664.3, 560.2], [666.0, 566.5]], h: 1.0, note: 'the same wall east of the gate and round the corner' },
     { pts: [[666.0, 566.5], [669.3, 577.2], [676.0, 591.0], [685.4, 610.9], [684.5, 625.0]], h: 1.7, t: 0.05, key: 'greenMesh', cap: 'greenMesh', note: 'green mesh screen fence along the road, east side of the garden plot' },
     { pts: [[632.7, 645.7], [641.4, 641.8]], h: 1.5, t: 0.2, key: 'Duvar_Beton', cap: 'Duvar_Beton', note: 'bare block wall on the lane, west of the garden gate' },
+    // v1.11: along the main road, from the çarşı down
+    { pts: [[291.6, 207.6], [292.4, 212.6], [296.7, 217.5], [306.3, 221.2], [317.0, 225.0], [322.4, 226.8]], h: 1.3,
+      note: 'dry-stone wall under the long white house, from the mosque path round the corner and along the road to the garage forecourt' },
+    { pts: [[373.5, 254.4], [376.0, 259.8]], h: 1.2, note: 'rubble wall on the west side of the road below the junction' },
+    { pts: [[376.0, 259.8], [378.5, 264.9], [381.2, 270.8]], h: 1.7, t: 0.05, key: 'rustSheet', cap: 'rustSheet', note: 'rusty corrugated-sheet fence in front of the yellow two-storey house' },
+    { pts: [[403.6, 318.0], [404.6, 326.0]], h: 1.9, t: 0.06, key: 'bluePaint', cap: 'bluePaint', note: 'blue sheet-metal yard gate and fence west of the road' },
+    { pts: [[404.6, 326.0], [405.6, 331.5]], h: 1.3, note: 'rubble wall south of the blue gate' },
+    { pts: [[411.6, 361.0], [414.2, 370.0]], h: 1.6, t: 0.05, key: 'greenMesh', cap: 'greenMesh', note: 'green shade cloth on a garden fence, west of the road by the park' },
+    { pts: [[414.2, 370.0], [417.6, 380.5], [421.4, 392.0]], h: 1.0, note: 'rubble wall along the road, west side, down to the lane' },
+    { pts: [[423.6, 416.5], [424.2, 432.5], [424.6, 452.7], [425.5, 468.0]], h: 0.35, t: 0.3, key: 'Duvar_Beton', cap: 'Duvar_Beton', note: 'footing of the red and white iron fence along the west side of the road' },
+    { pts: [[437.0, 418.0], [437.2, 428.0]], h: 1.8, t: 0.05, key: 'metalDark', cap: 'metalDark', note: 'black shade cloth on the fence east of the road' },
+    { pts: [[437.2, 428.0], [437.4, 438.0]], h: 1.8, t: 0.05, key: 'greenMesh', cap: 'greenMesh', note: 'green shade cloth, the same fence further south' },
+    { pts: [[437.4, 438.0], [437.8, 462.0]], h: 1.0, t: 0.22, key: 'Duvar_Beton', cap: 'Duvar_Beton', note: 'grey block garden wall with iron railings on top, east of the road' },
   ],
   extra: [
     { x: 644.2, z: 636.6, yaw: 0.42, w: 6.0, d: 3.8, storeys: 1, roof: 'g', barn: true, plain: true, wallKey: 'Duvar_Beton', note: 'block outbuilding with a tile roof beside the garden gate' },
     { x: 670.2, z: 602.8, yaw: -1.158, w: 8.0, d: 6.5, storeys: 1, roof: 'm', barn: true, plain: true, wallKey: 'Duvar_Beton', note: 'sheet-roofed shed on the east side of the garden plot' },
     { x: 86.0, z: 258.8, yaw: 0.735, w: 8.5, d: 4.4, storeys: 1, roof: 'g', barn: true, plain: true, wallKey: 'rubble', note: 'old rubble-stone barn with a low tile roof at the junction' },
+    // v1.11: buildings on the main road the roof tracer missed (under trees, grey or flat roofs)
+    { x: 271.6, z: 151.6, yaw: -0.08, w: 13.5, d: 10.0, storeys: 2, roof: 'h', wallKey: 'Duvar_Beyaz', face: Math.PI, stairFix: '+z', balconyFix: false,
+      note: 'two-storey white house east of the road, north of the mosque garden: outside stair up to a balcony' },
+    { x: 288.8, z: 152.4, yaw: -0.08, w: 14.5, d: 10.5, storeys: 2, roof: 'g', wallKey: 'Duvar_Mint', face: Math.PI, stairFix: null, note: 'two-storey mint-green building behind it' },
+    { x: 256.9, z: 188.6, yaw: -0.117, w: 9.0, d: 8.0, storeys: 2, roof: 'h', wallKey: 'Duvar_Somon', kind: 'shop', face: 0, stairFix: '+z', balconyFix: false,
+      note: 'the two-storey shop west of the road: shop front under a canopy on the road side, tan render above, outside stair on the south side' },
+    { x: 332.5, z: 219.5, yaw: -0.253, w: 10.0, d: 7.0, storeys: 1, roof: 'f', plain: true, wallKey: 'Duvar_Okr', kind: 'garage', face: Math.PI / 2,
+      note: 'flat-roofed tan garage with a blue double door behind a gravel forecourt; steel frame of an unfinished storey on the roof' },
+    { x: 343.6, z: 258.0, yaw: -0.145, w: 11.0, d: 10.5, storeys: 1, roof: 'h', plain: true, wallKey: 'rubble', note: 'south wing of the old stone house' },
+    { x: 398.5, z: 338.3, yaw: -1.451, w: 9.0, d: 6.0, storeys: 1, roof: 'm', barn: true, plain: true, wallKey: 'rubble', note: 'rubble barn with a rusty sheet roof on the road, north of the grey block house' },
   ],
   gates: [{ a: [108.7, 280.9], b: [112.9, 280.3], h: 1.75 },                     // two-leaf wrought-iron gate, meter box on its west pillar
     { a: [650.0, 562.2], b: [654.2, 561.6], h: 1.7 }, { a: [645.6, 639.9], b: [648.6, 638.5], h: 1.5 }],   // v1.6: the white house's gate; the garden gate
   fences: [{ pts: [[113.2, 280.2], [115.8, 276.6], [122.5, 270.5]], h: 1.5 },   // iron fence on along the east lane
-    { pts: [[649.0, 638.3], [666.0, 630.9], [684.5, 625.0]], h: 1.3 }],         // v1.6: wire fence of the garden along the lane
+    { pts: [[649.0, 638.3], [666.0, 630.9], [684.5, 625.0]], h: 1.3 },          // v1.6: wire fence of the garden along the lane
+    // v1.11: white pickets between red posts on a low footing, west side of the road south of the lake lane
+    { pts: [[423.6, 416.5], [424.2, 432.5], [424.6, 452.7], [425.5, 468.0]], h: 1.05, y: 0.35, key: 'trim', post: 'redPaint' },
+    { pts: [[437.4, 438.0], [437.8, 462.0]], h: 0.9, y: 1.0 }],                 // v1.11: iron railings on the block wall east of the road
+  // v1.11: concrete posts with three wires round the lawn north of the road and the garden at the junction
+  wireFences: [
+    { pts: [[337.5, 229.6], [352.0, 232.6], [364.0, 234.6]], h: 1.4 },
+    { pts: [[384.0, 246.5], [389.5, 258.0], [394.5, 269.0]], h: 1.4 },
+    { pts: [[352.0, 244.8], [366.0, 247.0], [373.0, 252.5]], h: 1.4 }],
   tank: { x: 651.0, z: 545.2, yaw: 0.2 },                                        // v1.6: steel water tank on a stone pedestal at the crossroads
   hedges: [{ pts: [[107.3, 283.4], [102.8, 285.6], [101.3, 289.5], [101.4, 294.5]], h: 1.7, t: 1.3 }],
   bust: { x: 83.6, z: 280.4, face: [0.913, -0.408] }, flagPole: { x: 82.4, z: 282.6, face: [0.913, -0.408] },
@@ -425,6 +500,17 @@ export const SV_SITES = {
     ['mulberry', 667.5, 538.0, 1.0], ['mulberry', 674.0, 536.5, 0.95],             // v1.6: the old trees north-east of the crossroads
     ['mulberry', 447.2, 568.5, 1.3],                                              // the big tree on the south-west corner
     ['mulberry', 447.0, 556.0, 1.0], ['poplar', 442.6, 541.0, 1.0], ['mulberry', 438.2, 527.0, 0.9], ['mulberry', 433.2, 512.0, 1.0],   // the row along the road's west side
+    // v1.11: the trees that stand out along the main road
+    ['mulberry', 276.6, 187.0, 1.2], ['mulberry', 280.8, 201.0, 1.3],                      // on the lawn strip under the mosque garden wall
+    ['mulberry', 266.0, 207.5, 1.0],                                                       // the tree on the little island at the fork
+    ['mulberry', 291.0, 218.6, 1.3], ['mulberry', 301.5, 222.4, 1.2],                      // the two old mulberries in front of the stone wall
+    ['mulberry', 281.0, 231.0, 1.1], ['fruit', 275.5, 229.0, 0.8],                         // by the porch house
+    ['fruit', 341.0, 226.5, 0.8], ['fruit', 347.5, 224.0, 0.8], ['mulberry', 356.5, 228.0, 1.0], ['fruit', 344.0, 218.0, 0.8],   // the lawn north of the road
+    ['mulberry', 367.0, 233.5, 1.3],                                                       // the big tree at the junction
+    ['fruit', 388.5, 250.0, 0.8], ['fruit', 393.0, 256.0, 0.8], ['fruit', 396.0, 263.0, 0.8],   // the fenced garden at the junction
+    ['mulberry', 409.5, 300.5, 1.4],                                                       // the big bare tree at the north tip of the park
+    ['mulberry', 436.0, 366.5, 1.3], ['mulberry', 441.0, 371.0, 1.3], ['mulberry', 430.5, 387.0, 1.3],   // the old trees at the south end of the park
+    ['pine', 421.0, 441.0, 1.2], ['pine', 420.4, 447.0, 1.3], ['pine', 420.8, 453.5, 1.2],   // the spruces behind the red and white fence
   ],
   grove: { x0: 484, x1: 522, z0: 582, z1: 624, step: 6.2, species: 'pine' },     // the pine wood between the junction and the school
 };

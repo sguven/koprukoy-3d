@@ -42,6 +42,10 @@ export function villageMaterials(lib, { quality = 2 } = {}) {
   M.metalDark = std({ color: 0x3b3f44, roughness: 0.6, metalness: 0.6 });                            // brackets, gutters, bins frame
   M.greenPaint = std({ color: 0x2f6b3a, roughness: 0.55, metalness: 0.2 });                          // gazebo roof, gates, benches
   M.orange = std({ color: 0xd85a1e, roughness: 0.6, metalness: 0.1 });                               // municipal litter bins
+  // v1.11: painted sheet metal and signs seen on the main road
+  M.bluePaint = std({ color: 0x2f62b8, roughness: 0.6, metalness: 0.25, side: THREE.DoubleSide });   // garage door, sheet-metal yard fence, the shop's freezer
+  M.redPaint = std({ color: 0xc23a2e, roughness: 0.6, metalness: 0.2 });                              // fence posts, the shop's drinks fridge
+  M.yellowSign = std({ color: 0xe8b81e, roughness: 0.7, metalness: 0.0 });                            // the shop's sign board
   M.bronze = std({ color: 0x3a3c2e, roughness: 0.5, metalness: 0.65, envMapIntensity: 0.7 });           // dark olive patina (docs/reference/02)
   // ---- çarşı (v0.9.2): sign board, Turkish flag, plaque, kiosk / çardak roofs, plastic café furniture, kerb blocks ----
   M.greenRoof = std({ color: 0x3f6b4a, roughness: 0.6, metalness: 0.25, side: THREE.DoubleSide });
