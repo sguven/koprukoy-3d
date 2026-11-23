@@ -4,7 +4,7 @@
 // Layout comes from village_layout.js; materials from village_materials.js; props from props.js.
 import * as THREE from 'three';
 import { GeoBatch, box, boxY, cyl, facadeWithHoles, roofGeometry, gableEnds, ribbon, patch } from './geo.js';
-import { inRegion, inCentreZone, rectCorners, distToPolyline, inCarsi, mulberry32, wallPieces } from './village_layout.js';
+import { inRegion, inCentreZone, rectCorners, distToPolyline, inCarsi, mulberry32, wallPieces, wallRuns, wallBook, registerPhotoWalls } from './village_layout.js';
 import { buildProps } from './props.js';
 
 const WALLS = ['Duvar_Beyaz', 'Duvar_Beyaz', 'Duvar_Beyaz', 'Duvar_Krem', 'Duvar_Krem', 'Duvar_Okr', 'Duvar_Pembe', 'Duvar_Sari', 'Duvar_Gri'];
@@ -111,7 +111,7 @@ export function buildVillage(ctx, layout, M) {
   const roadDistWas = (x, z) => { let best = Infinity, bw = 0; for (const r0 of roads) { const r = asWas(r0), h = distToPolyline(x, z, r.line); if (h.d < best) { best = h.d; bw = r.w; } } return { d: best, w: bw }; };
   // v1.14 (owner: nothing on the roads, walls drawn sensibly). roadHit = inside any road's surface grown by `m`;
   // offRoad = the point moved sideways off the roads; wallOK = may a piece of wall or fence stand here: not on a
-  // road, and not alongside (within 2.8 m, nearly parallel) a wall that belongs to something else.
+  // road, and not alongside a wall that belongs to something else (v1.16: see wallBook in village_layout.js).
   const liveRoads = roads.filter(r => !r.gone && r.line.length > 1);
   for (const r of liveRoads) if (!r.bb) { let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity; for (const p of r.line) { x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); z0 = Math.min(z0, p[1]); z1 = Math.max(z1, p[1]); } r.bb = [x0, x1, z0, z1]; }
   const roadAt = (x, z, m = 0.3) => { let worst = 0, hit = null; for (const r of liveRoads) { const h = r.w / 2 + m; if (x < r.bb[0] - h || x > r.bb[1] + h || z < r.bb[2] - h || z > r.bb[3] + h) continue; const q = distToPolyline(x, z, r.line); if (h - q.d > worst) { worst = h - q.d; hit = { r, i: q.i, over: worst }; } } return hit; };
@@ -124,17 +124,14 @@ export function buildVillage(ctx, layout, M) {
     }
     return roadHit(x, z, m) ? null : [x, z];
   };
-  const wallSegs = [];
+  // v1.16 (owner: a double wall along the school lane; "walls like this" everywhere): the wall book is shared with
+  // the layout (wallBook in village_layout.js), which has already settled the walls placed from photographs.
+  // wallOK = may a piece of a house's or a cemetery's wall stand here: not on a road, not alongside another wall.
+  const book = wallBook(roadHit), builtWalls = book.built;
   const wallOK = (ax, az, bx, bz, own, reg = true) => {
     const mx = (ax + bx) / 2, mz = (az + bz) / 2; if (roadHit(mx, mz, 0.25) || roadHit(ax, az, 0.1) || roadHit(bx, bz, 0.1)) return false;
-    const L = Math.hypot(bx - ax, bz - az) || 1, ux = (bx - ax) / L, uz = (bz - az) / L;
-    for (const w of wallSegs) {
-      if (w[4] === own || Math.abs(w[0] - mx) > 40 || Math.abs(w[1] - mz) > 40) continue;
-      if (Math.abs(ux * w[5] + uz * w[6]) < 0.75) continue;
-      const t = Math.max(0, Math.min(1, ((mx - w[0]) * (w[2] - w[0]) + (mz - w[1]) * (w[3] - w[1])) / w[7])), d = Math.hypot(mx - w[0] - t * (w[2] - w[0]), mz - w[1] - t * (w[3] - w[1]));
-      if (d < 2.8) return false;
-    }
-    if (reg) wallSegs.push([ax, az, bx, bz, own, ux, uz, L * L]);
+    if (book.alongside(ax, az, bx, bz, own) >= 0) return false;
+    if (reg) book.reg(ax, az, bx, bz, own);
     return true;
   };
   const clipPatch = (g) => {   // a ground patch without the triangles that lie on a road
@@ -271,7 +268,8 @@ export function buildVillage(ctx, layout, M) {
   if (S.marketTree) props.push({ kind: 'tree', species: 'mulberry', x: S.marketTree.x, z: S.marketTree.z, size: 1.6 });
 
   // v1.14: the walls placed from photographs come first: a house's own garden wall gives way to them
-  (S.stoneWalls || []).forEach((sw, wi) => { for (const [ax, az, bx, bz] of wallPieces(sw)) wallOK(ax, az, bx, bz, 'sw' + wi); });
+  // v1.16: what was placed from photographs comes first, as the layout settled it: a house's own wall gives way
+  if (!centreOnly) registerPhotoWalls(book, S);
   // ================================================================= buildings
   for (const b of layout.buildings) {
     if (b.kind === 'mosque') { buildMosque(b); continue; }
@@ -540,7 +538,7 @@ export function buildVillage(ctx, layout, M) {
   /** Dry-stone wall along a lane (owner), stepping with the ground in pieces of at most 2.5 m. */
   function buildStoneWall(sw, own) {
     const [x0, z0] = sw.pts[0], yG = yAt(x0, z0), id = bid++, frame = { x: x0, y: yG, z: z0, yaw: 0 }, bld = { id, base: yG - 3, top: yG + 3, yaw: 0, cx: x0, cz: z0 };
-    for (const [ax, az, bx, bz] of wallPieces(sw)) {
+    for (const [ax, az, bx, bz] of wallRuns(sw)) {   // v1.16: without the pieces that would run beside another wall
       const L = Math.hypot(bx - ax, bz - az), k = Math.max(1, Math.ceil(L / 2.5));
       for (let i = 0; i < k; i++) {
         const px = ax + (bx - ax) * (i + 0.5) / k, pz = az + (bz - az) * (i + 0.5) / k, dy = yAt(px, pz) - yG;
@@ -1172,13 +1170,16 @@ export function buildVillage(ctx, layout, M) {
         const cy = Math.cos(b.yaw), sy = Math.sin(b.yaw), v3 = new THREE.Vector3();
         const W = (xl, zl) => { v3.set(xl, 0, zl).applyMatrix4(fm); return [b.x + v3.x * cy + v3.z * sy, b.z - v3.x * sy + v3.z * cy]; };
         const fc = W(0, 0), rn = roadAt(fc[0], fc[1], 60), dNow = rn ? rn.r.w / 2 + 60 - rn.over : 99, zf = Math.min(dNow - (rn ? rn.r.w / 2 : 0) - 1.6, 9);   // from the façade plane
-        const own = 'h' + id, ok = (x0, z0, x1, z1) => { const p = W(x0, z0), q = W(x1, z1); return wallOK(p[0], p[1], q[0], q[1], own); };
+        const own = 'h' + id, ok = (x0, z0, x1, z1, reg = true) => { const p = W(x0, z0), q = W(x1, z1); return wallOK(p[0], p[1], q[0], q[1], own, reg); };
         if (zf > 1.8) {
           const run = (a0, a1, alongX, fixed) => {   // a straight run in pieces; alongX: along the street (z = fixed), else a return (x = fixed)
             const n = Math.max(1, Math.round(Math.abs(a1 - a0) / 2.1)); let built = 0;
+            // v1.16: first see which pieces may stand, and leave out a short stub left standing beside a gap
+            const can = []; for (let k = 0; k < n; k++) { const u0 = a0 + (a1 - a0) * k / n, u1 = a0 + (a1 - a0) * (k + 1) / n; can.push(alongX ? ok(u0, fixed, u1, fixed, false) : ok(fixed, u0, fixed, u1, false)); }
+            if (can.includes(false)) for (let k = 0, k0 = 0; k <= n; k++) if (k === n || !can[k]) { if (k - k0 < 3) for (let j = k0; j < k; j++) can[j] = 0; k0 = k + 1; }   // a stub under ~6 m
             for (let k = 0; k < n; k++) {
               const u0 = a0 + (a1 - a0) * k / n, u1 = a0 + (a1 - a0) * (k + 1) / n;
-              if (!(alongX ? ok(u0, fixed, u1, fixed) : ok(fixed, u0, fixed, u1))) continue; built++;
+              if (!can[k] || !(alongX ? ok(u0, fixed, u1, fixed) : ok(fixed, u0, fixed, u1))) continue; built++;
               if (solid) add(wk, alongX ? box(u1 - u0 + 0.02, wallH - wb, wt, (u0 + u1) / 2, (wallH + wb) / 2, fixed) : box(wt, wallH - wb, u1 - u0 + 0.02, fixed, (wallH + wb) / 2, (u0 + u1) / 2), fm);
               else { add('beton', alongX ? box(0.1, 1.45 - wb, 0.1, u0, (1.45 + wb) / 2, fixed) : box(0.1, 1.45 - wb, 0.1, fixed, (1.45 + wb) / 2, u0), fm); if (alongX) fenceWires(u0, u1, fixed, fm); else fenceWiresZ(fixed, u0, u1, fm); }
             }
@@ -1641,5 +1642,6 @@ export function buildVillage(ctx, layout, M) {
   for (const m of propsOut.meshes) group.add(m);
   group.traverse(o => { if (o.isMesh && o.material && o.material.userData && o.material.userData.isRoad) { o.castShadow = false; o.renderOrder = 1; } });
   group.traverse(o => { if (o.isMesh && o.material && o.material.userData && o.material.userData.noShadow) o.castShadow = false; });   // v1.3: the chain-link mesh
+  group.userData.walls = builtWalls;
   return { group, trees: propsOut.meshes };
 }

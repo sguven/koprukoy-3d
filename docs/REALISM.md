@@ -5,6 +5,25 @@ Two passes so far: **v0.7 "materials"** (surfaces only, nothing moved) and **v0.
 `model/koprukoy.glb` are still the v0.6 files. Terrain (SRTM 30 m), the reservoir at 724 m, the
 Çeşnigir Bridge body, D.260 and the roads outside the village are unchanged.
 
+## v1.16 — no double walls (Nov 2026)
+
+The owner's Orbit screenshot of 23 Nov 2026 shows two dry-stone walls running side by side along the lane in front of
+Köprüköy İlkokulu, about 1.5 m apart: the school's yard wall measured in the panorama (`SV_SITES.walls`) and the wall
+laid along the lane (`STONE_WALLS`). The v1.14 rule only made a house's own garden wall give way; walls placed from
+photographs were never checked against each other.
+
+- One wall book (`wallBook` in `src/village_layout.js`) for everything linear that stands: fences, gates and hedges
+  first, then the walls measured in a panorama, then the walls laid along a road line, then the houses' and the
+  cemeteries' walls. A piece is left out where another owner's piece runs beside it.
+- Side by side = nearly parallel, overlapping along the length, less than 5 m apart, no road between (v1.14 used
+  2.8 m, which left about 50 pairs 3–5 m apart). Closer than 0.45 m counts as one structure (railings on a footing).
+- Where a photographed wall stops because another carries on, a short piece joins the two; a garden-wall stub
+  shorter than about 6 m beside a gap is dropped.
+- The collision boxes use the same pieces, so there is no invisible wall in Walk mode.
+- `tools/wall_audit.mjs` loads the model and lists every place where two walls still run side by side: 0.
+
+Before / after: `docs/screenshots/v1.16_school_lane_walls.jpg`.
+
 ## v1.15 — the old shops and Güvendioğlu Market (Nov 2026)
 
 Owner's screenshots IMG_0685–0687 ("these three places are not realistic"), located like the v1.13 ones: 0687 at model

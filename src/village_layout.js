@@ -426,7 +426,10 @@ export function buildVillageLayout(terrH, existingRoads = []) {
   const pt = SITES.pitch ? offRoadRect(SITES.pitch) : [0, 0], pitch = SITES.pitch ? { ...SITES.pitch, x: SITES.pitch.x + pt[0], z: SITES.pitch.z + pt[1] } : SITES.pitch;
   // v1.13: the big cemetery's west side is the retaining wall in SV_SITES, not a low wall 15 m inside it
   const cemeteries = (SITES.cemeteries || []).map(c => ({ ...c, open: SV_OPEN, ...(c.label === 'grave strip' ? { wallEdges: [] } : c.label === 'big cemetery' ? { wallEdges: [0] } : {}) }));
-  return { roads, buildings, extra, sites: { ...SITES, gardens, green1, pitch, cemeteries, stoneWalls, roseYard: ROSE_YARD, ownerPlot: OWNER_PLOT, sv: SV_SITES }, rnd };
+  const sites = { ...SITES, gardens, green1, pitch, cemeteries, stoneWalls, roseYard: ROSE_YARD, ownerPlot: OWNER_PLOT, sv: SV_SITES };
+  // v1.16: settle the walls placed from photographs against each other (no two side by side)
+  registerPhotoWalls(wallBook((x, z, m = 0.3) => live.some(r => distToPolyline(x, z, r.line).d < r.w / 2 + m)), sites, true);
+  return { roads, buildings, extra, sites, rnd };
 }
 
 // ---------------------------------------------------------------- v1.13: the lanes into the houses' frame
@@ -721,7 +724,7 @@ function stoneWallLine(roads, sw) {
     if ((sw.toward[0] - L[i][0]) * nx + (sw.toward[1] - L[i][1]) * nz < 0) { nx = -nx; nz = -nz; }
     pts.push([L[i][0] + nx * sw.off, L[i][1] + nz * sw.off]);
   }
-  return { pts, h: sw.h, gaps: sw.gaps || [] };
+  return { pts, h: sw.h, gaps: sw.gaps || [], fromRoad: true };
 }
 
 // ---------------------------------------------------------------- centre-only mode (default)
@@ -760,7 +763,7 @@ export function carsiBoxes(sites) {
   if (sites.statue) out.push(sites.statue.x, sites.statue.z, sites.statue.yaw, 1.3, 1.3);
   if (sites.kiosk) out.push(sites.kiosk.x, sites.kiosk.z, sites.kiosk.yaw, sites.kiosk.w / 2, sites.kiosk.d / 2);
   if (sites.cardak) out.push(sites.cardak.x, sites.cardak.z, 0, sites.cardak.size / 2, sites.cardak.size / 2);
-  for (const w of sites.stoneWalls || []) for (const [x0, z0, x1, z1] of wallPieces(w)) out.push((x0 + x1) / 2, (z0 + z1) / 2, Math.atan2(-(z1 - z0), x1 - x0), Math.hypot(x1 - x0, z1 - z0) / 2, 0.3);
+  for (const w of sites.stoneWalls || []) for (const [x0, z0, x1, z1] of wallRuns(w)) out.push((x0 + x1) / 2, (z0 + z1) / 2, Math.atan2(-(z1 - z0), x1 - x0), Math.hypot(x1 - x0, z1 - z0) / 2, 0.3);
   const sv = sites.sv;          // v1.5: Street View additions — the barn, the gate and iron fence, the bust, the pylon
   if (sv) {
     for (const e of sv.extra) out.push(e.x, e.z, e.yaw, e.w / 2, e.d / 2);
@@ -774,6 +777,73 @@ export function carsiBoxes(sites) {
     for (const [x0, z0, x1, z1] of fencePieces(op.fence)) out.push((x0 + x1) / 2, (z0 + z1) / 2, Math.atan2(-(z1 - z0), x1 - x0), Math.hypot(x1 - x0, z1 - z0) / 2, 0.08);
   }
   return out;
+}
+// ---------------------------------------------------------------- no two walls side by side (v1.16, owner) ----
+// Two walls count as running side by side when they are nearly parallel, overlap along their length and lie less
+// than WALL_GAP apart with no road between them (the 2.8 m of v1.14 left pairs 3–5 m apart standing). The wall book
+// keeps every piece that stands; alongside() gives the distance to a piece of another owner beside this one, or -1.
+export const WALL_GAP = 5;
+export function wallBook(roadHit) {
+  const segs = [], built = [];   // built: [ax, az, bx, bz, owner], read by tools/wall_audit.mjs
+  const reg = (ax, az, bx, bz, own) => { const L = Math.hypot(bx - ax, bz - az) || 1; segs.push([ax, az, bx, bz, own, (bx - ax) / L, (bz - az) / L, L]); built.push([ax, az, bx, bz, own]); };
+  const book = { segs, built, reg, roadHit, hit: null };
+  book.alongside = (ax, az, bx, bz, own) => {
+    const mx = (ax + bx) / 2, mz = (az + bz) / 2, L = Math.hypot(bx - ax, bz - az) || 1, ux = (bx - ax) / L, uz = (bz - az) / L; let best = -1;
+    for (const w of segs) {
+      if (w[4] === own || Math.abs(w[0] - mx) > 60 || Math.abs(w[1] - mz) > 60) continue;
+      if (Math.abs(ux * w[5] + uz * w[6]) < 0.75) continue;
+      const s = (mx - w[0]) * w[5] + (mz - w[1]) * w[6], s2 = ((w[0] + w[2]) / 2 - ax) * ux + ((w[1] + w[3]) / 2 - az) * uz;
+      if ((s < -0.6 || s > w[7] + 0.6) && (s2 < -0.6 || s2 > L + 0.6)) continue;   // neither middle lies opposite the other piece
+      const d = Math.abs((mx - w[0]) * w[6] - (mz - w[1]) * w[5]); if (d >= WALL_GAP || (best >= 0 && d >= best)) continue;
+      if (d > 2.8 && roadHit((mx + w[0] + s * w[5]) / 2, (mz + w[1] + s * w[6]) / 2, 0)) continue;   // the two sides of a lane
+      best = d; book.hit = w;
+    }
+    return best;
+  };
+  return book;
+}
+/** Enters the fences, gates, hedges and walls placed from photographs in a wall book. With `settle` (the layout) it
+ *  first decides, wall by wall, which pieces stand: fences, gates and hedges stay as they are, then the walls
+ *  measured in a panorama, then the walls laid along a road line. A piece that would run beside something already
+ *  there (0.45–5 m to its side; closer is one structure, like railings on their footing) is left out (w.drop), and
+ *  where a wall stops for that reason a short piece joins it to the other wall (w.joins): no open end, no step. */
+export function registerPhotoWalls(book, sites, settle = false) {
+  const sv = sites.sv, line = (pts, own) => pts.slice(1).forEach((p, i) => book.reg(pts[i][0], pts[i][1], p[0], p[1], own));
+  if (sv) [...(sv.fences || []), ...(sv.wireFences || []), ...(sv.hedges || []), ...sv.gates.map(g => ({ pts: [g.a, g.b] }))].forEach((f, fi) => line(f.pts, 'pf' + fi));
+  if (sites.roseYard) line(sites.roseYard.fence.pts, 'rose');
+  if (sites.ownerPlot) line(sites.ownerPlot.fence, 'plot');
+  (sites.stoneWalls || []).map((w, wi) => [w, wi]).sort((a, b) => (a[0].fromRoad ? 1 : 0) - (b[0].fromRoad ? 1 : 0)).forEach(([w, wi]) => {
+    const own = 'sw' + wi;
+    if (settle) {
+      w.drop = new Set(); w.joins = [];
+      const beside = (q) => book.alongside(...q, own) > 0.45;
+      const join = (x, z) => { const h = book.hit, t = Math.max(0, Math.min(1, ((x - h[0]) * h[5] + (z - h[1]) * h[6]) / h[7])), fx = h[0] + t * (h[2] - h[0]), fz = h[1] + t * (h[3] - h[1]), d = Math.hypot(fx - x, fz - z);
+        if (d > 0.3 && d < WALL_GAP + 1 && !book.roadHit((x + fx) / 2, (z + fz) / 2, 0.3)) w.joins.push([x, z, fx, fz]); };
+      let prev = null, end = null, nb = 0;   // prev: the piece before was kept (true) / left out (false) / this is a start (null)
+      wallPieces(w).forEach(([ax, az, bx, bz], pi) => {
+        const k = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / 2.5)); if (end && Math.hypot(end[0] - ax, end[1] - az) > 0.6) prev = null;   // a gap (gate)
+        for (let i = 0; i < k; i++) {
+          const q = [ax + (bx - ax) * i / k, az + (bz - az) * i / k, ax + (bx - ax) * (i + 1) / k, az + (bz - az) * (i + 1) / k];
+          if (book.roadHit((q[0] + q[2]) / 2, (q[1] + q[3]) / 2, 0.3)) { w.drop.add(pi + ':' + i); prev = null; continue; }   // v1.14: no wall across a road
+          if (beside(q)) { w.drop.add(pi + ':' + i); nb++; if (prev === true) join(q[0], q[1]); prev = false; }
+          else { if (prev === false) join(q[0], q[1]); prev = true; }
+        }
+        end = [bx, bz];
+      });
+      if (nb) console.log('[layout] v1.16 wall', wi, '(' + (w.note || 'along a road') + '):', nb, 'pieces left out,', w.joins.length, 'joined to the wall beside');
+    }
+    for (const q of wallRuns(w)) book.reg(...q, own);
+  });
+}
+/** A stone wall as the pieces that stand ([x0, z0, x1, z1], at most 2.5 m each once it has been settled), joins included. */
+export function wallRuns(w) {
+  if (!w.drop || !w.drop.size) return [...wallPieces(w), ...(w.joins || [])];
+  const out = [];
+  wallPieces(w).forEach(([ax, az, bx, bz], pi) => {
+    const k = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / 2.5));
+    for (let i = 0; i < k; i++) if (!w.drop.has(pi + ':' + i)) out.push([ax + (bx - ax) * i / k, az + (bz - az) * i / k, ax + (bx - ax) * (i + 1) / k, az + (bz - az) * (i + 1) / k]);
+  });
+  return [...out, ...w.joins];
 }
 /** A stone wall as straight pieces [x0, z0, x1, z1], with its gaps left open. */
 export function wallPieces(w) {
