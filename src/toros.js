@@ -368,12 +368,12 @@ function buildCabin(car, { chrome, rubberM, darkM }) {
         x.beginPath(); x.moveTo(cx + Math.cos(a) * r, cy - Math.sin(a) * r); x.lineTo(cx + Math.cos(a) * (r - L), cy - Math.sin(a) * (r - L)); x.stroke();
         if (major) { x.fillStyle = redFrom !== null && v >= redFrom ? '#d8382c' : '#eeeeea'; x.font = `600 ${r > 100 ? 22 : 20}px Arial, Helvetica, sans-serif`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(String(Math.round(v * labelK)), cx + Math.cos(a) * (r - 36), cy - Math.sin(a) * (r - 36)); }
       }
-      x.fillStyle = '#9fa1a4'; x.font = '500 15px Arial, Helvetica, sans-serif'; x.textAlign = 'center'; x.fillText(unit, cx, cy + r * 0.42);
+      x.fillStyle = '#9fa1a4'; x.font = '500 15px Arial, Helvetica, sans-serif'; x.textAlign = 'center'; x.fillText(unit, cx, cy - r * 0.36);
     };
     dial(360, 128, 112, 160, 20, 10, 1, null, 'km/h');
     dial(664, 128, 104, 7, 1, 0.5, 1, 6, 'x1000/min');
     // odometer window in the speedometer
-    x.fillStyle = '#d9d9d4'; x.fillRect(320, 178, 80, 20); x.fillStyle = '#121212'; x.font = '600 16px "Courier New", monospace'; x.textAlign = 'center'; x.fillText('148 372', 360, 189);
+    x.fillStyle = '#d9d9d4'; x.fillRect(322, 150, 76, 19); x.fillStyle = '#121212'; x.font = '600 15px "Courier New", monospace'; x.textAlign = 'center'; x.fillText('148 372', 360, 160);
     // small gauges at the ends: fuel (left), coolant temperature (right)
     const small = (cx, lo, hi) => { x.strokeStyle = '#eeeeea'; x.lineWidth = 3; x.beginPath(); x.arc(cx, 150, 62, (180 + 40) * Math.PI / 180, (360 - 40) * Math.PI / 180); x.stroke();
       for (const k of [0, 0.5, 1]) { const a = (180 + 40 + k * 100) * Math.PI / 180; x.beginPath(); x.moveTo(cx + Math.cos(a) * 62, 150 + Math.sin(a) * 62); x.lineTo(cx + Math.cos(a) * 50, 150 + Math.sin(a) * 50); x.stroke(); }
