@@ -474,8 +474,9 @@ const OWNER_FIX = [
   { xz: [648.0, 536.0], set: { x: 648.0, z: 536.0, w: 3.6, d: 3.4, ownWall: 'redWall', wall: 'none', tree: false, barn: true, plain: true }, note: 'not a house: a small red pump hut on the open ground north of the crossroads' },
   // v1.11 (Street View drive down the main road from the çarşı, 35 panoramas of Apr 2026, model 262,166 → 431,453):
   { xz: [251.6, 178.6], set: { ownWall: 'Duvar_Krem', roof: 'g', wall: 'none', tree: false }, note: 'cream single-storey house with its gable end on the road (blue fascia, a sign on the gable wall)' },
-  { xz: [256.8, 219.1], set: { storeys: 2, ownWall: 'Duvar_Somon', wall: 'none', tree: false, stairFix: '+z', balconyFix: true },
-    note: 'v1.13 (owner\'s screenshots 0676/0677): the salmon-pink two-storey house at the fork, outside stair up to a balcony on the lane side (was one storey, ochre)' },
+  { xz: [256.8, 219.1], set: { x: 255.65, z: 221.5, w: 5.5, d: 13.0, yaw: -0.308, storeys: 2, ownWall: 'Duvar_Somon', wall: 'none', tree: false, stairFix: null, balconyFix: true, faceFix: 0.308 },
+    note: 'v1.13 (owner, 23 Nov 2026: the house is L-shaped; screenshots 0676/0677, satellite roof): the salmon-pink house at the fork. This is its west wing, ' +
+          'the taller one, garage doors below and the balcony above on the yard side; the lower north wing with the porch is in SV_SITES (was one ochre block turned 45°)' },
   { xz: [269.2, 237.4], set: { ownWall: 'Duvar_Krem', wall: 'none' }, note: 'cream, open ground in front' },
   { xz: [285.4, 237.4], set: { ownWall: 'Duvar_Beyaz', wall: 'none', porch: { dir: [0.71, -0.71], span: [0.1, 0.9], depth: 2.4 } }, note: 'white single-storey house with a columned porch, on the kerbed corner south of the road' },
   { xz: [311.1, 207.4], set: { ownWall: 'Duvar_Beyaz', wall: 'none', tree: false }, note: 'the long white house above the road: its yard is closed by the dry-stone wall along the road (SV_SITES)' },
@@ -561,6 +562,8 @@ export const SV_SITES = {
     { x: -29.5, z: 286.0, yaw: -1.215, w: 7.5, d: 6.0, storeys: 2, roof: 'g', plain: true, wallKey: 'woodRaw', face: 2.785, stairFix: null, balconyFix: false, note: 'timber fish shop on posts (open ground floor)' },
     { x: 423.0, z: 499.5, yaw: -1.41, w: 25.0, d: 4.5, storeys: 1, roof: 'm', barn: true, plain: true, wallKey: 'Duvar_Beton', note: 'east wing of the cemetery yard\'s shelter, along the road' },
     { x: 415.0, z: 516.0, yaw: -0.18, w: 22.0, d: 4.5, storeys: 1, roof: 'm', barn: true, plain: true, wallKey: 'Duvar_Beton', note: 'its south wing' },
+    { x: 261.95, z: 219.85, yaw: -0.308, w: 5.5, d: 6.0, storeys: 1, roof: 'h', wallKey: 'Duvar_Somon', face: 1.263, porch: { dir: [0.953, 0.303], span: [0.0, 1.0], depth: 2.2 },
+      note: 'north wing of the salmon-pink L-shaped house: single storey, doors onto the yard in the corner of the L, a columned porch on its east end towards the mosque' },
     { x: 398.5, z: 338.3, yaw: -1.451, w: 9.0, d: 6.0, storeys: 1, roof: 'm', barn: true, plain: true, wallKey: 'rubble', note: 'rubble barn with a rusty sheet roof on the road, north of the grey block house' },
   ],
   gates: [{ a: [108.7, 280.9], b: [112.9, 280.3], h: 1.75 },                     // two-leaf wrought-iron gate, meter box on its west pillar

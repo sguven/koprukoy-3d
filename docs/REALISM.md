@@ -33,7 +33,7 @@ touch. The random stream is kept as in v1.11 (`orig` lines and houses are replay
 | 245, 69 | 0652 | a green 20 m further north, on the junction | the pine park west of the main road: low red wall with railings and an arch |
 | 268.8, 69.6 / 273.5, 56.5 | 0650, 0651 | houses behind garden walls | the old row of shops right on the road |
 | 264.1, 97.9 | 0653, 0654 | small single-storey house | two storeys, cream |
-| 256.8, 219.1 | 0676, 0677 | one storey, ochre | salmon pink, two storeys, outside stair and balcony |
+| 255.65, 221.5 + 261.95, 219.85 | 0676, 0677 | one ochre block turned 45° | v1.13.1 (owner: the house is L-shaped): salmon pink, a taller west wing along the plot's west edge and a lower north wing with a columned porch on its east end, as the satellite roof shows (`docs/screenshots/v1.13.1_pink_house_L.jpg`). Still missing: the balcony and outside stair on the yard side of the west wing |
 | 475.5, 665.3 / 490.5, 696 | 0669, 0670 | long buildings mirrored across the road's axis | the workshop and the tyre shop on their NW–SE axis |
 | 126 → 150, 250–260 | 0681–0684 | open | dry-stone garden wall on the north side of the lane |
 
