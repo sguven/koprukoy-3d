@@ -1,6 +1,6 @@
 # villager.glb
 
-The walking character of the third-person Walk mode (v1.17, `src/avatar.js`). Built with `tools/build_character.mjs`.
+The walking character of the third-person Walk mode (v1.18, `src/avatar.js`). Built with `tools/build_character.mjs`.
 
 All parts are by **Quaternius** (https://quaternius.com) and dedicated to the public domain under
 [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/): free for any use, commercial included,

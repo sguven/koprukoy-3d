@@ -621,7 +621,7 @@ loadAll().then(gltf => {
   warming = false;
   try { warmScene(); } catch (e) { console.error(e); }
   document.getElementById('loading').remove(); sceneReady = true;
-  if (thirdPerson) setTimeout(getAvatar, 1500);   // v1.17: fetch the walking character in the background
+  if (thirdPerson) setTimeout(getAvatar, 1500);   // v1.18: fetch the walking character in the background
   setTimeout(buildSolids, 800);
 }).catch(err => { document.getElementById('loading').textContent = 'The model could not be loaded. Please reload the page.'; console.error(err); });
 
@@ -684,12 +684,12 @@ scene.add(car);
 // v1.12: the car is drawn into the shadow map on its own, on top of a cached map of the still world (src/carshadow.js)
 const carShadow = createCarShadow({ renderer, scene, light: sun, car });
 
-// ---------- v1.17: walk in third person (a villager seen from behind and above: src/avatar.js) ----------
+// ---------- v1.18: walk in third person (a villager seen from behind and above: src/avatar.js) ----------
 // The character (3.6 MB) is fetched once the village is up, or at once when Walk is opened before that. Until he is
 // in, Walk is the first-person view. V (or the button on a phone, or Settings › Controls) switches between the two.
 let thirdPerson = true; try { thirdPerson = localStorage.getItem('kk_tp') !== '0'; } catch (_) {}
 let avatar = null, avatarAdded = false, solids = null;
-// v1.17: walls, kerbs, fences, steps, posts … as a collision grid read from the finished scene (src/solids.js)
+// v1.18: walls, kerbs, fences, steps, posts … as a collision grid read from the finished scene (src/solids.js)
 function buildSolids() {
   if (solids) return; solids = createSolids({ scene, terrH, exclude: [car, ...(avatar ? [avatar.root] : [])] });
   solids.build(window.__solidsSlice || 8).then(s => console.log('[solids]', s.chunks, 'chunks in', Math.round(s.ms), 'ms'));
@@ -908,7 +908,7 @@ function moveJoy(e) { let dx = (e.clientX - joyCx) / JOY_R, dy = (e.clientY - jo
 const holdBtn = (id, k) => { const el = document.getElementById(id); const on = e => { touchIn[k] = true; el.classList.add('down'); try { el.setPointerCapture(e.pointerId); } catch (_) {} e.stopPropagation(); e.preventDefault(); }; const off = () => { touchIn[k] = false; el.classList.remove('down'); }; el.addEventListener('pointerdown', on); el.addEventListener('pointerup', off); el.addEventListener('pointercancel', off); el.addEventListener('lostpointercapture', off); };
 holdBtn('tLeft', 'left'); holdBtn('tRight', 'right'); holdBtn('tGas', 'gas'); holdBtn('tBrake', 'brake'); holdBtn('tUp', 'up'); holdBtn('tDn', 'dn');
 document.getElementById('tCam').addEventListener('pointerdown', e => { CS.cam = (CS.cam + 1) % 3; e.stopPropagation(); });
-// v1.17: third-person switch (VIEW on a phone, Settings › Controls) and the camera distance (mouse wheel)
+// v1.18: third-person switch (VIEW on a phone, Settings › Controls) and the camera distance (mouse wheel)
 document.getElementById('tView').addEventListener('pointerdown', e => { setThirdPerson(!thirdPerson); e.stopPropagation(); e.preventDefault(); });
 document.getElementById('optTP').checked = thirdPerson;
 document.getElementById('optTP').addEventListener('change', e => setThirdPerson(e.target.checked));
@@ -1152,7 +1152,7 @@ renderer.setAnimationLoop(now => {
   if (mode === 'orbit') {
     if (anim) { const k = Math.min(1, (now - anim.t0) / anim.dur), e = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2; camera.position.lerpVectors(anim.from.p, anim.to.p, e); controls.target.lerpVectors(anim.from.t, anim.to.t, e); if (k >= 1) anim = null; }
     controls.update(); focus = controls.target;
-  } else if (tpActive()) {   // v1.17: third person
+  } else if (tpActive()) {   // v1.18: third person
     const n = Math.ceil(dt / 0.02); for (let i = 0; i < n; i++) avatar.step(dt / n);
     avatar.place(dt); avatar.animate(dt); avatar.updateCamera(dt);
     focus = avatar.root.position; drawMinimap(P.x, P.z, -P.yaw);
@@ -1186,7 +1186,7 @@ renderer.setAnimationLoop(now => {
   // v1.12, Toros: the map covers 150 m around a point up to 35 m ahead of the car and is redrawn every 24 m (it was
   // redrawn every frame: the car is now added on top of a cached map, src/carshadow.js), snapped to whole texels
   if (driving) { const ahead = Math.max(-15, Math.min(35, CS.v * 1.5)); focus = carAhead.set(CS.x + Math.cos(CS.h) * ahead, CS.y, CS.z - Math.sin(CS.h) * ahead); }
-  // v1.17: the third-person walk too (the character is drawn on the cached map like the car)
+  // v1.18: the third-person walk too (the character is drawn on the cached map like the car)
   const walkingTP = tpActive(), mover = inGame || driving || walkingTP;
   const ext = mode === 'orbit' ? Math.min(900, Math.max(150, camera.position.distanceTo(focus) * 1.2)) : mover ? 150 : 140;
   const step = mode === 'orbit' ? ext * 0.04 : mover ? 24 : 6;

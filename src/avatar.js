@@ -1,4 +1,4 @@
-// v1.17 Walk in third person (Nov 2026): a villager you steer through the village, seen from behind and above.
+// v1.18 Walk in third person (Nov 2026): a villager you steer through the village, seen from behind and above.
 //
 // The character is model/character/villager.glb, built by tools/build_character.mjs from Quaternius's CC0 kits
 // (Universal Base Characters: the regular male head, parted hair and moustache; Modular Character Outfits: the

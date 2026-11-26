@@ -64,6 +64,13 @@ const BLD_FRAG = /* glsl */`varying vec4 vBld; varying vec2 vCtr;
   #define kkBid floor(vBld.x + 0.5)
   // building-local horizontal coordinates (rotated by the building's yaw) so textures follow the walls
   vec2 kk_local(vec3 p) { float c = cos(vBld.w), s = sin(vBld.w); vec2 d = p.xz - vCtr; return vec2(c * d.x - s * d.y, s * d.x + c * d.y); }
+  // v1.17 weathering helpers: smooth value noise and a 3-octave fbm on a 2D (wall or roof) coordinate
+  float kk_vn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(kk_hash2(i), kk_hash2(i + vec2(1.0, 0.0)), f.x), mix(kk_hash2(i + vec2(0.0, 1.0)), kk_hash2(i + vec2(1.0, 1.0)), f.x), f.y); }
+  float kk_fbm(vec2 p) { return 0.5 * kk_vn(p) + 0.3 * kk_vn(p * 2.03 + 7.1) + 0.2 * kk_vn(p * 4.11 + 3.7); }
+  // wall-plane coordinate: metres along the wall (building frame) and metres above the building's ground line
+  vec2 kk_wall(vec3 p, vec3 n) { vec2 lp = kk_local(p); float c = cos(vBld.w), s = sin(vBld.w);
+    vec2 ln = vec2(c * n.x - s * n.z, s * n.x + c * n.z); return vec2(abs(ln.x) > abs(ln.y) ? lp.y * sign(ln.x) : -lp.x * sign(ln.y), p.y - vBld.y); }
 `;
 
 /** Realistic palette for rendered village houses: lime white, cream, ochre, pink, pale yellow, grey render. */
@@ -109,13 +116,65 @@ export function buildingMaterialFactory(lib, { quality = 2 } = {}) {
           albedo *= tint / 0.78;                    // plaster texture is ~0.78 grey; tint carries the colour
         }
         // ---- weathering -------------------------------------------------
+        // v1.17: every house has an age (0 = rendered last year, 1 = fifty years of sun, frost and rain); the old
+        // ones lose plaster in patches down to the hollow brick or the rubble behind it, carry a rising-damp tide
+        // mark with a pale salt line at its top, hairline cracks, sun-bleached south and west fronts, green-grey
+        // algae on the north side and a blotchy, many-times-patched lime wash
+        float age = sqrt(kk_hash(bid * 5.17 + 1.3));
+        vec2 wp = kk_wall(vWPos, kkN) + vec2(mod(bid, 97.0) * 3.7, 0.0);
+        float vert = 1.0 - smoothstep(0.35, 0.6, abs(kkN.y));      // 1 on walls, 0 on the parapet tops
+        if (wallKind >= 0.14) {
+          // blotchy tone: lime wash renewed in patches, older coats showing through
+          float mott = kk_fbm(wp * vec2(0.45, 0.6));
+          albedo *= 0.93 + 0.14 * mott;
+          albedo = mix(albedo, vec3(dot(albedo, vec3(0.333))) * vec3(1.03, 1.0, 0.95), 0.25 * age * smoothstep(0.45, 0.75, mott));
+          // sun-bleached south / west faces, algae on the north side (model +z = south, -x = west)
+          float sunF = max(0.0, kkN.z) * 0.8 + max(0.0, -kkN.x) * 0.5;
+          albedo = mix(albedo, vec3(dot(albedo, vec3(0.333))) * 1.1, 0.3 * sunF * age);
+          float northF = max(0.0, -kkN.z);
+          float algae = northF * age * smoothstep(0.45, 0.8, kk_fbm(wp * vec2(0.9, 0.35) + 11.0)) * (0.4 + 0.6 * (1.0 - smoothstep(0.5, 2.5, hAbove)));
+          albedo = mix(albedo, albedo * vec3(0.66, 0.72, 0.6), 0.55 * algae * vert);
+          // rising damp: dark wet band with a ragged top and a thin white salt bloom along it
+          float tide = 0.35 + 0.75 * age + 0.3 * (kk_fbm(vec2(wp.x * 0.7, 0.0)) - 0.5);
+          float damp = (1.0 - smoothstep(tide - 0.18, tide + 0.02, hAbove)) * smoothstep(0.15, 0.4, age);
+          albedo = mix(albedo, albedo * vec3(0.64, 0.6, 0.54), damp * 0.85 * vert);
+          float salt = exp(-pow((hAbove - tide - 0.03) / 0.045, 2.0)) * smoothstep(0.15, 0.4, age) * kk_vn(wp * vec2(3.0, 1.0));
+          albedo = mix(albedo, vec3(0.86, 0.85, 0.81), salt * 0.45 * vert);
+          rough = clamp(rough - 0.12 * damp, 0.0, 1.0);
+          // hairline cracks: thin ridges of a noise field, only where the render has started to fail
+          float rdg = 1.0 - abs(2.0 * kk_vn(wp * vec2(1.1, 0.8) + 4.0) - 1.0);
+          float crack = smoothstep(0.955, 0.99, rdg) * smoothstep(0.35, 0.9, age) * smoothstep(0.45, 0.6, kk_vn(wp * 0.3 + 9.0));
+          albedo *= 1.0 - 0.5 * crack * vert;
+          // spalled render: the coat has fallen off in patches, most of all low down and on the old houses;
+          // behind it hollow red brick (houses since the 1970s) or the old rubble and mud mortar
+          float sp = kk_fbm(wp * vec2(0.85, 1.1) + 21.0) + 0.16 * (1.0 - smoothstep(0.2, 1.4, hAbove)) - 0.1 * smoothstep(1.4, 3.5, hAbove);
+          float thr = mix(0.88, 0.6, age);
+          float spall = smoothstep(thr, thr + 0.015, sp) * vert;
+          float rim = (smoothstep(thr - 0.035, thr, sp) - spall) * vert;
+          if (spall > 0.001) {
+            vec3 under;
+            if (h3 > 0.45) {   // hollow brick in courses of 19 cm, 29 cm long, grey mortar
+              float row = wp.y / 0.2, odd = mod(floor(row), 2.0), col = wp.x / 0.3 + 0.5 * odd;
+              float joint = max(smoothstep(0.84, 0.95, fract(row)), smoothstep(0.9, 0.97, fract(col)));
+              float tone = kk_hash2(vec2(floor(row), floor(col)) + mod(bid, 53.0));
+              under = mix(vec3(0.62, 0.33, 0.22) * (0.8 + 0.35 * tone), vec3(0.58, 0.56, 0.52), joint * 0.9);
+            } else {
+              vec3 pr = vWPos * 0.5 + h2 * 3.0;
+              under = kk_tri(tRubC, pr, kkW).rgb * vec3(1.0, 0.95, 0.88) * 0.9;
+              wN = normalize(mix(wN, kk_triNormal(tRubN, pr, kkW, kkN, 1.2), spall));
+            }
+            albedo = mix(albedo, under, spall);
+            rough = mix(rough, 0.95, spall);
+          }
+          albedo *= 1.0 - 0.35 * rim;                 // the broken edge of the coat throws a thin shadow
+        }
         // rain-splash and dust band at the base (0 .. 1.4 m), stronger on older houses
-        float splash = (1.0 - smoothstep(0.0, 1.4 + 0.8 * h4, hAbove)) * (0.35 + 0.45 * h4);
+        float splash = (1.0 - smoothstep(0.0, 1.0 + 0.8 * h4, hAbove)) * (0.25 + 0.4 * h4);
         albedo = mix(albedo, albedo * vec3(0.62, 0.56, 0.48), splash);
         // streaks running down from the eaves / window sills
         float streakN = texture2D(tAlb, vec2(kk_local(vWPos).x * 0.9 + bid, vWPos.y * 0.015)).g;
-        float streak = smoothstep(0.55, 0.9, streakN) * (1.0 - smoothstep(0.0, 2.5, fromTop)) * (0.25 + 0.5 * h3);
-        albedo *= 1.0 - 0.28 * streak;
+        float streak = smoothstep(0.55, 0.9, streakN) * (1.0 - smoothstep(0.0, 1.2 + 3.0 * age, fromTop)) * (0.25 + 0.5 * h3);
+        albedo *= 1.0 - (0.22 + 0.2 * age) * streak;
         // general grime / discolouration patches
         float grime = kk_tri(tRgh, vWPos * 0.11 + h1 * 7.0, kkW).r;
         albedo *= 0.9 + 0.2 * grime;
@@ -153,7 +212,31 @@ export function buildingMaterialFactory(lib, { quality = 2 } = {}) {
         // moss / dust on the shaded side, lichen on old roofs
         float age = smoothstep(0.55, 1.0, h1);
         albedo = mix(albedo, albedo * vec3(0.75, 0.8, 0.65), age * 0.5 * smoothstep(0.4, 0.8, kk_tri(tRgh, vWPos * 0.2, kkW).r));
-        albedo *= 0.88 + 0.24 * kk_tri(tRgh, vWPos * 0.07 + bid, kkW).r;`,
+        albedo *= 0.88 + 0.24 * kk_tri(tRgh, vWPos * 0.07 + bid, kkW).r;
+        // v1.17: years on the roof. Each tile its own firing (a shade lighter or darker), tiles replaced over the
+        // years in a fresher orange or an odd grey-brown, a few cracked or slipped ones showing a dark gap, orange and
+        // grey-green lichen rosettes, moss and dirt gathering towards the eaves, most of all on the north slopes,
+        // and the colour of old roofs burnt out by the sun
+        float rAge = sqrt(kk_hash(bid * 5.17 + 1.3));
+        vec2 tcell = floor(vec2(uvr.x * uScale * 7.0, uvr.y * uScale * 4.0));
+        float th = kk_hash2(tcell + mod(bid, 61.0) * 1.7);
+        albedo *= 0.9 + 0.2 * th;
+        if (th > 0.975 - 0.02 * h3) albedo = mix(albedo, vec3(0.62, 0.3, 0.17), 0.65);          // a newer tile
+        else if (th < 0.012 + 0.02 * rAge) albedo = mix(albedo, vec3(0.38, 0.33, 0.29), 0.6);  // an odd grey one from another roof
+        vec2 tf = fract(vec2(uvr.x * uScale * 7.0, uvr.y * uScale * 4.0));
+        float slipped = step(0.996 - 0.008 * rAge, kk_hash2(tcell * 1.31 + 5.0 + mod(bid, 37.0)));
+        albedo *= 1.0 - 0.75 * slipped * smoothstep(0.55, 0.7, tf.y);                            // a dark gap under a slipped tile
+        float north = max(0.0, -kkN.z) * 0.7 + 0.3;
+        vec2 rp = vWPos.xz;
+        float lich = smoothstep(0.64, 0.72, kk_vn(rp * 5.0 + 13.0)) * smoothstep(0.35, 0.65, kk_fbm(rp * 0.35 + bid * 0.01));
+        albedo = mix(albedo, vec3(0.74, 0.52, 0.2), 0.45 * lich * rAge * (1.0 - north * 0.6));     // orange Xanthoria
+        float lich2 = smoothstep(0.72, 0.8, kk_vn(rp * 4.3 + 2.0)) * smoothstep(0.45, 0.7, kk_fbm(rp * 0.28 + 7.0));
+        albedo = mix(albedo, albedo * vec3(0.85, 0.92, 0.85) + vec3(0.06), 0.35 * lich2 * rAge);                          // pale grey-green crust
+        float moss = north * rAge * smoothstep(0.5, 0.78, kk_fbm(rp * 0.5 + 3.0)) * smoothstep(0.4, 0.75, tf.y);
+        albedo = mix(albedo, vec3(0.24, 0.27, 0.15), 0.5 * moss);
+        albedo = mix(albedo, vec3(dot(albedo, vec3(0.333))) * vec3(1.08, 0.98, 0.9), 0.3 * rAge);  // faded by the sun
+        albedo *= 1.0 - 0.18 * rAge * smoothstep(0.5, 0.8, kk_fbm(rp * 0.18 + 1.0));                // dark weathering blotches
+        rough = clamp(rough + 0.1 * rAge, 0.0, 1.0);`,
     });
     cache.set(key, m); return m;
   }
@@ -161,7 +244,18 @@ export function buildingMaterialFactory(lib, { quality = 2 } = {}) {
   function metalRoof(name, tintHex) {
     const key = 'metal:' + name; if (cache.has(key)) return cache.get(key);
     const m = triplanarMaterial({ set: metal, scale: metal.size, normalScale: 1.0, antiTile: 0.2, sharp: 8, tint: new THREE.Color(tintHex).multiplyScalar(1.4), metalness: 0.35, roughBase: 0.6, cacheKey: 'metal',
-      extraFrag: `albedo *= 1.0;` });
+      extraVertex: BLD_VERT, vertexMain: BLD_VERT_MAIN, fragHead: BLD_FRAG,
+      // v1.17: the paint chalks and peels, rust comes through at the laps and runs down the corrugations
+      extraFrag: /* glsl */`
+        float mAge = sqrt(kk_hash(kkBid * 5.17 + 1.3));
+        vec2 mp = vWPos.xz;
+        float rustP = smoothstep(0.75 - 0.25 * mAge, 0.85 - 0.25 * mAge, kk_fbm(mp * 0.7 + mod(kkBid, 41.0)));
+        float runs = smoothstep(0.6, 0.9, kk_vn(vec2(dot(mp, vec2(0.7, 0.7)) * 9.0, 0.0) + vec2(0.0, mp.y * 0.2))) * mAge * 0.6;
+        float rr = clamp(rustP + runs * 0.5, 0.0, 1.0);
+        albedo = mix(albedo, vec3(0.42, 0.22, 0.12) * (0.8 + 0.4 * kk_vn(mp * 4.0)), rr * 0.85);
+        albedo = mix(albedo, vec3(dot(albedo, vec3(0.333))) * 1.1, 0.35 * mAge * (1.0 - rr));   // chalky, sun-faded paint
+        rough = mix(rough, 1.0, rr * 0.8);` });
+    m.metalness = 0.3;
     cache.set(key, m); return m;
   }
 
@@ -175,7 +269,12 @@ export function buildingMaterialFactory(lib, { quality = 2 } = {}) {
           vec3 ps = vWPos * 0.5; albedo = kk_tri(tStoC, ps, kkW).rgb * 0.95; wN = kk_triNormal(tStoN, ps, kkW, kkN, 1.0); rough = 0.9;
         }
         float hAbove = vWPos.y - vBld.y;
-        albedo *= 1.0 - 0.35 * (1.0 - smoothstep(0.0, 0.6, hAbove));`,
+        albedo *= 1.0 - 0.35 * (1.0 - smoothstep(0.0, 0.6, hAbove));
+        // v1.17: damp patches and a crust of dried mud splashed up from the yard
+        float pAge = sqrt(kk_hash(kkBid * 5.17 + 1.3));
+        float pd = smoothstep(0.45, 0.75, kk_tri(tRgh, vWPos * 0.3 + 2.0, kkW).r) * pAge;
+        albedo = mix(albedo, albedo * vec3(0.72, 0.7, 0.66), pd * 0.7);
+        albedo = mix(albedo, vec3(0.45, 0.38, 0.3), (1.0 - smoothstep(0.0, 0.35, hAbove)) * 0.35 * pAge);`,
     });
     m.userData.plinthStone = { tStoC: stone.c, tStoN: stone.n };
     cache.set(key, m); return m;
@@ -224,8 +323,13 @@ export function buildingMaterialFactory(lib, { quality = 2 } = {}) {
           interior *= 0.6 + 0.4 * smoothstep(0.0, 0.08, edge - 0.07);
           float frameTone = 0.72 + 0.25 * kk_hash(kkBid * 0.91);
           vec3 frameCol = mix(vec3(frameTone), vec3(0.36, 0.25, 0.14), step(0.82, kk_hash(kkBid * 2.3))); // mostly white PVC, some dark wood
+          // v1.17: frames yellow with the years; dust and dried rain spots gather on the lower half of the pane
+          float gAge = sqrt(kk_hash(kkBid * 5.17 + 1.3));
+          frameCol *= mix(vec3(1.0), vec3(0.97, 0.93, 0.82), gAge);
           diffuseColor.rgb = mix(interior, frameCol, fr);
-          float kkFrame = fr;`)
+          float kkDust = (1.0 - smoothstep(0.0, 0.7, vWuv.y)) * (0.12 + 0.3 * gAge) * (0.6 + 0.4 * texture2D(tNoise, vWuv * vWsz * 0.7 + kkBid * 0.37).r) * (1.0 - fr);
+          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.42, 0.39, 0.34), kkDust);
+          float kkFrame = max(fr, kkDust * 1.5);`)
         .replace('#include <roughnessmap_fragment>', `float roughnessFactor = mix(roughness, 0.6, kkFrame);`)
         .replace('#include <metalnessmap_fragment>', `float metalnessFactor = metalness;`);
     };
@@ -242,7 +346,14 @@ export function buildingMaterialFactory(lib, { quality = 2 } = {}) {
         // door colours seen in the region: varnished timber, dark green, grey or brown painted steel
         vec3 paint = h < 0.4 ? vec3(1.0) : h < 0.6 ? vec3(0.35, 0.55, 0.42) : h < 0.8 ? vec3(0.55, 0.57, 0.6) : vec3(0.5, 0.38, 0.3);
         albedo = h < 0.4 ? albedo : vec3(dot(albedo, vec3(0.33))) * paint * 1.3;
-        rough = h < 0.4 ? rough : 0.45;`,
+        rough = h < 0.4 ? rough : 0.45;
+        // v1.17: sun-greyed varnish, chipped paint and rust along the bottom of an old door
+        float dAge = sqrt(kk_hash(kkBid * 5.17 + 1.3));
+        float low = 1.0 - smoothstep(0.0, 0.55, vWPos.y - vBld.y - 0.45);
+        float chip = smoothstep(0.55, 0.62, kk_tri(tRgh, vWPos * 1.7 + 3.0, kkW).r) * dAge;
+        albedo = mix(albedo, h < 0.4 ? vec3(0.42, 0.4, 0.37) : vec3(0.36, 0.22, 0.13), max(chip * 0.7, low * dAge * 0.6));
+        albedo = mix(albedo, vec3(dot(albedo, vec3(0.333))) * 1.1, 0.3 * dAge);
+        rough = mix(rough, 0.9, max(chip, low * dAge));`,
     });
     cache.set(key, m); return m;
   }
@@ -251,7 +362,10 @@ export function buildingMaterialFactory(lib, { quality = 2 } = {}) {
     const key = 'trim'; if (cache.has(key)) return cache.get(key);
     const m = triplanarMaterial({ set: plaster, scale: 2.0, normalScale: 0.5, antiTile: 0.3, sharp: 6, tint: new THREE.Color(tintHex), cacheKey: 'trim',
       extraVertex: BLD_VERT, vertexMain: BLD_VERT_MAIN, fragHead: BLD_FRAG,
-      extraFrag: `albedo *= 0.9 + 0.2 * kk_hash(kkBid * 1.9); albedo *= 1.0 - 0.25 * (1.0 - smoothstep(0.0, 1.0, vWPos.y - vBld.y));` });
+      extraFrag: `albedo *= 0.9 + 0.2 * kk_hash(kkBid * 1.9); albedo *= 1.0 - 0.25 * (1.0 - smoothstep(0.0, 1.0, vWPos.y - vBld.y));
+        float tAge = sqrt(kk_hash(kkBid * 5.17 + 1.3));
+        albedo *= 1.0 - 0.3 * tAge * smoothstep(0.4, 0.75, kk_tri(tRgh, vWPos * 0.9 + 4.0, kkW).r);   // v1.17: grime on old sills and fascias
+        albedo = mix(albedo, albedo * vec3(0.92, 0.88, 0.8), tAge);` });
     cache.set(key, m); return m;
   }
 

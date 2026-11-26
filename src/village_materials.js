@@ -79,6 +79,19 @@ export function villageMaterials(lib, { quality = 2 } = {}) {
   M.rustSheet = triplanarMaterial({ set: lib.set('metal_corr'), scale: lib.set('metal_corr').size, normalScale: 0.9, antiTile: 0.4, sharp: 8, tint: new THREE.Color(0x7a4630), roughBase: 0.85, cacheKey: 'rustsheet',
     extraFrag: 'albedo = vec3(dot(albedo, vec3(0.33))) * vec3(1.0, 0.74, 0.58) * 0.95; albedo *= 0.75 + 0.45 * kk_tri(tRgh, vWPos * 0.35 + 7.0, kkW).r;' });
   M.voidDark = std({ color: 0x17130f, roughness: 1.0 });
+  // v1.17: a stack of split firewood seen end-on (box UVs: every face shows the log ends), and soot round a stove pipe
+  M.woodpile = std({ roughness: 0.95, map: canvasTex(256, 128, (c, W, H) => {
+    c.fillStyle = '#3a2c20'; c.fillRect(0, 0, W, H);
+    let sd = 7; const r = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
+    for (let y = 8; y < H + 8; y += 15) for (let x = (y / 15) % 2 ? 6 : 13; x < W + 8; x += 15) {
+      const rad = 6 + r() * 3, tone = 115 + r() * 55;
+      c.fillStyle = `rgb(${tone * 0.55},${tone * 0.4},${tone * 0.27})`; c.beginPath(); c.arc(x + r() * 3, y + r() * 3, rad + 1.5, 0, Math.PI * 2); c.fill();
+      c.fillStyle = `rgb(${tone},${tone * 0.82},${tone * 0.6})`; c.beginPath(); c.arc(x + r() * 2, y + r() * 2, rad, 0, Math.PI * 2); c.fill();
+      c.strokeStyle = `rgba(90,65,40,0.5)`; c.lineWidth = 1; c.beginPath(); c.arc(x, y, rad * 0.5, 0, Math.PI * 2); c.stroke();
+    }
+  }) });
+  M.soot = std({ color: 0x2a2724, roughness: 1.0, transparent: true, opacity: 0.55, depthWrite: false });
+  M.soot.userData.noShadow = true;
   M.woodRaw = triplanarMaterial({ set: lib.set('wood'), scale: 1.0, normalScale: 0.8, antiTile: 0.0, sharp: 8, tint: new THREE.Color(0xa08866), roughBase: 0.85, cacheKey: 'woodraw' });
   M.flag = std({ color: 0xc8102e, roughness: 0.8, side: THREE.DoubleSide });
   M.pole = triplanarMaterial({ set: concrete, scale: 1.0, normalScale: 0.6, antiTile: 0.2, sharp: 8, tint: new THREE.Color(0xa9a59c), roughBase: 0.9, cacheKey: 'pole', extraFrag: 'albedo *= 1.0 - 0.3 * (1.0 - smoothstep(0.0, 0.8, vWPos.y - 20.0)) * 0.0;' });

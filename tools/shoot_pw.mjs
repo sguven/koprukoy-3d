@@ -39,7 +39,7 @@ const browser = await chromium.launch({ headless: true, executablePath: process.
 const page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: 1 });
 page.on('console', m => { const t = m.text(); if (!/favicon|fonts\.g|THREE\.WebGLRenderer/.test(t)) console.log('[page]', t.slice(0, 300)); });
 page.on('pageerror', e => console.log('[pageerror]', e.message));
-// v1.17: Walk opens in third person (the character); these shots are first-person views unless TP=1
+// v1.18: Walk opens in third person (the character); these shots are first-person views unless TP=1
 if (!process.env.TP) await page.addInitScript(() => { try { localStorage.setItem('kk_tp', '0'); } catch (_) {} });
 const t0 = Date.now();
 await page.goto(`http://localhost:${port}/` + (process.env.HASH || ''), { waitUntil: 'domcontentloaded' });
