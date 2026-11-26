@@ -183,7 +183,10 @@ body:not(.is-touch)[data-mode="game"] .hint { right: auto; left: 50%; transform:
 .fsbtn svg { width: 18px; height: 18px; }
 #tDn { right: 18px; bottom: 30px; width: 64px; height: 64px; }
 #tCam { right: 18px; top: 256px; width: 64px; height: 44px; font-size: 14px; }
-#tView { right: 18px; top: 256px; width: 64px; height: 44px; font-size: 14px; }
+#tView { right: calc(124px + var(--sr)); bottom: calc(60px + var(--sb)); width: 64px; height: 44px; font-size: 14px; }   /* left of JUMP (v1.19.1: it sat over it on a phone held sideways) */
+/* v1.19.1: jump while walking on a phone, under the right thumb (the walk had no jump button) */
+#tWalkJump { right: calc(28px + var(--sr)); bottom: calc(40px + var(--sb)); width: 84px; height: 84px; font-size: 15px; background: rgba(162,72,47,0.62); border-color: rgba(255,255,255,0.6); }
+#tWalkJump.down { background: rgba(200,60,35,0.92); }
 
 @media (max-width: 700px) {
   .topbar { left: calc(8px + var(--sl)); right: calc(8px + var(--sr)); top: calc(8px + var(--st)); gap: 6px; }
@@ -328,6 +331,7 @@ body:not(.is-touch)[data-mode="game"] .hint { right: auto; left: 50%; transform:
 <div class="tc pad" id="tDn">▼</div>
 <div class="tc pad" id="tCam">CAMERA</div>
 <div class="tc pad" id="tView">VIEW</div>
+<div class="tc pad gbtn" id="tWalkJump">JUMP</div>
 <div id="loading" style="position:fixed;inset:0;display:grid;place-items:center;font:600 20px var(--display);letter-spacing:.04em">Loading model…</div>
 
 <script type="module">
@@ -714,6 +718,7 @@ function syncAvatar(spawn) {
   document.getElementById('cross').style.display = (mode === 'walk' && !on) || mode === 'fly' || mode === 'game' ? 'block' : 'none';
   if (mode === 'walk') document.getElementById('hint').textContent = on ? HINTS.walkTP : HINTS.walk;
   document.getElementById('tView').classList.toggle('show', isTouch && mode === 'walk');
+  document.getElementById('tWalkJump').classList.toggle('show', isTouch && mode === 'walk');
   sun.shadow.needsUpdate = true;
 }
 function setThirdPerson(on) {
@@ -906,7 +911,7 @@ const endJoy = e => { if (e.pointerId !== joyId) return; joyId = null; touchIn.j
 joyZone.addEventListener('pointerup', endJoy); joyZone.addEventListener('pointercancel', endJoy); joyZone.addEventListener('lostpointercapture', endJoy);
 function moveJoy(e) { let dx = (e.clientX - joyCx) / JOY_R, dy = (e.clientY - joyCy) / JOY_R; const l = Math.hypot(dx, dy); if (l > 1) { dx /= l; dy /= l; } touchIn.jx = dx; touchIn.jy = dy; knob.style.transform = `translate(${dx * KNOB_TRAVEL}px, ${dy * KNOB_TRAVEL}px)`; joy.classList.toggle('run', Math.min(1, l) > 0.92); }
 const holdBtn = (id, k) => { const el = document.getElementById(id); const on = e => { touchIn[k] = true; el.classList.add('down'); try { el.setPointerCapture(e.pointerId); } catch (_) {} e.stopPropagation(); e.preventDefault(); }; const off = () => { touchIn[k] = false; el.classList.remove('down'); }; el.addEventListener('pointerdown', on); el.addEventListener('pointerup', off); el.addEventListener('pointercancel', off); el.addEventListener('lostpointercapture', off); };
-holdBtn('tLeft', 'left'); holdBtn('tRight', 'right'); holdBtn('tGas', 'gas'); holdBtn('tBrake', 'brake'); holdBtn('tUp', 'up'); holdBtn('tDn', 'dn');
+holdBtn('tLeft', 'left'); holdBtn('tRight', 'right'); holdBtn('tGas', 'gas'); holdBtn('tBrake', 'brake'); holdBtn('tUp', 'up'); holdBtn('tDn', 'dn'); holdBtn('tWalkJump', 'jump');
 document.getElementById('tCam').addEventListener('pointerdown', e => { CS.cam = (CS.cam + 1) % 3; e.stopPropagation(); });
 // v1.18: third-person switch (VIEW on a phone, Settings › Controls) and the camera distance (mouse wheel)
 document.getElementById('tView').addEventListener('pointerdown', e => { setThirdPerson(!thirdPerson); e.stopPropagation(); e.preventDefault(); });
@@ -919,7 +924,7 @@ let carYawOff = 0, carPitchOff = 0, game = null, rotateTold = false;
 const HINTS = {
   orbit: isTouch ? '1 finger: move · 2 fingers: pinch to zoom, twist to rotate, slide up/down to tilt · Double-tap: zoom in' : 'Drag: move · Wheel: zoom · Right-drag or Ctrl+drag: rotate / tilt · Double-click: zoom in',
   walk: 'Click, then look with the mouse · WASD: walk · Shift: run · Space: jump · V: third person · Esc: release cursor',
-  walkTP: isTouch ? 'Left thumb: walk (push to the rim to run) · Drag right side: turn the camera · VIEW: first person' : 'Click, then turn the camera with the mouse · WASD: walk · Shift: run · Ctrl+Shift: sprint · Space: jump · Wheel: zoom · V: first person · Esc: cursor',
+  walkTP: isTouch ? 'Left thumb: walk (push to the rim to run) · Drag right side: turn the camera · JUMP: jump (over walls too) · VIEW: first person' : 'Click, then turn the camera with the mouse · WASD: walk · Shift: run · Ctrl+Shift: sprint · Space: jump · Wheel: zoom · V: first person · Esc: cursor',
   fly: 'Click, then look with the mouse · WASD: fly · E/Q: up/down · Shift: fast',
   car: '↑/W gas · ↓/S brake/reverse · ←/→ steer · Space handbrake · C camera · L headlights',
   game: isTouch ? 'Left thumb: move (push to the rim to run) · Drag right side or the FIRE button: aim · Tap a weapon to switch' : 'Click to aim · WASD move · Shift run · Mouse 1 fire · Mouse 2 scope (AWP) · 1/2/3, Q, wheel: weapons · R reload · Esc: cursor',
