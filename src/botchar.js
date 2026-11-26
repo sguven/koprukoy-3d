@@ -1,4 +1,4 @@
-// v1.18 Game-mode bots as people (Nov 2026): skinned, animated villagers with rifles instead of the box figures.
+// v1.19 Game-mode bots as people (Nov 2026): skinned, animated villagers with rifles instead of the box figures.
 //
 // The model is model/character/bots.glb, built with tools/build_character.mjs from the same Quaternius CC0 kits as
 // the walking villager (src/avatar.js, model/character/LICENSE.md): the regular man's head with every hairstyle and

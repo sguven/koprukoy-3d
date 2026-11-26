@@ -20,7 +20,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
-// v1.17: the walking character (src/avatar.js) is carried the same way: addActor() puts his skinned meshes in the
+// v1.18: the walking character (src/avatar.js) is carried the same way: addActor() puts his skinned meshes in the
 // proxy scene as depth-only skinned copies that share his skeleton, and his square is redrawn with the car's.
 
 const SHADOW_SIDE = { [THREE.FrontSide]: THREE.BackSide, [THREE.BackSide]: THREE.FrontSide, [THREE.DoubleSide]: THREE.DoubleSide };
@@ -169,7 +169,7 @@ export function createCarShadow({ renderer, scene, light, car }) {
     /**
      * Call right before renderer.render(scene, camera), after the loop has decided whether the shadow map is redrawn
      * (light.shadow.needsUpdate). `driving`: the car moves, so it is redrawn on top of the cached map every frame.
-     * `walking` (v1.17): the same for the character added with addActor().
+     * `walking` (v1.18): the same for the character added with addActor().
      * Returns true when the frame redraws the still world (it may ask for that itself, when the cache is missing).
      */
     plan(driving, walking = false) {
@@ -191,7 +191,7 @@ export function createCarShadow({ renderer, scene, light, car }) {
     },
     get casters() { return casters.length; },
     /**
-     * v1.17: an animated character that moves on top of the still world like the car. His skinned meshes leave
+     * v1.18: an animated character that moves on top of the still world like the car. His skinned meshes leave
      * three.js's own shadow pass and are drawn here by depth-only copies that share his skeleton (the skeleton is
      * updated by the main render before this pass runs). `centre` / `radius`: his bounding sphere in his own frame.
      */

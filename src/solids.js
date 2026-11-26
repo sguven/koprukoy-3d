@@ -1,4 +1,4 @@
-// v1.17 Solid walls, kerbs and fences for the walking character (Nov 2026, owner: "we walk through the pavements and
+// v1.18 Solid walls, kerbs and fences for the walking character (Nov 2026, owner: "we walk through the pavements and
 // walls: make them solid, and let us jump over them").
 //
 // The collision data of the first-person walk only knows the building footprints (D.buildings) and the ground

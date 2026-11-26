@@ -5,6 +5,50 @@ Two passes so far: **v0.7 "materials"** (surfaces only, nothing moved) and **v0.
 `model/koprukoy.glb` are still the v0.6 files. Terrain (SRTM 30 m), the reservoir at 724 m, the
 Çeşnigir Bridge body, D.260 and the roads outside the village are unchanged.
 
+## v1.17 — old, lived-in houses; checked against the Google satellite layer (Nov 2026)
+
+Owner's request: check the model against Google Maps, Street View and common sense, and make the houses older and
+more real.
+
+**Check against the satellite layer.** Seven areas of 235 × 177 m (the çarşı and six blocks around it) were taken
+from the Google satellite layer at zoom 19 and the model drawn from straight above at the same scale. The village is
+in the pin frame warped by the D.260 shift of `tools/build_village_data.py` (44 m east, 55 m north beyond 500 m from
+the bridge), so model point (x, z) is at lat = 39.5809021 − (z − 54.6 + 277.44) / 110574, lon = 33.4292022 +
+(x − 43.9 + 376.89) / 85797.18. Tile roofs were picked out of both pictures by colour, the two masks matched
+(best shift 0–3.5 m) and every roof larger than about 45 m² that has no counterpart listed.
+
+- The footprints agree: sizes and orientations match, and most roofs listed as missing are houses that the model has
+  with a sheet roof, or that the v1.14 rule moved a few metres off a lane.
+- North of the D.260 bridge (around 335, −125) the traced lane `secondary_106` ran from the north lane west through a
+  block of houses that in the satellite picture stand eave to eave, with no lane between them. The lane is gone
+  (`ROAD_MOVE`, kept as a stub so no other road changes its index) and the three houses it had pushed out of the model
+  are back: two on their traced footprints, the east one 2 m in from the north lane and 1.5 m shorter (`OWNER_FIX`).
+- Not changed, for a closer look later: the walled farmyard north of the road at about (445, 140) — a long building
+  on the north side with sheet-roofed sheds round the yard in the satellite picture — is two houses and a shed in the
+  model, and the lane `local_251` runs along its east wing.
+
+**Weathering** (`src/buildings.js`). Every house has an age from its id (0 = rendered last year, 1 = fifty years old);
+all effects scale with it, so the newer houses stay clean.
+
+- Render: plaster fallen off in patches, most of all low down, showing hollow red brick in 19 cm courses or the old
+  rubble behind it, with a thin shadow on the broken edge; a rising-damp tide mark 0.4–1.1 m high with a ragged top
+  and a white salt line along it; hairline cracks; rain streaks from the eaves that run longer on old houses; a
+  blotchy, many-times-renewed lime wash; south and west fronts bleached by the sun; grey-green algae low on the north
+  side.
+- Tile roofs: each tile its own shade, newer orange tiles and odd grey ones put in over the years, a few slipped tiles
+  with a dark gap under them, orange and pale lichen, moss on north slopes, faded colour and dark blotches on old roofs.
+- Sheet roofs chalk and rust in patches and runs. Doors: chipped paint, rust or grey wood along the bottom. Windows:
+  yellowed frames, dust on the lower half of the pane. Sills, fascias and soffits gather grime; plinths stay damp
+  with dried mud at the foot.
+
+Comparison sheets: `docs/screenshots/v1.17_satellite_d260_block.jpg`, `v1.17_weathering_before_after.jpg`, `v1.17_weathering_close.jpg`.
+
+**Lived-in details** (`buildHouse` › `lived` in `src/village.js`): firewood stacked against the back wall under a
+scrap of rusty sheet held down by a stone (about a third of the houses and barns), and the black stove pipe out of a
+side wall, up past the eaves with a cap, soot round the hole (almost half the houses). Both are placed by a hash of
+the house's position, never on a busy side (stair, porch, terrace door) or a road, and make no random draws, so the
+colours, trees and details of every other house are unchanged.
+
 ## v1.16 — no double walls (Nov 2026)
 
 The owner's Orbit screenshot of 23 Nov 2026 shows two dry-stone walls running side by side along the lane in front of

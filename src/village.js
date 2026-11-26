@@ -1099,6 +1099,42 @@ export function buildVillage(ctx, layout, M) {
         add('metalDark', box(w + 2 * e, 0.06, 0.06, 0, ry - 0.03, -d / 2 - e));
       }
     }
+    // v1.17 (owner: older, lived-in houses): firewood stacked against the back wall under a scrap of roof sheet, and
+    // the black stove pipe (soba borusu) out through a side wall and up past the eaves. Hash of the position, no
+    // random draws, so the rest of the village keeps its colours and details.
+    if (!b.kind && !b.lowerFloor) lived();
+    function lived() {
+      const hh = (k) => { const t = Math.sin(b.x * 12.9898 + b.z * 78.233 + k * 37.719) * 43758.5453; return t - Math.floor(t); };
+      const opp = { '+z': '-z', '-z': '+z', '+x': '-x', '-x': '+x' }, c = Math.cos(b.yaw), s = Math.sin(b.yaw), v = new THREE.Vector3();
+      const world = (fm, x, z) => { v.set(x, 0, z).applyMatrix4(fm); return [b.x + v.x * c + v.z * s, b.z - v.x * s + v.z * c]; };
+      const busy = (side) => side === stairSide || (b.porch && porchSide(b) === side) || (b.balc && porchSide(b, b.balc.dir) === side) || (b.doors || []).some(od => porchSide(b, od.dir) === side);
+      const back = opp[front];
+      if (hh(1) < (isBarn ? 0.35 : 0.3) && !busy(back)) {
+        const fm = faceMatrix(back, w, d), L = back === '+z' || back === '-z' ? w : d, pl = Math.min(2.4, L - 1.0);
+        if (pl > 1.0) {
+          const x = (hh(2) < 0.5 ? -1 : 1) * (L / 2 - pl / 2 - 0.3), [gx, gz] = world(fm, x, 0.35);
+          if (!roadHit(gx, gz, 0.4)) {
+            const g = terrH(gx, gz) - b.yTop, ph = 0.8 + 0.5 * hh(3);
+            const pile = boxY(pl, 0.55, g - 0.1, g + ph, x, 0.33); add('woodpile', pile, fm);
+            const sh = box(pl + 0.3, 0.03, 0.85, 0, 0, 0); sh.rotateX(0.22); sh.translate(x, g + ph + 0.1, 0.38); add('rustSheet', sh, fm);
+            add('rubble', box(0.25, 0.2, 0.2, x - pl / 2 + 0.2, g + ph + 0.22, 0.6), fm);   // a stone to hold the sheet down
+          }
+        }
+      }
+      if (hh(4) < (isBarn ? 0 : 0.45)) {
+        const sides = ['+x', '-x', '+z', '-z'].filter(sd => sd !== front && !busy(sd)); if (!sides.length) return;
+        const side = sides[Math.floor(hh(5) * sides.length)], fm = faceMatrix(side, w, d), L = side === '+z' || side === '-z' ? w : d;
+        const nw = Math.max(L > 2.6 ? 1 : 0, Math.min(2, Math.round((L - 1.0) / 3.8)));
+        const x = nw >= 2 ? -L / 2 + L / nw : (hh(6) < 0.5 ? -1 : 1) * (L / 2 - 0.55);
+        const py = y0 + (n - 1) * FLOOR + FLOOR - 0.45, out = 0.8, r = 0.065, top = y1 + 0.9;
+        const hz = cyl(r, r, out, 0, 0, 0, 8); hz.rotateX(Math.PI / 2); hz.translate(x, py, out / 2); add('metalDark', hz, fm);
+        add('metalDark', cyl(r, r, top - py, x, (top + py) / 2, out, 8), fm);
+        add('metalDark', cyl(r + 0.02, r + 0.02, 0.12, x, py, out, 8), fm);                       // the elbow
+        const cap = new THREE.ConeGeometry(0.16, 0.14, 8); cap.translate(x, top + 0.14, out); add('metalDark', cap, fm);
+        add('metalDark', box(0.03, 0.03, out, x, py + 1.4, out / 2), fm);                        // a wire bracket to the wall
+        add('soot', box(0.5, 0.7, 0.01, x, py + 0.22, 0.006), fm);                               // soot round the hole
+      }
+    }
     if (b.porch) buildPorch(b.porch);
     if (b.balc) buildPorch(b.balc);
     // v0.9.7 (owner): on one side the roof runs on over a sitting terrace — wooden posts, a concrete floor, a table

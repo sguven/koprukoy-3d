@@ -1,4 +1,4 @@
-// v1.17: builds model/character/villager.glb, the character of the third-person walk (src/avatar.js).
+// v1.18: builds model/character/villager.glb, the character of the third-person walk (src/avatar.js).
 //
 // Sources (all CC0 1.0, by Quaternius — https://quaternius.com):
 //   Universal Base Characters      Regular_Male_OnlyHead, Hair_SimpleParted, Hair_Moustache (+ their textures)

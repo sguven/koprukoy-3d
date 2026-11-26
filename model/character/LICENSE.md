@@ -1,6 +1,6 @@
 # villager.glb
 
-The walking character of the third-person Walk mode (v1.17, `src/avatar.js`). Built with `tools/build_character.mjs`.
+The walking character of the third-person Walk mode (v1.18, `src/avatar.js`). Built with `tools/build_character.mjs`.
 
 All parts are by **Quaternius** (https://quaternius.com) and dedicated to the public domain under
 [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/): free for any use, commercial included,
@@ -17,7 +17,7 @@ WebP, meshes are meshopt-compressed, and the hair is tinted dark brown at run ti
 
 # bots.glb
 
-The people the game mode's bots are (v1.18, `src/botchar.js`), built with the same tool from the same CC0 kits by
+The people the game mode's bots are (v1.19, `src/botchar.js`), built with the same tool from the same CC0 kits by
 **Quaternius**, plus two colourways as separate textures (`T_Noble_2_BaseColor.webp`, `T_Noble_3_BaseColor.webp`):
 
 | Part | Kit |

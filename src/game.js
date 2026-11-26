@@ -55,7 +55,7 @@ export function createGame(ctx) {
     rubber: mat(0x202020, 0.95), blade: mat(0xd5d8dc, 0.25, 0.95),
     flash: new THREE.SpriteMaterial({ color: 0xffe3a0, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false }),
   };
-  // v1.18: the muzzle flash is a hot core with a few short spikes fading out, not a square
+  // v1.19: the muzzle flash is a hot core with a few short spikes fading out, not a square
   M.flash.map = (() => {
     const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d');
     const gr = x.createRadialGradient(32, 32, 0, 32, 32, 30); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.25, 'rgba(255,230,170,0.9)'); gr.addColorStop(0.6, 'rgba(255,150,40,0.25)'); gr.addColorStop(1, 'rgba(255,120,0,0)');
@@ -289,7 +289,7 @@ export function createGame(ctx) {
     return out;
   })();
   const MUZZLE = {}; for (const k of BOT_GUNS) MUZZLE[k] = weaponModel(k).userData.muzzle;
-  // v1.18: the bots are people (src/botchar.js): skinned villagers holding these guns with both hands. The box figures
+  // v1.19: the bots are people (src/botchar.js): skinned villagers holding these guns with both hands. The box figures
   // above stay as the stand-in while model/character/bots.glb loads (and if it cannot load).
   // Where the hands and the shoulder go on each gun, in the weapon frame (barrel along -Z, grip down):
   const HOLD = {
@@ -365,7 +365,7 @@ export function createGame(ctx) {
     for (let i = 0; i < IML.length; i++) IML[i].count = 0;
     for (let k = 0; k < G.bots.length; k++) {
       const b = G.bots[k];
-      if (!b.vis || b.char) continue;   // off screen: not drawn at all; a person (v1.18) draws itself
+      if (!b.vis || b.char) continue;   // off screen: not drawn at all; a person (v1.19) draws itself
       b.mesh.updateMatrixWorld(true);
       const parts = b.mesh.userData.parts; for (let i = 0; i < parts.length; i++) { const o = parts[i], im = o.userData.imesh; im.setMatrixAt(im.count++, o.matrixWorld); }
     }
