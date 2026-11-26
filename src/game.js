@@ -9,6 +9,7 @@
 // they hear. Line of sight and bullets are blocked by the terrain height field and the building boxes.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { createBotCrowd } from './botchar.js';
 
 const BOT_NAMES = ['Keskinli', 'Kırıkkaleli', 'Çeşnigir', 'Kapulukaya', 'Hırka', 'Köprübaşı', 'Kızılırmak', 'Bozkır', 'Karakeçili', 'Ceritler', 'Yeşilyurt', 'Göçeri'];
 const botName = (i) => BOT_NAMES[i % BOT_NAMES.length] + (i >= BOT_NAMES.length ? ' ' + (Math.floor(i / BOT_NAMES.length) + 1) : '');
@@ -54,6 +55,15 @@ export function createGame(ctx) {
     rubber: mat(0x202020, 0.95), blade: mat(0xd5d8dc, 0.25, 0.95),
     flash: new THREE.SpriteMaterial({ color: 0xffe3a0, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false }),
   };
+  // v1.19: the muzzle flash is a hot core with a few short spikes fading out, not a square
+  M.flash.map = (() => {
+    const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d');
+    const gr = x.createRadialGradient(32, 32, 0, 32, 32, 30); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.25, 'rgba(255,230,170,0.9)'); gr.addColorStop(0.6, 'rgba(255,150,40,0.25)'); gr.addColorStop(1, 'rgba(255,120,0,0)');
+    x.fillStyle = gr; x.beginPath();
+    for (let i = 0; i < 12; i++) { const a = i / 12 * Math.PI * 2, r = i % 2 ? 11 : 30; x.lineTo(32 + Math.cos(a) * r, 32 + Math.sin(a) * r); }
+    x.closePath(); x.fill();
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+  })();
   // bots stand out against the village: bright red kit, black vest, yellow scarf, with a little glow so they do not vanish in shadow
   M.cloth.emissive.setHex(0x5a0d08); M.cloth2.emissive.setHex(0x3a0906); M.team.emissive.setHex(0x6b5200);
   const tracerMat = new THREE.LineBasicMaterial({ color: 0xfff3c0, transparent: true, opacity: 0.75 });
@@ -279,6 +289,55 @@ export function createGame(ctx) {
     return out;
   })();
   const MUZZLE = {}; for (const k of BOT_GUNS) MUZZLE[k] = weaponModel(k).userData.muzzle;
+  // v1.19: the bots are people (src/botchar.js): skinned villagers holding these guns with both hands. The box figures
+  // above stay as the stand-in while model/character/bots.glb loads (and if it cannot load).
+  // Where the hands and the shoulder go on each gun, in the weapon frame (barrel along -Z, grip down):
+  const HOLD = {
+    ak47:   { scale: 0.62, grip: [0.06, -0.06, 0.12], fore: [0, -0.05, -0.4], butt: [0, -0.03, 0.5], mag: [0, -0.2, -0.2] },
+    m4a1:   { scale: 0.65, grip: [0.06, -0.05, 0.13], fore: [0, -0.04, -0.38], butt: [0, -0.01, 0.43], mag: [0, -0.18, -0.12] },
+    mp5:    { scale: 0.7, grip: [0.06, -0.05, 0.11], fore: [0, -0.035, -0.36], butt: [0, -0.02, 0.41], mag: [0, -0.18, -0.2] },
+    deagle: { scale: 0.85, grip: [0, -0.07, 0.05], fore: [-0.035, -0.085, 0.06], butt: null, mag: [0, -0.15, 0.06] },
+  };
+  const v3 = (a) => a && new THREE.Vector3(a[0], a[1], a[2]);
+  const crowdGuns = {}; for (const k of BOT_GUNS) crowdGuns[k] = { geo: IM[k].geometry, mat: vcMat, scale: HOLD[k].scale, muzzle: MUZZLE[k], grip: v3(HOLD[k].grip), fore: v3(HOLD[k].fore), butt: v3(HOLD[k].butt), mag: v3(HOLD[k].mag) };
+  const crowd = createBotCrowd({ url: new URL('../model/character/bots.glb', import.meta.url).href, guns: crowdGuns, makeFlash: flashSprite, parent: group });
+  const attachChar = (b) => { if (crowd.ready && !b.char) { b.char = crowd.make(b.id, b.weapon); if (b.dead > 0) b.char.die(); } };
+  // a soft dark patch under each person (the bots stay out of the static shadow map)
+  const blobs = (() => {
+    const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d');
+    const gr = x.createRadialGradient(32, 32, 2, 32, 32, 31); gr.addColorStop(0, 'rgba(0,0,0,0.55)'); gr.addColorStop(0.55, 'rgba(0,0,0,0.3)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+    x.fillStyle = gr; x.fillRect(0, 0, 64, 64);
+    const geo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
+    const m = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+    const im = new THREE.InstancedMesh(geo, m, MAX_BOTS); im.count = 0; im.frustumCulled = false; im.renderOrder = 1; im.name = 'Bot_blobs';
+    im.instanceMatrix.setUsage(THREE.DynamicDrawUsage); group.add(im); return im;
+  })();
+  const _bm = new THREE.Matrix4(), _bq = new THREE.Quaternion(), _bs = new THREE.Vector3(), _bp = new THREE.Vector3();
+  const charIn = { x: 0, y: 0, z: 0, yaw: 0, vx: 0, vz: 0, pitch: 0, aim: false, crouch: false, reloadK: -1 };
+  // the people's animation, after the bots moved: only the ones in view, 15 times a second beyond 60 m
+  function animateChars(dt) {
+    let nb = 0;
+    for (let k = 0; k < G.bots.length; k++) {
+      const b = G.bots[k], ch = b.char; if (!ch) continue;
+      ch.visible = b.vis; if (!b.vis) { b.cacc = 0.2; continue; }
+      const dist = len2(b.x - P.x, b.z - P.z);
+      _bs.set(b.dead > 0 ? 1.5 : 1.05, 1, b.dead > 0 ? 1.5 : 1.05); _bq.setFromAxisAngle(_v1.set(0, 1, 0), b.yaw);
+      _bp.set(b.x, b.y + 0.03, b.z); if (b.dead > 0) _bp.addScaledVector(_v1.set(-Math.sin(b.yaw), 0, -Math.cos(b.yaw)), 0.7);
+      blobs.setMatrixAt(nb++, _bm.compose(_bp, _bq, _bs));
+      b.cacc = (b.cacc || 0) + dt;
+      if (dist > 60 && !(G.scoped) && b.cacc < 1 / 15) continue;
+      const step = Math.min(b.cacc, 0.25); b.cacc = 0;
+      const W = WEAPONS[b.weapon];
+      charIn.x = b.x; charIn.y = b.y; charIn.z = b.z; charIn.yaw = b.yaw; charIn.vx = b.vx || 0; charIn.vz = b.vz || 0;
+      charIn.pitch = Math.atan2(P.y + EYE - 0.3 - (b.y + 1.45), Math.max(1, dist));
+      charIn.aim = b.hasLos || b.state === 'search' || b.state === 'chase' || b.state === 'hold' || b.state === 'close';
+      charIn.crouch = !!b.crouch && b.state === 'hold';
+      charIn.reloadK = b.reloadT > 0 ? 1 - b.reloadT / (W.reload + 0.4) : -1;
+      ch.update(step, charIn);
+      ch.flash.visible = b.flashT > 0; if (ch.flash.visible) ch.flash.scale.setScalar(0.35 + rnd() * 0.3);
+    }
+    blobs.count = nb; blobs.visible = nb > 0; if (nb) blobs.instanceMatrix.needsUpdate = true;
+  }
   const IML = Object.values(IM);
   const slot = (im) => { const o = new THREE.Object3D(); o.userData.im = im; o.userData.imesh = IM[im]; return o; };
   function botMesh(weapon) {
@@ -306,7 +365,7 @@ export function createGame(ctx) {
     for (let i = 0; i < IML.length; i++) IML[i].count = 0;
     for (let k = 0; k < G.bots.length; k++) {
       const b = G.bots[k];
-      if (!b.vis) continue;   // off screen: not drawn at all
+      if (!b.vis || b.char) continue;   // off screen: not drawn at all; a person (v1.19) draws itself
       b.mesh.updateMatrixWorld(true);
       const parts = b.mesh.userData.parts; for (let i = 0; i < parts.length; i++) { const o = parts[i], im = o.userData.imesh; im.setMatrixAt(im.count++, o.matrixWorld); }
     }
@@ -320,16 +379,18 @@ export function createGame(ctx) {
       state: 'patrol', route: null, pauseT: 0, lookYaw: 0, speedK: 0.85 + rnd() * 0.3, lateral: (rnd() - 0.5) * 2.4,
       seen: 0, lastSeen: null, ls: { x: 0, z: 0 }, hasLos: false, losT: rnd() * 0.3, aimT: 0, reaction: 0.3 + rnd() * 0.4,
       mag: W.mag, burst: 0, cd: 1 + rnd(), reloadT: 0, walk: 0, stuck: 0, lastX: p.x, lastZ: p.z, dead: 0, flee: 0, side: 1, sideT: 0, crouch: 0,
-      mesh: botMesh(weapon), flashT: 0, acc: rnd() * 0.2, vis: true };
+      mesh: botMesh(weapon), flashT: 0, acc: rnd() * 0.2, vis: true, char: null, vx: 0, vz: 0, cacc: 0 };
     b.mesh.position.set(b.x, b.y, b.z); group.add(b.mesh);
+    attachChar(b);
     return b;
   }
   function killBot(b, head) {
-    b.dead = 6; b.state = 'dead'; b.hp = 0; G.kills++; feed(`${b.name} ${head ? 'kafadan vuruldu' : 'vuruldu'} — ${WEAPONS[G.weapon].name}`); sound(head ? 'headshot' : 'hit');
+    b.dead = 6; b.state = 'dead'; b.hp = 0; G.kills++; if (b.char) b.char.die(); feed(`${b.name} ${head ? 'kafadan vuruldu' : 'vuruldu'} — ${WEAPONS[G.weapon].name}`); sound(head ? 'headshot' : 'hit');
   }
   function respawnBot(b) {
     const p = roadPoint(P, 90, 280); b.x = p.x; b.z = p.z; b.y = surfaceAt(p.x, p.z).y; b.hp = 100; b.state = 'patrol'; b.route = null; b.dead = 0; b.flee = 0; b.crouch = 0; b.mag = WEAPONS[b.weapon].mag; b.reloadT = 0;
     b.mesh.rotation.set(0, b.yaw, 0); b.mesh.position.set(b.x, b.y, b.z); b.cd = 1.5; b.hasLos = false; b.seen = 0;
+    b.vx = b.vz = 0; if (b.char) b.char.reset();
   }
   function alertBot(b, x, z) { if (b.dead > 0) return; b.ls.x = x; b.ls.z = z; b.lastSeen = b.ls; b.seen = Math.max(b.seen, 6); if (b.state === 'patrol') b.state = 'search'; }
   function moveBot(b, tx, tz, speed, dt) {
@@ -355,6 +416,7 @@ export function createGame(ctx) {
     // v1.1: how often a bot thinks and moves depends on how far it is: every frame within 60 m (and whatever is in
     // view through the scope), ~20 times a second to 120 m, ~5 times a second beyond (was: 10 a second beyond 180 m)
     if (dist >= 60 && !(G.scoped && b.vis)) { const every = dist < 120 ? 0.05 : 0.2; b.acc += dt; if (b.acc < every) return; dt = b.acc; b.acc = 0; }
+    const x0 = b.x, z0 = b.z;
     // ---- perception: line of sight a few times a second; at most LOS_PER_FRAME traces a frame, the rest wait a frame
     b.losT -= dt;
     const needTrace = dist < 120 && G.dead <= 0;
@@ -432,7 +494,8 @@ export function createGame(ctx) {
       const playerMoving = kd('KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight');   // (keyboard only, as before)
       let p = W.botAcc * G.difficulty * Math.max(0.25, 1 - dist / 170);
       if (playerMoving) p *= 0.65; if (moving) p *= 0.7; if (b.crouch) p *= 1.2; if (b.aimT < b.reaction + 0.4) p *= 1.15;
-      const muzzle = u.flash.getWorldPosition(_v1);
+      if (b.char) b.char.fired();
+      const muzzle = (b.char && b.vis ? b.char.flash : u.flash).getWorldPosition(_v1);   // (a person out of view was not posed this frame)
       if (rnd() < Math.min(0.85, p)) {
         const falloff = Math.max(0.6, 1 - dist / 400), dmg = Math.round(W.dmg * falloff * (0.85 + rnd() * 0.3));
         hurtPlayer(dmg, b); tracer(muzzle, _v2.set(ex + (rnd() - 0.5) * 0.3, P.y + EYE - 0.3 + (rnd() - 0.5) * 0.4, ez + (rnd() - 0.5) * 0.3));
@@ -444,8 +507,10 @@ export function createGame(ctx) {
         tracer(muzzle, end); if (w) puff(end.x, end.y, end.z, 0.5); if (dist < 40) sound('whiz');
       }
     }
-    // ---- pose (limbs only for bots in view: v1.1)
-    if (b.vis) {
+    // the speed really covered (the people's legs follow it), smoothed a little
+    const kv = Math.min(1, dt * 10); b.vx += ((b.x - x0) / dt - b.vx) * kv; b.vz += ((b.z - z0) / dt - b.vz) * kv;
+    // ---- pose (limbs only for bots in view: v1.1; a person is posed in animateChars)
+    if (b.vis && !b.char) {
       const sw = Math.sin(b.walk * 2.4) * (moving ? 0.6 : 0);
       u.l1.rotation.x = sw; u.l2.rotation.x = -sw;
       const aim = b.hasLos || b.state === 'search' ? 1 : 0;
@@ -454,7 +519,7 @@ export function createGame(ctx) {
       u.gun.rotation.x += ((aim ? 0 : 0.35) - u.gun.rotation.x) * Math.min(1, dt * 8); u.gun.position.y = 1.28 - (aim ? 0 : 0.06);
     }
     const crouchK = b.crouch && b.state === 'hold' ? 0.75 : 1; b.mesh.scale.y += (crouchK - b.mesh.scale.y) * Math.min(1, dt * 6);
-    u.flash.visible = b.flashT > 0; if (u.flash.visible) u.flash.scale.setScalar(0.35 + rnd() * 0.3);
+    u.flash.visible = b.flashT > 0 && !b.char; if (u.flash.visible) u.flash.scale.setScalar(0.35 + rnd() * 0.3);
     b.mesh.position.set(b.x, b.y + (moving ? Math.abs(Math.sin(b.walk * 2.4)) * 0.03 : 0), b.z); b.mesh.rotation.set(0, b.yaw, 0);
   }
 
@@ -543,7 +608,7 @@ export function createGame(ctx) {
     else if (bestB) {
       const falloff = W.melee ? 1 : Math.max(0.5, 1 - bestT / 500), dmg = Math.round(W.dmg * falloff * (bestHead ? W.head : 1) * (0.9 + rnd() * 0.2));
       bestB.hp -= dmg; puff(end.x, end.y, end.z, 0.45, bloodMat); sound(bestHead ? 'headshot' : 'hit');
-      if (bestB.hp <= 0) killBot(bestB, bestHead); else { alertBot(bestB, P.x, P.z); bestB.hasLos = true; bestB.seen = 6; bestB.aimT = bestB.reaction; }
+      if (bestB.hp <= 0) killBot(bestB, bestHead); else { if (bestB.char) bestB.char.hit(); alertBot(bestB, P.x, P.z); bestB.hasLos = true; bestB.seen = 6; bestB.aimT = bestB.reaction; }
     }
     if (!W.melee) { const muzzle = _v2.copy(models[G.weapon].userData.muzzle).add(models[G.weapon].position).applyMatrix4(camera.matrixWorld); tracer(muzzle, end); }
     // bots within earshot turn towards the gunfire
@@ -642,6 +707,7 @@ export function createGame(ctx) {
     if (isTouch) for (const b of [fireBtn, reloadBtn, jumpBtn]) b.classList.add('show');
     vm.visible = true; warmAudio();
     if (!G.bots.length) for (let i = 0; i < G.botCount; i++) G.bots.push(spawnBot(i));
+    crowd.load().then(() => { for (const b of G.bots) attachChar(b); }).catch(e => console.warn('bot characters', e));
     newRound();
   }
   function newRound() {
@@ -658,7 +724,7 @@ export function createGame(ctx) {
     for (const l of tracers) l.visible = on; for (const p of puffs) p.visible = on;
     for (const k in IM) { IM[k].count = on ? 1 : 0; IM[k].visible = on; }
   }
-  function setBots(n) { G.botCount = n; while (G.bots.length > n) { const b = G.bots.pop(); group.remove(b.mesh); } while (G.bots.length < n) G.bots.push(spawnBot(G.bots.length)); }
+  function setBots(n) { G.botCount = n; while (G.bots.length > n) { const b = G.bots.pop(); group.remove(b.mesh); if (b.char) b.char.dispose(); } while (G.bots.length < n) G.bots.push(spawnBot(G.bots.length)); }
   function setPrimary(k) { if (!WEAPONS[k] || WEAPONS[k].slot !== 1) return; G.primary = k; if (G.on) { G.ammo[k] = { mag: WEAPONS[k].mag, reserve: WEAPONS[k].reserve }; setWeapon(k); } }
   function setDifficulty(d) { G.difficulty = d; }
   function cycleWeapon(dir) { const order = [G.primary, 'deagle', 'knife'], i = order.indexOf(G.weapon); setWeapon(order[(i + dir + 3) % 3]); }
@@ -675,6 +741,7 @@ export function createGame(ctx) {
     while (G.feed.length && G.feed[G.feed.length - 1].t <= 0) G.feed.pop();   // newest first: the oldest lines expire at the end
     markVisibleBots(); losLeft = LOS_PER_FRAME;
     for (let i = 0; i < G.bots.length; i++) botStep(G.bots[i], dt);
+    animateChars(dt);
     // view model: bob while walking, kick on firing, lowered while reloading / swapping
     const moving = isMoving();
     G.bob += dt * (moving ? (isRunning() ? 11 : 7) : 2);
