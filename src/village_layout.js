@@ -58,6 +58,9 @@ const ROAD_MOVE = {
   local_327: { pts: [[277.4, 206.4], [277.9, 206.9]], gone: true },
   local_326: { pts: [[326.2, 222.6], [326.6, 223.0]], gone: true },                      // a stub into the long house's yard: the garage's gravel forecourt is open ground
   local_312: { pts: [[222.8, 179.1], [240.0, 188.5], [252.0, 196.0], [263.0, 197.4], [271.2, 194.9]] },   // the lane west passes south of the shop
+  // v1.17 (Google satellite, Nov 2026): no lane runs west from the north lane through the block of houses north of the
+  // D.260 bridge; the houses stand eave to eave there. The traced piece had pushed three of them out of the model.
+  secondary_106: { pts: [[357.0, -138.0], [357.4, -138.4]], gone: true },
 };
 
 // ---------------------------------------------------------------- buildings traced from the photo
@@ -477,6 +480,9 @@ const OWNER_FIX = [
           '(span: the part of the side clear of the tandır, from its south end). ' +
           'v1.1.1 (owner, 11 Nov 2026): on the south face of the lower storey the door and the window swap places — the door on the left, the window on the right as seen from the south' },
   { xz: [60.0, 319.4], set: { storeys: 1 }, note: 'single storey, not two' },
+  // v1.17 (Google satellite): the east house of the row north of the D.260 bridge stands right on the lane's edge; its
+  // footprint is drawn 2 m in from the lane and 1.5 m shorter so that it is no longer left out
+  { xz: [347.7, -121.9], set: { x: 345.5, z: -122.4, w: 13.5 }, note: 'east house of the row west of the north lane, eave to eave with its neighbours' },
   { xz: [117.6, 340.6], set: { wallGone: true }, note: 'no garden wall in front of this house (owner, 11 Nov 2026)' },
   { xz: [88.5, 322.8], set: { wall: 'none' }, note: 'its plot is closed by the stone wall along the lane (STONE_WALLS), not a wire fence' },
   // v0.9.8 (owner's photos of the opening): the white house among the trees west of the çardak plot is the
