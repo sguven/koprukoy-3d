@@ -20,6 +20,9 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
+// v1.18: the walking character (src/avatar.js) is carried the same way: addActor() puts his skinned meshes in the
+// proxy scene as depth-only skinned copies that share his skeleton, and his square is redrawn with the car's.
+
 const SHADOW_SIDE = { [THREE.FrontSide]: THREE.BackSide, [THREE.BackSide]: THREE.FrontSide, [THREE.DoubleSide]: THREE.DoubleSide };
 
 export function createCarShadow({ renderer, scene, light, car }) {
@@ -63,6 +66,9 @@ export function createCarShadow({ renderer, scene, light, car }) {
   // the car's size for the scissor square (its bounding sphere, in the car's frame)
   const box = new THREE.Box3().setFromObject(car, true), sphere = new THREE.Sphere(); box.getBoundingSphere(sphere);
   const carInv = new THREE.Matrix4().copy(car.matrixWorld).invert(); const centreLocal = sphere.center.clone().applyMatrix4(carInv), radius = sphere.radius + 0.3;
+  // everything that moves on top of the still world: the car, and the character once loaded ({ obj, centre, radius })
+  // (only the active ones, the one being driven or walked, are redrawn between full passes: a parked car stays put)
+  const movers = [{ obj: car, centre: centreLocal, radius, active: true }];
 
   // ---- full-screen copies: cache ← map (colour only) and map ← cache (colour and depth, so the car is depth-tested) ----
   const tri = new THREE.BufferGeometry();
@@ -92,16 +98,22 @@ export function createCarShadow({ renderer, scene, light, car }) {
   function syncProxies() {
     for (const [f, p] of casters) {
       let vis = f.visible; for (let a = f.parent; vis && a; a = a.parent) vis = a.visible;
-      p.visible = vis; if (vis) p.matrixWorld.copy(f.matrixWorld);
+      p.visible = vis; if (vis) { p.matrixWorld.copy(f.matrixWorld); if (p.isSkinnedMesh) p.bindMatrixInverse.copy(f.bindMatrixInverse); }   // (an attached skin's inverse follows its world matrix)
     }
   }
-  /** The car's square in the shadow map (texels, y up), from its bounding sphere seen by the light. */
+  /** The movers' square in the shadow map (texels, y up), from their bounding spheres seen by the light. */
   function carRect(map, cam) {
-    _c.copy(centreLocal).applyMatrix4(car.matrixWorld);
-    _v.copy(_c).applyMatrix4(cam.matrixWorldInverse).applyMatrix4(cam.projectionMatrix);
-    const W = map.width, H = map.height, rx = radius / (cam.right - cam.left) * W, ry = radius / (cam.top - cam.bottom) * H;
-    const x = (_v.x * 0.5 + 0.5) * W, y = (_v.y * 0.5 + 0.5) * H;
-    return rect.set(Math.floor(x - rx) - 2, Math.floor(y - ry) - 2, Math.ceil(2 * rx) + 4, Math.ceil(2 * ry) + 4);
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const m of movers) {
+      if (!m.active) continue;
+      _c.copy(m.centre).applyMatrix4(m.obj.matrixWorld);
+      _v.copy(_c).applyMatrix4(cam.matrixWorldInverse).applyMatrix4(cam.projectionMatrix);
+      const W = map.width, H = map.height, rx = m.radius / (cam.right - cam.left) * W, ry = m.radius / (cam.top - cam.bottom) * H;
+      const x = (_v.x * 0.5 + 0.5) * W, y = (_v.y * 0.5 + 0.5) * H;
+      x0 = Math.min(x0, Math.floor(x - rx) - 2); y0 = Math.min(y0, Math.floor(y - ry) - 2); x1 = Math.max(x1, Math.ceil(x + rx) + 2); y1 = Math.max(y1, Math.ceil(y + ry) + 2);
+    }
+    if (x0 === Infinity) return rect.set(0, 0, 0, 0);
+    return rect.set(x0, y0, x1 - x0, y1 - y0);
   }
   function drawCar(map, cam, scissor) {
     syncProxies();
@@ -157,9 +169,12 @@ export function createCarShadow({ renderer, scene, light, car }) {
     /**
      * Call right before renderer.render(scene, camera), after the loop has decided whether the shadow map is redrawn
      * (light.shadow.needsUpdate). `driving`: the car moves, so it is redrawn on top of the cached map every frame.
+     * `walking` (v1.18): the same for the character added with addActor().
      * Returns true when the frame redraws the still world (it may ask for that itself, when the cache is missing).
      */
-    plan(driving) {
+    plan(driving, walking = false) {
+      movers[0].active = driving; for (let i = 1; i < movers.length; i++) movers[i].active = walking;
+      driving = driving || walking;
       keepCache = driving;
       if (driving && !cacheOk) light.shadow.needsUpdate = true;
       pending = light.shadow.needsUpdate ? 'full' : driving ? 'move' : null;
@@ -175,5 +190,23 @@ export function createCarShadow({ renderer, scene, light, car }) {
       renderer.setRenderTarget(was); if (tmp) tmp.dispose();
     },
     get casters() { return casters.length; },
+    /**
+     * v1.18: an animated character that moves on top of the still world like the car. His skinned meshes leave
+     * three.js's own shadow pass and are drawn here by depth-only copies that share his skeleton (the skeleton is
+     * updated by the main render before this pass runs). `centre` / `radius`: his bounding sphere in his own frame.
+     */
+    addActor(obj, centre, r) {
+      obj.updateMatrixWorld(true);
+      obj.traverse(o => {
+        if (!o.isSkinnedMesh || !o.castShadow) return;
+        o.castShadow = false;
+        const mat = Array.isArray(o.material) ? o.material[0] : o.material;
+        const p = new THREE.SkinnedMesh(o.geometry, depthMat(mat)); p.bindMode = o.bindMode; p.bind(o.skeleton, o.bindMatrix);
+        p.matrixAutoUpdate = false; p.matrixWorldAutoUpdate = false; p.frustumCulled = false; proxyScene.add(p);
+        casters.push([o, p]);
+      });
+      movers.push({ obj, centre: centre.clone(), radius: r, active: false });
+      prev = null; cacheOk = false;
+    },
   };
 }
