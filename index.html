@@ -348,6 +348,7 @@ import { createEngine } from './src/engine.js';
 import { PERF, DistanceCuller, createPerfMeter } from './src/perf.js';
 import { createCarShadow } from './src/carshadow.js';
 import { createAvatar } from './src/avatar.js';
+import { createSolids } from './src/solids.js';
 import { parseBench, createBench } from './src/bench.js';
 
 const POIS = [{"id": "kopru", "label": "Çeşnigir Bridge", "kind": "tarihi", "pos": [-377, 16, -277]}, {"id": "viyaduk", "label": "D.260 viaduct", "kind": "yol", "pos": [-539, 22, -105]}, {"id": "d260a", "label": "D.260", "kind": "yon", "pos": [-951, 35, -319]}, {"id": "d260b", "label": "D.260", "kind": "yon", "pos": [154, 36, 568]}, {"id": "karakecili", "label": "To Karakeçili", "kind": "yon", "pos": [-825, 21, -209]}, {"id": "gezi", "label": "Promenade", "kind": "yer", "pos": [-267, 14, -57]}, {"id": "seyir", "label": "Viewpoint rock", "kind": "yer", "pos": [-292, 24, -338]}, {"id": "iskele", "label": "Boat pier", "kind": "yer", "pos": [-262, 9, -393]}, {"id": "cennet", "label": "Çeşnigir park", "kind": "yer", "pos": [-262, 12, -340]}, {"id": "kanyon", "label": "Çeşnigir Canyon", "kind": "yer", "pos": [-277, 55, -602]}, {"id": "nehir", "label": "Kızılırmak · Kapulukaya Reservoir", "kind": "su", "pos": [-318, 8, 331]}];
@@ -621,6 +622,7 @@ loadAll().then(gltf => {
   try { warmScene(); } catch (e) { console.error(e); }
   document.getElementById('loading').remove(); sceneReady = true;
   if (thirdPerson) setTimeout(getAvatar, 1500);   // v1.17: fetch the walking character in the background
+  setTimeout(buildSolids, 800);
 }).catch(err => { document.getElementById('loading').textContent = 'The model could not be loaded. Please reload the page.'; console.error(err); });
 
 // v1.1: one frame, still behind "Loading…", that draws the whole map from above with every distance-culled detail,
@@ -686,11 +688,16 @@ const carShadow = createCarShadow({ renderer, scene, light: sun, car });
 // The character (3.6 MB) is fetched once the village is up, or at once when Walk is opened before that. Until he is
 // in, Walk is the first-person view. V (or the button on a phone, or Settings › Controls) switches between the two.
 let thirdPerson = true; try { thirdPerson = localStorage.getItem('kk_tp') !== '0'; } catch (_) {}
-let avatar = null, avatarAdded = false;
+let avatar = null, avatarAdded = false, solids = null;
+// v1.17: walls, kerbs, fences, steps, posts … as a collision grid read from the finished scene (src/solids.js)
+function buildSolids() {
+  if (solids) return; solids = createSolids({ scene, terrH, exclude: [car, ...(avatar ? [avatar.root] : [])] });
+  solids.build(window.__solidsSlice || 8).then(s => console.log('[solids]', s.chunks, 'chunks in', Math.round(s.ms), 'ms'));
+}
 function getAvatar() {
   if (!avatar) {
     const ld = new GLTFLoader(); ld.setMeshoptDecoder(MeshoptDecoder);
-    avatar = createAvatar({ scene, camera, P, surfaceInto, pushOut, terrH, kd, touchIn, loader: ld, url: new URL('./model/character/villager.glb', import.meta.url).href });
+    avatar = createAvatar({ scene, camera, P, surfaceInto, pushOut, terrH, kd, touchIn, loader: ld, url: new URL('./model/character/villager.glb', import.meta.url).href, solids: () => solids });
     avatar.load().then(root => {
       if (!avatarAdded) { avatarAdded = true; carShadow.addActor(root, new THREE.Vector3(0, 0.9, 0), 1.2); sun.shadow.needsUpdate = true; }
       // compile his shaders off the main thread before he first appears

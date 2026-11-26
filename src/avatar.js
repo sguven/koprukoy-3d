@@ -27,11 +27,13 @@ const GAIT = [
 export const SPEED = { walk: 1.55, run: 4.6, sprint: 7.0 };
 const CAM = { minD: 1.6, maxD: 16, d: 5.2, minPitch: -1.25, maxPitch: 0.32, pitch: -0.32, height: 1.55 };
 const R_BODY = 0.32;   // collision radius of the body (m)
+const STEP = 0.42;     // kerbs, pavements and steps up to this height are stepped onto (m)
+const CLIMB = 2.6;     // walls and fences up to this height over the feet are jumped onto / over (m)
 
-export function createAvatar({ scene, camera, P, surfaceInto, pushOut, terrH, kd, touchIn, loader, url }) {
+export function createAvatar({ scene, camera, P, surfaceInto, pushOut, terrH, kd, touchIn, loader, url, solids = () => null }) {
   const root = new THREE.Group(); root.name = 'avatar'; root.visible = false; scene.add(root);
   let model = null, mixer = null, loco = [], idle = null, air = null, ready = false, loading = null;
-  const S = { x: 0, y: 0, z: 0, vy: 0, yaw: 0, speed: 0, vx: 0, vz: 0, phase: 0, airW: 0, yDraw: null, ground: true };
+  const S = { x: 0, y: 0, z: 0, vy: 0, yaw: 0, speed: 0, vx: 0, vz: 0, phase: 0, airW: 0, yDraw: null, ground: true, vault: 0, jumpHeld: false };
   const cam = { d: CAM.d, dNow: CAM.d, tx: 0, ty: 0, tz: 0, init: false };
   const g = { y: 0, road: false, water: false }, q = { x: 0, z: 0 };
 
@@ -86,25 +88,56 @@ export function createAvatar({ scene, camera, P, surfaceInto, pushOut, terrH, kd
       const tgt = Math.atan2(dx, dz); let d = tgt - S.yaw; d = Math.atan2(Math.sin(d), Math.cos(d));
       const rate = S.speed > 3 ? 7 : 10; S.yaw += Math.sign(d) * Math.min(Math.abs(d), rate * dt);
     }
-    // he walks where he faces (that is what keeps the feet planted while turning)
+    // he walks where he faces (that is what keeps the feet planted while turning); during a vault he keeps going over
     const hx = Math.sin(S.yaw), hz = Math.cos(S.yaw);
+    if (S.vault > 0) { S.vault -= dt; S.speed = Math.max(S.speed, 2.4); }
     let nx = S.x + hx * S.speed * dt, nz = S.z + hz * S.speed * dt;
+    // walls, fences, kerbs … (src/solids.js). On the ground a kerb or a step up to STEP is climbed; in the air
+    // only what is below the feet lets him through, so he lands on a wall's crown or clears it.
+    const step = S.ground ? STEP : 0.12;
+    if (blockedAt(nx, nz, step) && !blockedAt(S.x, S.z, step)) {   // slide along it: try each axis on its own (stuck inside one already: let him out)
+      if (!blockedAt(nx, S.z, step)) nz = S.z; else if (!blockedAt(S.x, nz, step)) nx = S.x; else { nx = S.x; nz = S.z; }
+      if (S.ground) S.speed = Math.min(S.speed, 1.2);
+    }
     surfaceInto(g, nx, nz, S.y + 0.5);
     if (!g.water && g.y - S.y < 0.75) { q.x = nx; q.z = nz; pushOut(q, R_BODY); nx = q.x; nz = q.z; }
     else { nx = S.x; nz = S.z; S.speed *= 0.3; }   // the lake shore or a step too high: stop there
     const moved = Math.hypot(nx - S.x, nz - S.z);
     S.x = nx; S.z = nz;
-    surfaceInto(g, S.x, S.z, S.y + 0.5);
-    if ((kd('Space') || touchIn.jump) && S.ground) { S.vy = 4.0; S.ground = false; }
+    const gy = groundAt(S.x, S.z);
+    // jump (edge-triggered): in front of a wall or a fence he can get over, a jump high enough to clear it, with a
+    // push forward; otherwise an ordinary jump
+    const jump = kd('Space') || touchIn.jump;
+    if (jump && !S.jumpHeld && S.ground) {
+      const so = solids(); let top = -1e9;
+      if (so && so.ready) for (const d of [0.45, 0.75, 1.05, 1.4]) { const t = so.topIn(S.x + hx * d, S.z + hz * d, 0.22, S.y + 0.25); if (t > top) top = t; }
+      const h = top - S.y;
+      if (isFinite(top) && h > 0.25 && h <= CLIMB) { S.vy = Math.sqrt(2 * 9.81 * (h + 0.35)); S.vault = Math.min(1.2, 0.35 + S.vy / 9.81 * 1.1); }
+      else S.vy = 4.2;
+      S.ground = false;
+    }
+    S.jumpHeld = jump;
     S.vy -= 9.81 * dt; S.y += S.vy * dt;
-    if (S.y <= g.y) { S.y = g.y; S.vy = 0; S.ground = true; }
-    else if (S.y - g.y > 0.25) S.ground = false;   // off a kerb: a short fall, stays on the ground animation below 25 cm
-    else if (S.vy <= 0) { S.y = g.y; S.vy = 0; S.ground = true; }   // walking down a slope: follow it
+    if (S.y <= gy) { S.y = gy; S.vy = 0; S.ground = true; S.vault = 0; }
+    else if (S.y - gy > 0.25) S.ground = false;   // off a kerb: a short fall, stays on the ground animation below 25 cm
+    else if (S.vy <= 0) { S.y = gy; S.vy = 0; S.ground = true; S.vault = 0; }   // walking down a slope: follow it
     // the stride phase advances with the ground covered, at the stride length of the current gait blend
     const real = moved / Math.max(dt, 1e-4);
     S.phase = (S.phase + moved / strideAt(Math.min(S.speed, real + 0.2))) % 1;
     S.real = real;
     P.x = S.x; P.z = S.z; P.y = S.y;
+  }
+  /** Would the body at (x, z) run into a solid that rises more than `step` above the feet? */
+  function blockedAt(x, z, step) {
+    const so = solids(); if (!so || !so.ready) return false;
+    return so.topIn(x, z, R_BODY, S.y + step) > S.y + step;
+  }
+  /** The ground under the feet: terrain / road / bridge, or the top of a kerb, a pavement, a step or a wall he is on. */
+  function groundAt(x, z) {
+    surfaceInto(g, x, z, S.y + 0.5); let y = g.y;
+    const so = solids();
+    if (so && so.ready) { const t = so.topIn(x, z, 0.16, y); if (isFinite(t) && t <= S.y + STEP && t > y) y = t; }
+    return y;
   }
   function strideAt(v) {
     if (v <= GAIT[0].v) return GAIT[0].stride;
@@ -142,7 +175,9 @@ export function createAvatar({ scene, camera, P, surfaceInto, pushOut, terrH, kd
   const _t = new THREE.Vector3();
   function blocked(x, y, z) {
     if (y < terrH(x, z) + 0.35) return true;
-    q.x = x; q.z = z; return pushOut(q, 0.25) && y < terrH(x, z) + 8;   // inside a house (eaves height ~8 m above the ground)
+    q.x = x; q.z = z; if (pushOut(q, 0.25) && y < terrH(x, z) + 8) return true;   // inside a house (eaves height ~8 m above the ground)
+    const so = solids(); if (so && so.ready) { const t = so.topIn(x, z, 0.12); if (t >= y - 0.1 && isFinite(t)) return true; }   // in a wall
+    return false;
   }
   function updateCamera(dt) {
     P.pitch = Math.max(CAM.minPitch, Math.min(CAM.maxPitch, P.pitch));
