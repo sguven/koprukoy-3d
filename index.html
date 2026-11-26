@@ -183,6 +183,7 @@ body:not(.is-touch)[data-mode="game"] .hint { right: auto; left: 50%; transform:
 .fsbtn svg { width: 18px; height: 18px; }
 #tDn { right: 18px; bottom: 30px; width: 64px; height: 64px; }
 #tCam { right: 18px; top: 256px; width: 64px; height: 44px; font-size: 14px; }
+#tView { right: 18px; top: 256px; width: 64px; height: 44px; font-size: 14px; }
 
 @media (max-width: 700px) {
   .topbar { left: calc(8px + var(--sl)); right: calc(8px + var(--sr)); top: calc(8px + var(--st)); gap: 6px; }
@@ -297,6 +298,7 @@ body:not(.is-touch)[data-mode="game"] .hint { right: auto; left: 50%; transform:
       <input type="range" id="optSens" min="0.3" max="3" step="0.1" value="1" style="flex:1;margin-left:10px" aria-label="Mouse and touch look sensitivity"></label>
     <label class="chip" style="width:100%;justify-content:space-between;margin-top:8px"><span>Field of view <b id="fovVal">55°</b></span>
       <input type="range" id="optFov" min="55" max="90" step="1" value="55" style="flex:1;margin-left:10px" aria-label="Field of view on foot"></label>
+    <div class="row" style="margin-top:8px"><label class="chip"><input type="checkbox" id="optTP" checked> Walk: see the character (third person)</label></div>
   </div>
   <div>
     <div class="group-title">Performance</div>
@@ -325,6 +327,7 @@ body:not(.is-touch)[data-mode="game"] .hint { right: auto; left: 50%; transform:
 <div class="tc pad" id="tUp">▲</div>
 <div class="tc pad" id="tDn">▼</div>
 <div class="tc pad" id="tCam">CAMERA</div>
+<div class="tc pad" id="tView">VIEW</div>
 <div id="loading" style="position:fixed;inset:0;display:grid;place-items:center;font:600 20px var(--display);letter-spacing:.04em">Loading model…</div>
 
 <script type="module">
@@ -344,6 +347,7 @@ import { buildToros, COLORS, WB, TRACK, WR, EYE as DRIVER_EYE } from './src/toro
 import { createEngine } from './src/engine.js';
 import { PERF, DistanceCuller, createPerfMeter } from './src/perf.js';
 import { createCarShadow } from './src/carshadow.js';
+import { createAvatar } from './src/avatar.js';
 import { parseBench, createBench } from './src/bench.js';
 
 const POIS = [{"id": "kopru", "label": "Çeşnigir Bridge", "kind": "tarihi", "pos": [-377, 16, -277]}, {"id": "viyaduk", "label": "D.260 viaduct", "kind": "yol", "pos": [-539, 22, -105]}, {"id": "d260a", "label": "D.260", "kind": "yon", "pos": [-951, 35, -319]}, {"id": "d260b", "label": "D.260", "kind": "yon", "pos": [154, 36, 568]}, {"id": "karakecili", "label": "To Karakeçili", "kind": "yon", "pos": [-825, 21, -209]}, {"id": "gezi", "label": "Promenade", "kind": "yer", "pos": [-267, 14, -57]}, {"id": "seyir", "label": "Viewpoint rock", "kind": "yer", "pos": [-292, 24, -338]}, {"id": "iskele", "label": "Boat pier", "kind": "yer", "pos": [-262, 9, -393]}, {"id": "cennet", "label": "Çeşnigir park", "kind": "yer", "pos": [-262, 12, -340]}, {"id": "kanyon", "label": "Çeşnigir Canyon", "kind": "yer", "pos": [-277, 55, -602]}, {"id": "nehir", "label": "Kızılırmak · Kapulukaya Reservoir", "kind": "su", "pos": [-318, 8, 331]}];
@@ -616,6 +620,7 @@ loadAll().then(gltf => {
   warming = false;
   try { warmScene(); } catch (e) { console.error(e); }
   document.getElementById('loading').remove(); sceneReady = true;
+  if (thirdPerson) setTimeout(getAvatar, 1500);   // v1.17: fetch the walking character in the background
 }).catch(err => { document.getElementById('loading').textContent = 'The model could not be loaded. Please reload the page.'; console.error(err); });
 
 // v1.1: one frame, still behind "Loading…", that draws the whole map from above with every distance-culled detail,
@@ -676,6 +681,43 @@ document.getElementById('optRack').addEventListener('change', e => { rack.visibl
 scene.add(car);
 // v1.12: the car is drawn into the shadow map on its own, on top of a cached map of the still world (src/carshadow.js)
 const carShadow = createCarShadow({ renderer, scene, light: sun, car });
+
+// ---------- v1.17: walk in third person (a villager seen from behind and above: src/avatar.js) ----------
+// The character (3.6 MB) is fetched once the village is up, or at once when Walk is opened before that. Until he is
+// in, Walk is the first-person view. V (or the button on a phone, or Settings › Controls) switches between the two.
+let thirdPerson = true; try { thirdPerson = localStorage.getItem('kk_tp') !== '0'; } catch (_) {}
+let avatar = null, avatarAdded = false;
+function getAvatar() {
+  if (!avatar) {
+    const ld = new GLTFLoader(); ld.setMeshoptDecoder(MeshoptDecoder);
+    avatar = createAvatar({ scene, camera, P, surfaceInto, pushOut, terrH, kd, touchIn, loader: ld, url: new URL('./model/character/villager.glb', import.meta.url).href });
+    avatar.load().then(root => {
+      if (!avatarAdded) { avatarAdded = true; carShadow.addActor(root, new THREE.Vector3(0, 0.9, 0), 1.2); sun.shadow.needsUpdate = true; }
+      // compile his shaders off the main thread before he first appears
+      const v = root.visible; root.visible = true; renderer.compileAsync(root, camera, scene).catch(() => {}).finally(() => { root.visible = v; syncAvatar(true); });
+    }).catch(e => console.error('character failed to load', e));
+  }
+  return avatar;
+}
+/** Third person is on and the character is in: show him (and spawn him at P when `spawn`). */
+const tpActive = () => mode === 'walk' && thirdPerson && avatar && avatar.ready;
+function syncAvatar(spawn) {
+  const on = tpActive();
+  if (avatar) { if (on && spawn) avatar.spawn(); avatar.visible = on; }
+  document.getElementById('cross').style.display = (mode === 'walk' && !on) || mode === 'fly' || mode === 'game' ? 'block' : 'none';
+  if (mode === 'walk') document.getElementById('hint').textContent = on ? HINTS.walkTP : HINTS.walk;
+  document.getElementById('tView').classList.toggle('show', isTouch && mode === 'walk');
+  sun.shadow.needsUpdate = true;
+}
+function setThirdPerson(on) {
+  thirdPerson = on; try { localStorage.setItem('kk_tp', on ? '1' : '0'); } catch (_) {}
+  document.getElementById('optTP').checked = on;
+  if (on) getAvatar();
+  if (mode === 'walk') {
+    if (on) { const was = avatar && avatar.ready; syncAvatar(was); }
+    else { P.pitch = 0; eyeY = null; syncAvatar(false); }
+  }
+}
 const colorsEl = document.getElementById('colors');
 COLORS.forEach(([n, c], i) => { const b = document.createElement('button'); b.className = 'swatch' + (i ? '' : ' on'); b.style.background = '#' + c.toString(16).padStart(6, '0'); b.title = n; b.setAttribute('aria-label', 'Colour: ' + n); b.onclick = () => { paint.color.setHex(c); colorsEl.querySelectorAll('.swatch').forEach(s => s.classList.remove('on')); b.classList.add('on'); }; colorsEl.appendChild(b); });
 
@@ -695,7 +737,7 @@ function placeCarAtSpawn() {
   updateCarTransform(0);
 }
 const keys = new Set();
-addEventListener('keydown', e => { if (e.target.tagName === 'INPUT') return; keys.add(e.code); if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code) && mode !== 'orbit') e.preventDefault(); if (e.code === 'KeyC' && mode === 'car') CS.cam = (CS.cam + 1) % 3; if (e.code === 'KeyL' && mode === 'car') setLights(!document.getElementById('optLights').checked); });
+addEventListener('keydown', e => { if (e.target.tagName === 'INPUT') return; keys.add(e.code); if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code) && mode !== 'orbit') e.preventDefault(); if (e.code === 'KeyC' && mode === 'car') CS.cam = (CS.cam + 1) % 3; if (e.code === 'KeyL' && mode === 'car') setLights(!document.getElementById('optLights').checked); if (e.code === 'KeyV' && mode === 'walk') setThirdPerson(!thirdPerson); });
 addEventListener('keyup', e => keys.delete(e.code));
 addEventListener('blur', () => keys.clear());
 const touchIn = { left: false, right: false, gas: false, brake: false, up: false, dn: false, jump: false, jx: 0, jy: 0 };
@@ -859,12 +901,18 @@ function moveJoy(e) { let dx = (e.clientX - joyCx) / JOY_R, dy = (e.clientY - jo
 const holdBtn = (id, k) => { const el = document.getElementById(id); const on = e => { touchIn[k] = true; el.classList.add('down'); try { el.setPointerCapture(e.pointerId); } catch (_) {} e.stopPropagation(); e.preventDefault(); }; const off = () => { touchIn[k] = false; el.classList.remove('down'); }; el.addEventListener('pointerdown', on); el.addEventListener('pointerup', off); el.addEventListener('pointercancel', off); el.addEventListener('lostpointercapture', off); };
 holdBtn('tLeft', 'left'); holdBtn('tRight', 'right'); holdBtn('tGas', 'gas'); holdBtn('tBrake', 'brake'); holdBtn('tUp', 'up'); holdBtn('tDn', 'dn');
 document.getElementById('tCam').addEventListener('pointerdown', e => { CS.cam = (CS.cam + 1) % 3; e.stopPropagation(); });
+// v1.17: third-person switch (VIEW on a phone, Settings › Controls) and the camera distance (mouse wheel)
+document.getElementById('tView').addEventListener('pointerdown', e => { setThirdPerson(!thirdPerson); e.stopPropagation(); e.preventDefault(); });
+document.getElementById('optTP').checked = thirdPerson;
+document.getElementById('optTP').addEventListener('change', e => setThirdPerson(e.target.checked));
+dom.addEventListener('wheel', e => { if (!tpActive()) return; e.preventDefault(); avatar.zoom(Math.exp(Math.sign(e.deltaY) * Math.min(1, Math.abs(e.deltaY) / 100) * 0.15)); }, { passive: false });
 
 // ---------- modlar ----------
 let carYawOff = 0, carPitchOff = 0, game = null, rotateTold = false;
 const HINTS = {
   orbit: isTouch ? '1 finger: move · 2 fingers: pinch to zoom, twist to rotate, slide up/down to tilt · Double-tap: zoom in' : 'Drag: move · Wheel: zoom · Right-drag or Ctrl+drag: rotate / tilt · Double-click: zoom in',
-  walk: 'Click, then look with the mouse · WASD: walk · Shift: run · Space: jump · Esc: release cursor',
+  walk: 'Click, then look with the mouse · WASD: walk · Shift: run · Space: jump · V: third person · Esc: release cursor',
+  walkTP: isTouch ? 'Left thumb: walk (push to the rim to run) · Drag right side: turn the camera · VIEW: first person' : 'Click, then turn the camera with the mouse · WASD: walk · Shift: run · Ctrl+Shift: sprint · Space: jump · Wheel: zoom · V: first person · Esc: cursor',
   fly: 'Click, then look with the mouse · WASD: fly · E/Q: up/down · Shift: fast',
   car: '↑/W gas · ↓/S brake/reverse · ←/→ steer · Space handbrake · C camera · L headlights',
   game: isTouch ? 'Left thumb: move (push to the rim to run) · Drag right side or the FIRE button: aim · Tap a weapon to switch' : 'Click to aim · WASD move · Shift run · Mouse 1 fire · Mouse 2 scope (AWP) · 1/2/3, Q, wheel: weapons · R reload · Esc: cursor',
@@ -895,6 +943,8 @@ function setMode(m) {
   // the Game renders at its preset's resolution (phones: lower, so it stays smooth with many bots), view distance and shadows
   if (basePixelRatio() !== basePRwas) perf.reset();
   applyGameView();
+  if (m === 'walk' && thirdPerson) getAvatar();
+  syncAvatar(m === 'walk');
   if (m === 'game') { if (!game) game = createGame({ scene, camera, P, D, terrH, surfaceAt, surfaceInto, pushOut, look: LOOK, kd, isTouch, touchIn, EYE, village: VILLAGE }); game.start();
     if (isTouch && innerHeight > innerWidth && !rotateTold) { rotateTold = true; toast('Turn your phone sideways for the best view'); toastT = 3.5; } }
   else if (prev === 'game' && game) game.stop();
@@ -1095,6 +1145,10 @@ renderer.setAnimationLoop(now => {
   if (mode === 'orbit') {
     if (anim) { const k = Math.min(1, (now - anim.t0) / anim.dur), e = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2; camera.position.lerpVectors(anim.from.p, anim.to.p, e); controls.target.lerpVectors(anim.from.t, anim.to.t, e); if (k >= 1) anim = null; }
     controls.update(); focus = controls.target;
+  } else if (tpActive()) {   // v1.17: third person
+    const n = Math.ceil(dt / 0.02); for (let i = 0; i < n; i++) avatar.step(dt / n);
+    avatar.place(dt); avatar.animate(dt); avatar.updateCamera(dt);
+    focus = avatar.root.position; drawMinimap(P.x, P.z, -P.yaw);
   } else if (mode === 'walk' || mode === 'fly') { const n = Math.ceil(dt / 0.05); for (let i = 0; i < n; i++) walkStep(dt / n, mode === 'fly'); focus = camera.position; drawMinimap(P.x, P.z, -P.yaw); }
   else if (mode === 'game') {
     if (bench) bench.pre(dt);
@@ -1125,22 +1179,24 @@ renderer.setAnimationLoop(now => {
   // v1.12, Toros: the map covers 150 m around a point up to 35 m ahead of the car and is redrawn every 24 m (it was
   // redrawn every frame: the car is now added on top of a cached map, src/carshadow.js), snapped to whole texels
   if (driving) { const ahead = Math.max(-15, Math.min(35, CS.v * 1.5)); focus = carAhead.set(CS.x + Math.cos(CS.h) * ahead, CS.y, CS.z - Math.sin(CS.h) * ahead); }
-  const ext = mode === 'orbit' ? Math.min(900, Math.max(150, camera.position.distanceTo(focus) * 1.2)) : inGame || driving ? 150 : 140;
-  const step = mode === 'orbit' ? ext * 0.04 : inGame || driving ? 24 : 6;
+  // v1.17: the third-person walk too (the character is drawn on the cached map like the car)
+  const walkingTP = tpActive(), mover = inGame || driving || walkingTP;
+  const ext = mode === 'orbit' ? Math.min(900, Math.max(150, camera.position.distanceTo(focus) * 1.2)) : mover ? 150 : 140;
+  const step = mode === 'orbit' ? ext * 0.04 : mover ? 24 : 6;
   // small village details and far grass patches: shown / hidden by distance (re-checked every 4 m of camera movement);
   // the shadow map only needs a refresh when something inside it appeared or went
   const cullChanged = culler.update(camera.position, false, inGame && !GAME_PRESETS[gamePreset].shadowOnCull ? 0 : ext); if (cullChanged) sun.shadow.needsUpdate = true;
   if (sun.shadow.needsUpdate || shadowFocus.distanceToSquared(focus) > step * step || Math.abs(ext - shadowExt) > shadowExt * 0.08) {
     const sc = sun.shadow.camera; if (sc.right !== ext) { sc.left = -ext; sc.right = ext; sc.top = ext; sc.bottom = -ext; sc.near = 1; sc.far = 4000; sc.updateProjectionMatrix(); }
     shadowCentre.copy(focus);
-    if (inGame || driving) {   // snap the centre to the texel grid of the light (its right / up axes)
+    if (mover) {   // snap the centre to the texel grid of the light (its right / up axes)
       const texel = 2 * ext / sun.shadow.mapSize.x, a = focus.dot(lightRight), b = focus.dot(lightUp);
       shadowCentre.addScaledVector(lightRight, Math.round(a / texel) * texel - a).addScaledVector(lightUp, Math.round(b / texel) * texel - b);
     }
     sun.target.position.copy(shadowCentre); sun.position.copy(shadowCentre).addScaledVector(sunDir, 1500);
     shadowFocus.copy(focus); shadowExt = ext; sun.shadow.needsUpdate = true;
   }
-  const shadowRedrawn = carShadow.plan(driving); if (shadowRedrawn) perf.shadowRedrawn();
+  const shadowRedrawn = carShadow.plan(driving, walkingTP); if (shadowRedrawn) perf.shadowRedrawn();
   const tRender = performance.now();
   renderer.info.reset(); renderer.render(scene, camera); if (inGame && game) game.renderOverlay(renderer); renderMirrors(); placeLabels();
   if (bench && bench.active) bench.post(frameMs, tFrame, tRender, shadowRedrawn, cullChanged);
