@@ -230,7 +230,7 @@ body:not(.is-touch)[data-mode="game"] .hint { right: auto; left: 50%; transform:
 <div id="perf" aria-live="off">– FPS</div>
 
 <div class="topbar">
-  <div class="brand"><h1>Köprüköy</h1><div class="sub">Keskin · Kırıkkale, Türkiye — 3D v1.21</div></div>
+  <div class="brand"><h1>Köprüköy</h1><div class="sub">Keskin · Kırıkkale, Türkiye — 3D v1.23</div></div>
   <div class="modes" id="modes" role="tablist" aria-label="Navigation mode">
     <button data-mode="orbit" class="on">Orbit</button>
     <button data-mode="walk" title="Walk through the village">Walk</button>
@@ -354,6 +354,7 @@ import { tagBuildings } from './src/buildings.js';
 import { buildVillageLayout, buildCentreLayout, roadSamples, squareSamples, carsiBoxes, buildingBoxes, inRegion, inCentreZone } from './src/village_layout.js';
 import { pruneOldVillage, pruneRocks, LIFT } from './src/village.js';
 import { bridgeDeckY, onBridge, bridgeParapetBoxes, bridgeRampSamples } from './src/bridge.js';
+import { editRoadbedTerrain, editRoadbedDetail } from './src/roadbed.js';
 import { editCesnigirTerrain, syncTerrainMesh, pruneCesnigir, cesnigirSamples, cesnigirBoxes, PHOTO_VIEW } from './src/cesnigir.js';
 import { createGame } from './src/game.js';
 import { buildToros, COLORS, WB, TRACK, WR, EYE as DRIVER_EYE } from './src/toros.js';
@@ -577,6 +578,7 @@ function makeWaterNormals() {
 async function loadAll() {
   const [{ default: b64 }, { default: data }] = await Promise.all([import('./model4.js'), import('./data4.js')]);
   D = data; CS_EDIT = editCesnigirTerrain(D.grid);   // v1.10: the park east of the tor is dry land, not water
+  editRoadbedTerrain(D.grid, CS_EDIT);   // v1.23: no ground above the D.260 deck (src/roadbed.js)
   // v1.21: the survey's outermost row of heights was pinned to ~40 m, so the map stood on a slab with walls up to 70 m high
   // at its edge; with land beyond the map (src/atmosphere.js) the edge row now carries on the ground just inside it
   { const g = D.grid, W1 = g.seg + 1, H = g.h, put = (k, from) => { if (!CS_EDIT.has(k)) { H[k] = 1.5 * H[from] - 0.5 * H[2 * from - k]; CS_EDIT.set(k, H[k]); } };
@@ -613,7 +615,7 @@ loadAll().then(gltf => {
     o.castShadow = !/^(Arazi|Su_|Yol_|Pencereler|Gezi_Alani)/.test(o.name); o.receiveShadow = true;
     if (o.name === 'Arazi' || o.name === 'Arazi_Detay') o.material.color.setHex(0xeadbc2);
     if (o.name === 'Arazi') { syncTerrainMesh(o, D.grid, CS_EDIT); terrainMesh = o; const t = o.material.map; if (t) { t.anisotropy = renderer.capabilities.getMaxAnisotropy(); t.colorSpace = THREE.SRGBColorSpace; } o.material.roughness = 1; o.material.envMapIntensity = 0.12; }
-    if (o.name === 'Arazi_Detay') { o.material.polygonOffset = true; o.material.polygonOffsetFactor = -1; o.material.polygonOffsetUnits = -1; const t = o.material.map; if (t) t.anisotropy = renderer.capabilities.getMaxAnisotropy(); o.material.envMapIntensity = 0.12; o.renderOrder = 1; }
+    if (o.name === 'Arazi_Detay') { editRoadbedDetail(o); o.material.polygonOffset = true; o.material.polygonOffsetFactor = -1; o.material.polygonOffsetUnits = -1; const t = o.material.map; if (t) t.anisotropy = renderer.capabilities.getMaxAnisotropy(); o.material.envMapIntensity = 0.12; o.renderOrder = 1; }
     if (o.name === 'Su_Kizilirmak') {
       waterMat = new THREE.MeshStandardMaterial({ color: 0x2c7a80, roughness: 0.06, metalness: 0.0, normalMap: makeWaterNormals(), envMapIntensity: 1.1, transparent: true, opacity: 0.93 });
       waterMat.normalScale.set(0.35, 0.35); o.material = waterMat; o.castShadow = false;
