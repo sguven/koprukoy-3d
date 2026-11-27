@@ -22,12 +22,26 @@ export function canopyMaterials(lib, { quality = 2 } = {}) {
         // leaf texture modulates the per-tree vertex colour; darker, bluer in the canopy's lower/inner parts
         diffuseColor.rgb *= leaf.rgb / 0.42;
         diffuseColor.rgb *= 0.55 + 0.45 * smoothstep(-0.6, 0.8, fN.y);
-        diffuseColor.a = leaf.a;`)
+        diffuseColor.a = leaf.a;
+        // v1.21: real leaves are greyer olive than paint green
+        diffuseColor.rgb = mix(vec3(dot(diffuseColor.rgb, vec3(0.3, 0.55, 0.15))), diffuseColor.rgb, 0.8);`)
+      .replace('#include <opaque_fragment>', /* glsl */`
+        // v1.21: light through the leaves. Looking towards the sun a canopy glows yellow-green at its edges instead of
+        // being a dark blob, and the shaded side still gets some light wrapped round it.
+        #if NUM_DIR_LIGHTS > 0
+        {
+          vec3 L = directionalLights[ 0 ].direction;
+          float back = pow(max(dot(-geometryViewDir, L), 0.0), 3.0);
+          float wrap = clamp(dot(normal, L) * 0.5 + 0.5, 0.0, 1.0);
+          outgoingLight += diffuseColor.rgb * vec3(1.0, 1.05, 0.7) * directionalLights[ 0 ].color * (0.16 * back + 0.05 * wrap);
+        }
+        #endif
+        #include <opaque_fragment>`)
       .replace('#include <normal_fragment_maps>', /* glsl */`
         // soften the faceted canopy normals toward a rounded shading, and bend leaves outward a little
         normal = normalize(normal + kk_viewN(fN) * 0.5);`);
   };
-  mat.customProgramCacheKey = () => 'kk_canopy';
+  mat.customProgramCacheKey = () => 'kk_canopy2';
 
   const depth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, alphaTest: 0.45, side: THREE.DoubleSide });
   const patchDepth = (m) => {

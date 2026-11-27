@@ -101,6 +101,7 @@ export function buildVillage(ctx, layout, M) {
   let bat = new GeoBatch();
   const wires = [];                       // line segments for fence wires and overhead cables
   const treeSpots = [], props = [];       // handed to props.js
+  const smoke = [];                       // v1.21: chimney / stove-pipe tops [x, y, z, kind] for the smoke (src/atmosphere.js); no random draws
   const roads = layout.roads, centreOnly = !!layout.centreOnly;
   const yAt = (x, z) => terrH(x, z);
   const roadDist = (x, z) => { let best = Infinity, bw = 0; for (const r of roads) { const h = distToPolyline(x, z, r.line); if (h.d < best) { best = h.d; bw = r.w; } } return { d: best, w: bw }; };
@@ -1087,6 +1088,7 @@ export function buildVillage(ctx, layout, M) {
         // chimney
         const cx = (rnd() - 0.5) * (w - 1.5), cz = (rnd() < 0.5 ? -1 : 1) * d * 0.2, roofY = ry + (Dd - Math.abs(cz)) * Math.tan(pitch);
         add('chimney', boxY(0.5, 0.5, roofY - 0.3, roofY + 0.75, cx, cz)); add('beton', box(0.7, 0.07, 0.7, cx, roofY + 0.78, cz));
+        smoke.push([b.x + cx * Math.cos(b.yaw) + cz * Math.sin(b.yaw), b.yTop + roofY + 0.9, b.z - cx * Math.sin(b.yaw) + cz * Math.cos(b.yaw), 0]);
         if (rnd() < 0.3) add('metalDark', cyl(0.12, 0.12, 0.5, cx, roofY + 1.0, cz, 10));
         // satellite dish at an eaves corner
         if (rnd() < 0.45 && !b.plain) { const dish = new THREE.CircleGeometry(0.4, 18); dish.rotateX(-0.9); dish.translate(W - 0.5, ry + 0.25, Dd - 0.3); add('metal', dish); add('metalDark', cyl(0.025, 0.025, 1.1, W - 0.5, ry - 0.25, Dd - 0.2)); }
@@ -1131,6 +1133,7 @@ export function buildVillage(ctx, layout, M) {
         add('metalDark', cyl(r, r, top - py, x, (top + py) / 2, out, 8), fm);
         add('metalDark', cyl(r + 0.02, r + 0.02, 0.12, x, py, out, 8), fm);                       // the elbow
         const cap = new THREE.ConeGeometry(0.16, 0.14, 8); cap.translate(x, top + 0.14, out); add('metalDark', cap, fm);
+        { const p = new THREE.Vector3(x, top + 0.2, out).applyMatrix4(fm); smoke.push([b.x + p.x * Math.cos(b.yaw) + p.z * Math.sin(b.yaw), b.yTop + p.y, b.z - p.x * Math.sin(b.yaw) + p.z * Math.cos(b.yaw), 1]); }
         add('metalDark', box(0.03, 0.03, out, x, py + 1.4, out / 2), fm);                        // a wire bracket to the wall
         add('soot', box(0.5, 0.7, 0.01, x, py + 0.22, 0.006), fm);                               // soot round the hole
       }
@@ -1689,5 +1692,5 @@ export function buildVillage(ctx, layout, M) {
   group.traverse(o => { if (o.isMesh && o.material && o.material.userData && o.material.userData.isRoad) { o.castShadow = false; o.renderOrder = 1; } });
   group.traverse(o => { if (o.isMesh && o.material && o.material.userData && o.material.userData.noShadow) o.castShadow = false; });   // v1.3: the chain-link mesh
   group.userData.walls = builtWalls;
-  return { group, trees: propsOut.meshes };
+  return { group, trees: propsOut.meshes, smoke };
 }
