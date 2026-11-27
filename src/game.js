@@ -315,6 +315,8 @@ export function createGame(ctx) {
   const _bm = new THREE.Matrix4(), _bq = new THREE.Quaternion(), _bs = new THREE.Vector3(), _bp = new THREE.Vector3();
   const charIn = { x: 0, y: 0, z: 0, yaw: 0, vx: 0, vz: 0, pitch: 0, aim: false, crouch: false, reloadK: -1 };
   // the people's animation, after the bots moved: only the ones in view, 15 times a second beyond 60 m
+  // (v1.20, phones: 12 times a second beyond 30 m: skinning and the arm IK are most of a bot's cost on a phone's CPU)
+  const ANIM_FAR = isTouch ? 30 : 60, ANIM_HZ = isTouch ? 12 : 15;
   function animateChars(dt) {
     let nb = 0;
     for (let k = 0; k < G.bots.length; k++) {
@@ -325,7 +327,7 @@ export function createGame(ctx) {
       _bp.set(b.x, b.y + 0.03, b.z); if (b.dead > 0) _bp.addScaledVector(_v1.set(-Math.sin(b.yaw), 0, -Math.cos(b.yaw)), 0.7);
       blobs.setMatrixAt(nb++, _bm.compose(_bp, _bq, _bs));
       b.cacc = (b.cacc || 0) + dt;
-      if (dist > 60 && !(G.scoped) && b.cacc < 1 / 15) continue;
+      if (dist > ANIM_FAR && !(G.scoped) && b.cacc < 1 / ANIM_HZ) continue;
       const step = Math.min(b.cacc, 0.25); b.cacc = 0;
       const W = WEAPONS[b.weapon];
       charIn.x = b.x; charIn.y = b.y; charIn.z = b.z; charIn.yaw = b.yaw; charIn.vx = b.vx || 0; charIn.vz = b.vz || 0;
@@ -652,7 +654,7 @@ export function createGame(ctx) {
   let fireId = null, fx0 = 0, fy0 = 0;
   const fireUp = e => { if (e.pointerId !== fireId) return; fireId = null; G.firing = false; G.fired = false; fireBtn.classList.remove('down'); };
   fireBtn.addEventListener('pointerdown', e => { e.stopPropagation(); e.preventDefault(); if (fireId !== null) return; fireId = e.pointerId; fx0 = e.clientX; fy0 = e.clientY; try { fireBtn.setPointerCapture(e.pointerId); } catch (_) {} G.firing = true; G.fired = false; fireBtn.classList.add('down'); });
-  fireBtn.addEventListener('pointermove', e => { if (e.pointerId !== fireId) return; const dx = e.clientX - fx0, dy = e.clientY - fy0; fx0 = e.clientX; fy0 = e.clientY; const k = 0.005 * look.sens * camera.fov / look.fov; P.yaw -= dx * k; P.pitch = Math.max(-1.45, Math.min(1.45, P.pitch - dy * k)); });
+  fireBtn.addEventListener('pointermove', e => { if (e.pointerId !== fireId) return; const dx = e.clientX - fx0, dy = e.clientY - fy0; fx0 = e.clientX; fy0 = e.clientY; if (look.touchTurn) { look.touchTurn(dx, dy, e); return; } const k = 0.005 * look.sens * camera.fov / look.fov; P.yaw -= dx * k; P.pitch = Math.max(-1.45, Math.min(1.45, P.pitch - dy * k)); });
   for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) fireBtn.addEventListener(ev, fireUp);
   const tap = (b, fn) => b.addEventListener('pointerdown', e => { e.stopPropagation(); e.preventDefault(); fn(); b.classList.add('down'); setTimeout(() => b.classList.remove('down'), 140); });
   tap(reloadBtn, () => reload());
@@ -715,7 +717,7 @@ export function createGame(ctx) {
     for (const b of G.bots) respawnBot(b);
   }
   function stop() {
-    G.on = false; group.visible = false; hud.style.display = 'none'; for (const b of touchBtns) b.classList.remove('show'); setScope(false); vm.visible = false; for (const l of tracers) l.visible = false; for (const p of puffs) p.visible = false; G.firing = false; fireId = null; touchIn.jump = false; if (cross) { cross.classList.remove('off'); cross.style.removeProperty('--gap'); } hudCache.clear(); for (const k in hudNum) delete hudNum[k];
+    look.assist = 1; G.on = false; group.visible = false; hud.style.display = 'none'; for (const b of touchBtns) b.classList.remove('show'); setScope(false); vm.visible = false; for (const l of tracers) l.visible = false; for (const p of puffs) p.visible = false; G.firing = false; fireId = null; touchIn.jump = false; if (cross) { cross.classList.remove('off'); cross.style.removeProperty('--gap'); } hudCache.clear(); for (const k in hudNum) delete hudNum[k];
   }
   /** Loading: show (then hide again) one of everything the game draws, so a frame rendered in between prepares it all. */
   function warm(on) {
@@ -741,6 +743,7 @@ export function createGame(ctx) {
     while (G.feed.length && G.feed[G.feed.length - 1].t <= 0) G.feed.pop();   // newest first: the oldest lines expire at the end
     markVisibleBots(); losLeft = LOS_PER_FRAME;
     for (let i = 0; i < G.bots.length; i++) botStep(G.bots[i], dt);
+    if (isTouch) aimAssist();
     animateChars(dt);
     // view model: bob while walking, kick on firing, lowered while reloading / swapping
     const moving = isMoving();
@@ -754,6 +757,24 @@ export function createGame(ctx) {
     updateFx(dt);
     syncBotInstances();
     updateHud();
+  }
+  // v1.20, phones: aim friction. While the crosshair is within a few degrees of a bot in view that can see you (so not
+  // through a wall), dragging turns the view up to 45 % slower, so a thumb can settle on him. It never moves the aim by
+  // itself. Read by index.html's touch look through look.assist.
+  function aimAssist() {
+    let best = 1;
+    if (G.dead <= 0 && !G.roundOver) {
+      const cp = Math.cos(P.pitch), dx0 = -Math.sin(P.yaw) * cp, dy0 = Math.sin(P.pitch), dz0 = -Math.cos(P.yaw) * cp, ey = P.y + EYE;
+      const near = (G.scoped ? 0.6 : 2.5) * Math.PI / 180, far = (G.scoped ? 1.5 : 6) * Math.PI / 180;
+      for (let i = 0; i < G.bots.length; i++) {
+        const b = G.bots[i]; if (b.dead > 0 || !b.vis || !b.hasLos) continue;
+        const vx = b.x - P.x, vy = b.y + 1.3 - ey, vz = b.z - P.z, d = Math.sqrt(vx * vx + vy * vy + vz * vz); if (d < 1 || d > 120) continue;
+        const c = (vx * dx0 + vy * dy0 + vz * dz0) / d; if (c <= 0) continue;
+        const a = Math.acos(Math.min(1, c)), k = a <= near ? 0 : a >= far ? 1 : (a - near) / (far - near);
+        best = Math.min(best, 0.55 + 0.45 * k);
+      }
+    }
+    look.assist = best;
   }
   /** bots on the minimap: red dots, only within 60 m (no wallhack radar) */
   function drawMinimap(mctx, toPx) {

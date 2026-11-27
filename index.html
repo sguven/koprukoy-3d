@@ -47,7 +47,7 @@ body.is-touch { touch-action: none; position: fixed; inset: 0; }
 #scene { position: fixed; left: 0; top: 0; width: 100%; height: var(--app-h, 100%); }
 canvas { display: block; touch-action: none; }
 #labels { position: fixed; left: 0; top: 0; width: 100%; height: var(--app-h, 100%); pointer-events: none; overflow: hidden; }
-.lbl { position: absolute; transform: translate(-50%, -100%); white-space: nowrap; font: 600 12px/1 var(--body); padding: 5px 8px; border-radius: 4px; background: rgba(43, 38, 32, 0.82); color: #fff; }
+.lbl { position: absolute; left: 0; top: 0; transform: translate(-50%, -100%); will-change: transform; white-space: nowrap; font: 600 12px/1 var(--body); padding: 5px 8px; border-radius: 4px; background: rgba(43, 38, 32, 0.82); color: #fff; }
 .lbl.tarihi { background: var(--accent); }
 .lbl.su { background: var(--water); }
 .lbl.yol { background: #5a5f66; }
@@ -124,8 +124,12 @@ body.is-touch .crosshair .cd { left: -1.5px; top: -1.5px; width: 3px; height: 3p
 .pad.down { background: rgba(162,72,47,0.85); }
 #tLeft { left: 18px; bottom: 26px; width: 74px; height: 74px; }
 #tRight { left: 104px; bottom: 26px; width: 74px; height: 74px; }
-#tGas { right: 18px; bottom: 26px; width: 84px; height: 112px; }
-#tBrake { right: 112px; bottom: 26px; width: 74px; height: 74px; }
+#tGas { right: calc(18px + var(--sr)); bottom: calc(26px + var(--sb)); width: 96px; height: 132px; border-radius: 18px; }
+#tBrake { right: calc(126px + var(--sr)); bottom: calc(26px + var(--sb)); width: 88px; height: 88px; border-radius: 18px; }
+#tGas.down { background: rgba(70,140,70,0.88); }
+/* v1.20: in the Toros the left thumb steers on a wide pill (analog: a light push turns a little) */
+body[data-mode="car"] .joy { width: 184px; height: 92px; border-radius: 46px; }
+body[data-mode="car"] .joyzone .jlabel { width: 184px; bottom: calc(126px + var(--sb)); }
 #tUp { right: 18px; bottom: 112px; width: 64px; height: 64px; }
 /* oyun butonları: sağ alt köşede başparmak kümesi */
 .gbtn { border-radius: 50%; font-size: 13px; letter-spacing: 0.06em; }
@@ -182,7 +186,7 @@ body.is-touch #gameHud .gh-end { pointer-events: auto; }
 body:not(.is-touch)[data-mode="game"] .hint { right: auto; left: 50%; transform: translateX(-50%); bottom: 12px; max-width: 620px; text-align: center; }
 .fsbtn svg { width: 18px; height: 18px; }
 #tDn { right: 18px; bottom: 30px; width: 64px; height: 64px; }
-#tCam { right: 18px; top: 256px; width: 64px; height: 44px; font-size: 14px; }
+#tCam { right: calc(18px + var(--sr)); bottom: calc(172px + var(--sb)); width: 72px; height: 46px; font-size: 14px; }
 #tView { right: calc(124px + var(--sr)); bottom: calc(60px + var(--sb)); width: 64px; height: 44px; font-size: 14px; }   /* left of JUMP (v1.19.1: it sat over it on a phone held sideways) */
 /* v1.19.1: jump while walking on a phone, under the right thumb (the walk had no jump button) */
 #tWalkJump { right: calc(28px + var(--sr)); bottom: calc(40px + var(--sb)); width: 84px; height: 84px; font-size: 15px; background: rgba(162,72,47,0.62); border-color: rgba(255,255,255,0.6); }
@@ -372,7 +376,9 @@ const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'hi
 // v1.0: the pixel ratio comes from basePixelRatio() and the auto-resolution meter (set up below, before the first frame).
 // Desktop is capped at 1.5 (was 2): on a high-DPI screen that is 44 % fewer pixels to shade, hardly visible in a 3D scene.
 let mode = 'orbit';
-const basePixelRatio = () => LITE ? 1 : Math.min(devicePixelRatio, mode === 'game' ? GAME_PRESETS[gamePreset].pr : isTouch ? 1.6 : 1.5);
+// v1.20: on a phone the moving modes (Walk, Fly, Toros) start at 1.35× (was 1.6×): ~30 % fewer pixels, steadier frames
+// while the view turns; Orbit keeps 1.6× for crisp map views
+const basePixelRatio = () => LITE ? 1 : Math.min(devicePixelRatio, mode === 'game' ? GAME_PRESETS[gamePreset].pr : isTouch ? (mode === 'orbit' ? 1.6 : 1.35) : 1.5);
 // The size the scene is drawn at. Normally the window; as a home-screen web app on iOS the window is reported one status
 // bar short, so there the screen's own size is used (only when the difference is that small: an iPad window stays as is).
 const VP = { w: innerWidth, h: innerHeight };
@@ -675,7 +681,8 @@ function placeLabels() {
   for (const l of lbls) {
     if (!l.on) { if (l.vis !== false) { l.vis = false; l.el.style.display = 'none'; } continue; }
     if (l.vis !== true) { l.vis = true; l.el.style.display = ''; }
-    l.el.style.left = `${l.x}px`; l.el.style.top = `${l.y}px`;
+    // v1.20: moved with a transform (left/top made the browser lay the page out again every frame)
+    const tx = Math.round(l.x), ty = Math.round(l.y); if (tx !== l.tx || ty !== l.ty) { l.tx = tx; l.ty = ty; l.el.style.transform = `translate(${tx}px, ${ty}px) translate(-50%, -100%)`; }
   }
 }
 
@@ -752,14 +759,16 @@ const keys = new Set();
 addEventListener('keydown', e => { if (e.target.tagName === 'INPUT') return; keys.add(e.code); if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code) && mode !== 'orbit') e.preventDefault(); if (e.code === 'KeyC' && mode === 'car') CS.cam = (CS.cam + 1) % 3; if (e.code === 'KeyL' && mode === 'car') setLights(!document.getElementById('optLights').checked); if (e.code === 'KeyV' && mode === 'walk') setThirdPerson(!thirdPerson); });
 addEventListener('keyup', e => keys.delete(e.code));
 addEventListener('blur', () => keys.clear());
-const touchIn = { left: false, right: false, gas: false, brake: false, up: false, dn: false, jump: false, jx: 0, jy: 0 };
+const touchIn = { left: false, right: false, gas: false, brake: false, up: false, dn: false, jump: false, jx: 0, jy: 0, steer: 0 };
 // is any of these keys down? (v1.1: no rest array and no closure, it is called many times a frame)
 function kd() { for (let i = 0; i < arguments.length; i++) if (keys.has(arguments[i])) return true; return false; }
 const GEARS = [3.8, 2.3, 1.5, 1.05], FINAL = 3.9;
 function carStep(dt) {
   if (CS.dead > 0) { CS.dead -= dt; if (CS.dead <= 0) { CS.x = CS.safe.x; CS.z = CS.safe.z; CS.h = CS.safe.h; CS.v = 0; CS.y = surfaceAt(CS.x, CS.z).y; toast(''); } updateCarTransform(dt); return; }
   const thr = kd('KeyW', 'ArrowUp') || touchIn.gas ? 1 : 0, brk = kd('KeyS', 'ArrowDown') || touchIn.brake ? 1 : 0;
-  const st = (kd('KeyA', 'ArrowLeft') || touchIn.left ? 1 : 0) - (kd('KeyD', 'ArrowRight') || touchIn.right ? 1 : 0);
+  // v1.20: the phone's steering pill is analog (touchIn.steer, -1 … 1); keys and the old buttons steer fully
+  const stKeys = (kd('KeyA', 'ArrowLeft') || touchIn.left ? 1 : 0) - (kd('KeyD', 'ArrowRight') || touchIn.right ? 1 : 0);
+  const st = stKeys !== 0 ? stKeys : touchIn.steer;
   const hb = kd('Space');
   const g = surfaceAt(CS.x, CS.z, CS.y);
   const onRoad = g.road;
@@ -888,28 +897,59 @@ dom.addEventListener('click', () => { if ((mode === 'walk' || mode === 'fly' || 
 const lookK = (base) => base * LOOK.sens * camera.fov / LOOK.fov;
 document.addEventListener('mousemove', e => { if (document.pointerLockElement === dom) { const k = lookK(0.0022); P.yaw -= e.movementX * k; P.pitch = Math.max(-1.45, Math.min(1.45, P.pitch - e.movementY * k)); } });
 // touch look: drag on the screen; unlocked dragging also works on desktop
+// v1.20, phones: a quick flick turns further than a slow drag of the same length (slow drags stay precise, a fast
+// swipe can turn you round), and in the Game the view slows down a little while the crosshair is on a bot (LOOK.assist)
+LOOK.assist = 1;
+let lookT = 0;
+LOOK.touchTurn = (dx, dy, e) => {
+  const t = e ? e.timeStamp : performance.now(), ms = Math.max(4, Math.min(50, t - lookT)); lookT = t;
+  const v = Math.sqrt(dx * dx + dy * dy) / ms;   // px per ms
+  const touch = !e || e.pointerType !== 'mouse';
+  const gain = touch ? (1 + 0.8 * Math.max(0, Math.min(1, (v - 0.35) / 1.4))) * LOOK.assist : 1;
+  const k = lookK(0.005) * gain; P.yaw -= dx * k; P.pitch = Math.max(-1.45, Math.min(1.45, P.pitch - dy * k));
+};
 let lookId = null, lx0 = 0, ly0 = 0;
-dom.addEventListener('pointerdown', e => { if (mode === 'walk' || mode === 'fly' || mode === 'game' || mode === 'car') { if (document.pointerLockElement === dom) return; lookId = e.pointerId; lx0 = e.clientX; ly0 = e.clientY; } });
+dom.addEventListener('pointerdown', e => { if (mode === 'walk' || mode === 'fly' || mode === 'game' || mode === 'car') { if (document.pointerLockElement === dom) return; lookId = e.pointerId; lx0 = e.clientX; ly0 = e.clientY; lookT = e.timeStamp; } });
 addEventListener('pointermove', e => { if (e.pointerId !== lookId) return; const dx = e.clientX - lx0, dy = e.clientY - ly0; lx0 = e.clientX; ly0 = e.clientY;
   if (mode === 'car') { carYawOff -= dx * 0.006; carPitchOff = Math.max(-0.4, Math.min(0.6, carPitchOff + dy * 0.004)); return; }
-  const k = lookK(0.005); P.yaw -= dx * k; P.pitch = Math.max(-1.45, Math.min(1.45, P.pitch - dy * k)); });
+  LOOK.touchTurn(dx, dy, e); });
 addEventListener('pointerup', e => { if (e.pointerId === lookId) lookId = null; });
 addEventListener('pointercancel', e => { if (e.pointerId === lookId) lookId = null; });
-// joystick: appears under the thumb anywhere in the left part of the screen, rests bottom-left
+// joystick: appears under the thumb anywhere in the left part of the screen, rests bottom-left.
+// v1.20: a small dead zone in the middle (a resting thumb no longer creeps), and when the thumb slides past the rim the
+// stick follows it (it used to stay put, so the thumb ended up off the stick). In the Toros it is a wide steering pill:
+// only left / right counts, and a light push steers a little (the curve is gentle around the middle).
 const joyZone = document.getElementById('joyZone'), joy = document.getElementById('joy'), knob = document.getElementById('joyKnob'); let joyId = null, joyCx = 0, joyCy = 0;
-const JOY_R = 64, KNOB_TRAVEL = 40;
+const JOY_DEAD = 0.1;
+const joyDims = () => mode === 'car' ? { rx: 92, ry: 46, tx: 62, ty: 0 } : { rx: 64, ry: 64, tx: 40, ty: 40 };
+function placeJoy() {
+  const z = joyZone.getBoundingClientRect(), d = joyDims();
+  joyCx = Math.max(z.left + d.rx + 6, Math.min(z.right - d.rx - 6, joyCx)); joyCy = Math.max(z.top + d.ry + 6, Math.min(z.bottom - d.ry - 6, joyCy));
+  joy.style.left = (joyCx - z.left - d.rx) + 'px'; joy.style.bottom = (z.bottom - joyCy - d.ry) + 'px';
+}
 joyZone.addEventListener('pointerdown', e => {
   if (joyId !== null) return; joyId = e.pointerId; try { joyZone.setPointerCapture(e.pointerId); } catch (_) {}
-  const z = joyZone.getBoundingClientRect();
-  joyCx = Math.max(z.left + JOY_R + 6, Math.min(z.right - JOY_R - 6, e.clientX)); joyCy = Math.max(z.top + JOY_R + 6, Math.min(z.bottom - JOY_R - 6, e.clientY));
-  joy.style.left = (joyCx - z.left - JOY_R) + 'px'; joy.style.bottom = (z.bottom - joyCy - JOY_R) + 'px'; joy.classList.add('active');
+  joyCx = e.clientX; joyCy = e.clientY; placeJoy(); joy.classList.add('active');
   document.getElementById('joyLabel').style.display = 'none';
   moveJoy(e); e.preventDefault(); e.stopPropagation();
 });
 joyZone.addEventListener('pointermove', e => { if (e.pointerId === joyId) moveJoy(e); });
-const endJoy = e => { if (e.pointerId !== joyId) return; joyId = null; touchIn.jx = touchIn.jy = 0; knob.style.transform = ''; joy.style.left = joy.style.bottom = ''; joy.classList.remove('active', 'run'); };
+function endJoy(e) { if (e && e.pointerId !== joyId) return; joyId = null; touchIn.jx = touchIn.jy = touchIn.steer = 0; knob.style.transform = ''; joy.style.left = joy.style.bottom = ''; joy.classList.remove('active', 'run'); }
 joyZone.addEventListener('pointerup', endJoy); joyZone.addEventListener('pointercancel', endJoy); joyZone.addEventListener('lostpointercapture', endJoy);
-function moveJoy(e) { let dx = (e.clientX - joyCx) / JOY_R, dy = (e.clientY - joyCy) / JOY_R; const l = Math.hypot(dx, dy); if (l > 1) { dx /= l; dy /= l; } touchIn.jx = dx; touchIn.jy = dy; knob.style.transform = `translate(${dx * KNOB_TRAVEL}px, ${dy * KNOB_TRAVEL}px)`; joy.classList.toggle('run', Math.min(1, l) > 0.92); }
+function moveJoy(e) {
+  const d = joyDims(), car = mode === 'car';
+  let dx = (e.clientX - joyCx) / d.rx, dy = car ? 0 : (e.clientY - joyCy) / d.ry; let l = Math.sqrt(dx * dx + dy * dy);
+  if (l > 1.15) {   // past the rim: drag the stick along so the thumb stays on it
+    const k = (l - 1) / l; joyCx += dx * k * d.rx; if (!car) joyCy += dy * k * d.ry; placeJoy();
+    dx = (e.clientX - joyCx) / d.rx; dy = car ? 0 : (e.clientY - joyCy) / d.ry; l = Math.sqrt(dx * dx + dy * dy);
+  }
+  if (l > 1) { dx /= l; dy /= l; l = 1; }
+  knob.style.transform = `translate(${(dx * d.tx).toFixed(1)}px, ${(dy * d.ty).toFixed(1)}px)`;
+  const out = l <= JOY_DEAD ? 0 : (l - JOY_DEAD) / (1 - JOY_DEAD), s = l > 0 ? out / l : 0;
+  if (car) { touchIn.jx = touchIn.jy = 0; touchIn.steer = -Math.sign(dx) * Math.pow(out, 1.5); }
+  else { touchIn.jx = dx * s; touchIn.jy = dy * s; touchIn.steer = 0; }
+  joy.classList.toggle('run', !car && l > 0.93);   // the rim: the same point where walking turns into running
+}
 const holdBtn = (id, k) => { const el = document.getElementById(id); const on = e => { touchIn[k] = true; el.classList.add('down'); try { el.setPointerCapture(e.pointerId); } catch (_) {} e.stopPropagation(); e.preventDefault(); }; const off = () => { touchIn[k] = false; el.classList.remove('down'); }; el.addEventListener('pointerdown', on); el.addEventListener('pointerup', off); el.addEventListener('pointercancel', off); el.addEventListener('lostpointercapture', off); };
 holdBtn('tLeft', 'left'); holdBtn('tRight', 'right'); holdBtn('tGas', 'gas'); holdBtn('tBrake', 'brake'); holdBtn('tUp', 'up'); holdBtn('tDn', 'dn'); holdBtn('tWalkJump', 'jump');
 document.getElementById('tCam').addEventListener('pointerdown', e => { CS.cam = (CS.cam + 1) % 3; e.stopPropagation(); });
@@ -926,7 +966,7 @@ const HINTS = {
   walk: 'Click, then look with the mouse · WASD: walk · Shift: run · Space: jump · V: third person · Esc: release cursor',
   walkTP: isTouch ? 'Left thumb: walk (push to the rim to run) · Drag right side: turn the camera · JUMP: jump (over walls too) · VIEW: first person' : 'Click, then turn the camera with the mouse · WASD: walk · Shift: run · Ctrl+Shift: sprint · Space: jump · Wheel: zoom · V: first person · Esc: cursor',
   fly: 'Click, then look with the mouse · WASD: fly · E/Q: up/down · Shift: fast',
-  car: '↑/W gas · ↓/S brake/reverse · ←/→ steer · Space handbrake · C camera · L headlights',
+  car: isTouch ? 'Left thumb: steer (a light push turns a little) · GAS / BRAKE (hold BRAKE to reverse) · Drag right side: look around · CAMERA: switch view' : '↑/W gas · ↓/S brake/reverse · ←/→ steer · Space handbrake · C camera · L headlights',
   game: isTouch ? 'Left thumb: move (push to the rim to run) · Drag right side or the FIRE button: aim · Tap a weapon to switch' : 'Click to aim · WASD move · Shift run · Mouse 1 fire · Mouse 2 scope (AWP) · 1/2/3, Q, wheel: weapons · R reload · Esc: cursor',
 };
 document.getElementById('hint').textContent = HINTS.orbit;
@@ -943,7 +983,8 @@ function setMode(m) {
   document.getElementById('cross').style.display = m === 'walk' || m === 'fly' || m === 'game' ? 'block' : 'none';
   document.getElementById('gameGroup').hidden = m !== 'game';
   const show = (ids, on) => ids.forEach(id => document.getElementById(id).classList.toggle('show', on && isTouch));
-  show(['joyZone'], m === 'walk' || m === 'fly' || m === 'game'); show(['tUp', 'tDn'], m === 'fly'); show(['tLeft', 'tRight', 'tGas', 'tBrake', 'tCam'], m === 'car');
+  show(['joyZone'], m === 'walk' || m === 'fly' || m === 'game' || m === 'car'); show(['tUp', 'tDn'], m === 'fly'); show(['tGas', 'tBrake', 'tCam'], m === 'car');
+  endJoy(null); document.getElementById('joyLabel').textContent = m === 'car' ? 'STEER' : 'MOVE';
   if (document.pointerLockElement && m !== 'walk' && m !== 'fly') document.exitPointerLock();
   if (m === 'walk' || m === 'fly' || m === 'game') {
     // start from the current view
@@ -1193,8 +1234,11 @@ renderer.setAnimationLoop(now => {
   if (driving) { const ahead = Math.max(-15, Math.min(35, CS.v * 1.5)); focus = carAhead.set(CS.x + Math.cos(CS.h) * ahead, CS.y, CS.z - Math.sin(CS.h) * ahead); }
   // v1.18: the third-person walk too (the character is drawn on the cached map like the car)
   const walkingTP = tpActive(), mover = inGame || driving || walkingTP;
-  const ext = mode === 'orbit' ? Math.min(900, Math.max(150, camera.position.distanceTo(focus) * 1.2)) : mover ? 150 : 140;
-  const step = mode === 'orbit' ? ext * 0.04 : mover ? 24 : 6;
+  // v1.20: a phone driving the Toros: the map covers 190 m and is redrawn every 40 m (every 24 m it was a full redraw
+  // ~1.7 times a second at 150 km/h, each one a visible hitch on a phone)
+  const phoneCar = driving && isTouch;
+  const ext = mode === 'orbit' ? Math.min(900, Math.max(150, camera.position.distanceTo(focus) * 1.2)) : phoneCar ? 190 : mover ? 150 : 140;
+  const step = mode === 'orbit' ? ext * 0.04 : phoneCar ? 40 : mover ? 24 : 6;
   // small village details and far grass patches: shown / hidden by distance (re-checked every 4 m of camera movement);
   // the shadow map only needs a refresh when something inside it appeared or went
   const cullChanged = culler.update(camera.position, false, inGame && !GAME_PRESETS[gamePreset].shadowOnCull ? 0 : ext); if (cullChanged) sun.shadow.needsUpdate = true;
