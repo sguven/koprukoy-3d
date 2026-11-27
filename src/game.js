@@ -6,7 +6,8 @@
 // Bots carry the same rifles, roam the real road network (village_layout roads → graph of lanes and junctions),
 // react with a short delay when they spot the player, fire bursts, run-and-gun, strafe at mid range, fall back and
 // reload when the magazine is empty, run for cover when hurt, turn towards shots that hit them and towards gunfire
-// they hear. Line of sight and bullets are blocked by the terrain height field and the building boxes.
+// they hear. Line of sight and bullets are blocked by the terrain height field, the building boxes and (v1.23) the walls,
+// fences, posts and tree trunks of the walk's collision grid (src/solids.js).
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { createBotCrowd } from './botchar.js';
@@ -227,13 +228,25 @@ export function createGame(ctx) {
     }
     return false;
   };
+  // v1.23 (owner: "the bots shouldn't shoot me from behind walls"): sight lines and bullets also stop at the walls,
+  // fences, kerbs, posts and tree trunks of the collision grid the walk builds from the scene (src/solids.js, v1.18).
+  // Until v1.22 only the terrain and the building boxes stopped them, so a garden wall or a fence hid nobody.
+  // The grid is asked only for the part of the segment before the terrain / building hit, cell by cell (~0.1 ms for
+  // the 8 sight lines a frame). Before the grid is built (the first second or so) it is the old test alone.
+  const solidsOf = ctx.solids || (() => null);
   const trace = (ax, ay, az, bx, by, bz, step = 1.5) => {
     const L = Math.sqrt((bx - ax) * (bx - ax) + (by - ay) * (by - ay) + (bz - az) * (bz - az)), n = Math.max(1, Math.ceil(L / step));
+    let tc = 1, hit = null;
     for (let i = 1; i <= n; i++) {
       const t = i / n, x = ax + (bx - ax) * t, y = ay + (by - ay) * t, z = az + (bz - az) * t, h = terrH(x, z);
-      if (y < h || inBuilding(x, y, z)) { _hit.t = t * L; _hit.x = x; _hit.y = Math.max(y, h); _hit.z = z; return _hit; }   // shared result
+      if (y < h || inBuilding(x, y, z)) { tc = t; _hit.t = t * L; _hit.x = x; _hit.y = Math.max(y, h); _hit.z = z; hit = _hit; break; }   // shared result
     }
-    return null;
+    const S = solidsOf();
+    if (S && S.ready) {
+      const f = S.segmentHit(ax, ay, az, ax + (bx - ax) * tc, ay + (by - ay) * tc, az + (bz - az) * tc);
+      if (f >= 0) { const t = f * tc; _hit.t = t * L; _hit.x = ax + (bx - ax) * t; _hit.y = ay + (by - ay) * t; _hit.z = az + (bz - az) * t; return _hit; }
+    }
+    return hit;
   };
 
   // ---- road graph for roaming: lanes of the layout, junctions = endpoints within 4 m of each other
@@ -498,9 +511,16 @@ export function createGame(ctx) {
       if (playerMoving) p *= 0.65; if (moving) p *= 0.7; if (b.crouch) p *= 1.2; if (b.aimT < b.reaction + 0.4) p *= 1.15;
       if (b.char) b.char.fired();
       const muzzle = (b.char && b.vis ? b.char.flash : u.flash).getWorldPosition(_v1);   // (a person out of view was not posed this frame)
-      if (rnd() < Math.min(0.85, p)) {
+      // v1.23: a hit is checked again from the muzzle at the moment of the shot. The sight line is a few tenths of a
+      // second old and runs from the bot's head, so a player who has just stepped behind a wall (or ducked below it)
+      // is no longer hit through it: the round hits the wall instead.
+      const hx = ex + (rnd() - 0.5) * 0.3, hy = P.y + EYE - 0.3 + (rnd() - 0.5) * 0.4, hz = ez + (rnd() - 0.5) * 0.3;
+      const wall = rnd() < Math.min(0.85, p) ? trace(muzzle.x, muzzle.y, muzzle.z, hx, hy, hz, 2.0) : false;
+      if (wall === null) {
         const falloff = Math.max(0.6, 1 - dist / 400), dmg = Math.round(W.dmg * falloff * (0.85 + rnd() * 0.3));
-        hurtPlayer(dmg, b); tracer(muzzle, _v2.set(ex + (rnd() - 0.5) * 0.3, P.y + EYE - 0.3 + (rnd() - 0.5) * 0.4, ez + (rnd() - 0.5) * 0.3));
+        hurtPlayer(dmg, b); tracer(muzzle, _v2.set(hx, hy, hz));
+      } else if (wall) {
+        tracer(muzzle, _v2.set(wall.x, wall.y, wall.z)); puff(wall.x, wall.y, wall.z, 0.5);
       } else {
         // a miss: the round passes close by and hits the ground or a wall behind
         const dir = _v2.set(ex - muzzle.x + (rnd() - 0.5) * 3, P.y + EYE - 0.3 - muzzle.y + (rnd() - 0.5) * 2, ez - muzzle.z + (rnd() - 0.5) * 3).normalize();
