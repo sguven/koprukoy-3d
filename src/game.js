@@ -580,7 +580,7 @@ export function createGame(ctx) {
     if (!W.auto && G.fired) return;   // semi-automatic: one shot per click
     if (!W.melee && A.mag <= 0) { reload(); return; }
     if (!W.melee) A.mag--;
-    G.fired = true; G.fireCd = 1 / W.rate; G.kick = 1; G.lastShot = G.time; sound('shot', 0, G.weapon);
+    G.fired = true; G.fireQueue = 0; G.fireCd = 1 / W.rate; G.kick = 1; G.lastShot = G.time; sound('shot', 0, G.weapon);
     if (!W.melee) { vmFlash.visible = true; vmFlash.position.copy(models[G.weapon].userData.muzzle).add(models[G.weapon].position); vmFlash.scale.setScalar(0.25 + rnd() * 0.25); }
     // camera kick (recoil): up and a little sideways, the AK climbs
     P.pitch += W.kick * Math.PI / 180 * (0.7 + rnd() * 0.5); P.yaw += (rnd() - 0.5) * W.kick * Math.PI / 180 * 0.5;
@@ -652,8 +652,12 @@ export function createGame(ctx) {
   const touchBtns = [fireBtn, reloadBtn, jumpBtn, scopeBtn];
   // FIRE: hold to shoot, and drag the thumb on it to aim at the same time (like mobile shooters)
   let fireId = null, fx0 = 0, fy0 = 0;
+  // v1.20.1: a press is never lost. A new touch always takes the button over (a finger whose release the browser never
+  // reported used to leave it dead until the mode was changed), the shot goes off on the touch itself rather than on
+  // the next frame, and a tap during the last moments of the bolt / weapon swap is kept and fires as soon as it can.
   const fireUp = e => { if (e.pointerId !== fireId) return; fireId = null; G.firing = false; G.fired = false; fireBtn.classList.remove('down'); };
-  fireBtn.addEventListener('pointerdown', e => { e.stopPropagation(); e.preventDefault(); if (fireId !== null) return; fireId = e.pointerId; fx0 = e.clientX; fy0 = e.clientY; try { fireBtn.setPointerCapture(e.pointerId); } catch (_) {} G.firing = true; G.fired = false; fireBtn.classList.add('down'); });
+  fireBtn.addEventListener('pointerdown', e => { e.stopPropagation(); e.preventDefault(); fireId = e.pointerId; fx0 = e.clientX; fy0 = e.clientY; try { fireBtn.setPointerCapture(e.pointerId); } catch (_) {} G.firing = true; G.fired = false; G.fireQueue = 0.35; fireBtn.classList.add('down'); if (G.on && G.dead <= 0) fire(); });
+  addEventListener('pointerup', fireUp); addEventListener('pointercancel', fireUp);
   fireBtn.addEventListener('pointermove', e => { if (e.pointerId !== fireId) return; const dx = e.clientX - fx0, dy = e.clientY - fy0; fx0 = e.clientX; fy0 = e.clientY; if (look.touchTurn) { look.touchTurn(dx, dy, e); return; } const k = 0.005 * look.sens * camera.fov / look.fov; P.yaw -= dx * k; P.pitch = Math.max(-1.45, Math.min(1.45, P.pitch - dy * k)); });
   for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) fireBtn.addEventListener(ev, fireUp);
   const tap = (b, fn) => b.addEventListener('pointerdown', e => { e.stopPropagation(); e.preventDefault(); fn(); b.classList.add('down'); setTimeout(() => b.classList.remove('down'), 140); });
@@ -686,6 +690,9 @@ export function createGame(ctx) {
       const sh = [G.primary, 'deagle', 'knife'].map((k, i) => `<span data-w="${k}" class="${k === G.weapon ? 'on' : ''}">${isTouch ? '' : (i + 1) + ' '}${WEAPONS[k].name}</span>`).join('');
       if (sh !== slotsHtml) { el('ghSlots').innerHTML = sh; slotsHtml = sh; }
     }
+    // v1.20.1: FIRE greys out while it cannot shoot (dead, reloading, swapping, the AWP's bolt), so a press that does
+    // nothing is no longer a mystery
+    if (isTouch) { const wait = G.dead > 0 || G.roundOver || G.reloading > 0 || G.swapT > 0 || G.fireCd > 0.15; if (changed('fireWait', wait)) fireBtn.classList.toggle('wait', wait); }
     if (isTouch && hudCache.get('scope') !== !!W.scope) { hudCache.set('scope', !!W.scope); scopeBtn.classList.toggle('show', !!W.scope); }
     // crosshair: hidden behind the scope or while dead; the gap opens with the real spread (moving, holding the trigger)
     if (cross) {
@@ -738,7 +745,8 @@ export function createGame(ctx) {
     G.hurt = Math.max(0, G.hurt - dt * 1.6); G.fireCd = Math.max(0, G.fireCd - dt); G.swapT = Math.max(0, G.swapT - dt); G.heat = Math.max(0, G.heat - dt * 0.02);
     const W = WEAPONS[G.weapon], A = G.ammo[G.weapon];
     if (G.reloading > 0) { G.reloading -= dt; if (G.reloading <= 0) { const need = W.mag - A.mag, take = Math.min(need, A.reserve); A.mag += take; A.reserve -= take; G.reloading = 0; } }
-    if (G.firing && G.dead <= 0) fire();
+    G.fireQueue = Math.max(0, (G.fireQueue || 0) - dt);
+    if ((G.firing || G.fireQueue > 0) && G.dead <= 0) { const wasFired = G.fired; if (!G.firing) G.fired = false; fire(); if (!G.firing) G.fired = wasFired; }
     for (let i = 0; i < G.feed.length; i++) G.feed[i].t -= dt;
     while (G.feed.length && G.feed[G.feed.length - 1].t <= 0) G.feed.pop();   // newest first: the oldest lines expire at the end
     markVisibleBots(); losLeft = LOS_PER_FRAME;
