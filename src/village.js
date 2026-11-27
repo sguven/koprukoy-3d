@@ -488,11 +488,11 @@ export function buildVillage(ctx, layout, M) {
   // house as generated (b.orig) is run dry on the main stream, recording its draws, then the corrected one replays
   // the same draws (same wall / roof colour, chimney, trees) and continues on a stream of its own.
   function buildCorrected(b) {
-    const tape = [], saved = bat, nT = treeSpots.length, nW = wires.length, id0 = bid;
+    const tape = [], saved = bat, nT = treeSpots.length, nW = wires.length, nS = smoke.length, id0 = bid;
     rnd = () => { const v = baseRnd(); tape.push(v); return v; };
     bat = { add() {} }; buildHouse(b.orig); bat = saved;
     if (b.kind !== 'tandir') treeSpots.length = nT;   // the tandır keeps the plot trees of the house it replaces
-    wires.length = nW; bid = id0;
+    wires.length = nW; smoke.length = nS; bid = id0;   // v1.23: the dry run's chimneys do not smoke either
     if (b.gone) { treeSpots.length = nT; rnd = baseRnd; return; }   // v1.4.1: no house here — draws made, nothing built
     let i = 0; const own = mulberry32(Math.round(b.x * 100) ^ Math.round(b.z * 100));
     rnd = () => (i < tape.length ? tape[i++] : own());
