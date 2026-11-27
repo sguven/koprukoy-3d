@@ -644,7 +644,7 @@ loadAll().then(gltf => {
   // v1.1: build the Game's bots, weapons and effects now and compile every shader of the scene while "Loading…" is
   // still up, so that nothing compiles in the middle of a round (the first look at a material, the first shot, the
   // first bot used to stall a frame for 20–200 ms). The loop draws nothing until the shaders are ready (8 s at most).
-  try { game = createGame({ scene, camera, P, D, terrH, surfaceAt, surfaceInto, pushOut, look: LOOK, kd, isTouch, touchIn, EYE, village: VILLAGE }); } catch (e) { console.error(e); }
+  try { game = createGame({ scene, camera, P, D, terrH, surfaceAt, surfaceInto, pushOut, look: LOOK, kd, isTouch, touchIn, EYE, village: VILLAGE, solids: () => solids }); } catch (e) { console.error(e); }
   try { atmo.patch(scene); } catch (e) { console.error(e); }
   warming = true;
   return Promise.race([renderer.compileAsync(scene, camera), new Promise(r => setTimeout(r, 8000))]).catch(() => {});
@@ -1038,7 +1038,7 @@ function setMode(m) {
   applyGameView();
   if (m === 'walk' && thirdPerson) getAvatar();
   syncAvatar(m === 'walk');
-  if (m === 'game') { if (!game) game = createGame({ scene, camera, P, D, terrH, surfaceAt, surfaceInto, pushOut, look: LOOK, kd, isTouch, touchIn, EYE, village: VILLAGE }); game.start();
+  if (m === 'game') { if (!game) game = createGame({ scene, camera, P, D, terrH, surfaceAt, surfaceInto, pushOut, look: LOOK, kd, isTouch, touchIn, EYE, village: VILLAGE, solids: () => solids }); game.start();
     if (isTouch && innerHeight > innerWidth && !rotateTold) { rotateTold = true; toast('Turn your phone sideways for the best view'); toastT = 3.5; } }
   else if (prev === 'game' && game) game.stop();
   // on foot the field of view is the player's setting; orbit and the Toros keep 55°
