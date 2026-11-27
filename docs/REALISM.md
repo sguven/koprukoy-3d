@@ -5,6 +5,41 @@ Two passes so far: **v0.7 "materials"** (surfaces only, nothing moved) and **v0.
 `model/koprukoy.glb` are still the v0.6 files. Terrain (SRTM 30 m), the reservoir at 724 m, the
 Çeşnigir Bridge body, D.260 and the roads outside the village are unchanged.
 
+## v1.21 — a real place: sky, air, land beyond the map, smoke, birds and sound (Nov 2026)
+
+Owner's request: people who open the model should feel they are in a real place; it looked mechanical. Everything is
+in `src/atmosphere.js` and `src/ambience.js`; no new assets.
+
+- **Sky** (`cloudDome`): three's `Sky` was a washed-out white under AgX. It still lights the scene (environment map),
+  but the visible sky is a dome drawn after the opaque scene: zenith blue to a hazy horizon, a glow and disc round the
+  sun, and a cumulus layer at 1.9 km (value noise, ~1.3 km cells, wind ~8 m/s). On phones the cloud lighting uses one
+  noise lookup less.
+- **Cloud shadows**: the same noise projected along the sun dims the sunlight (to 38 %) under each cloud. Added to
+  three's `lights_fragment_begin` chunk for materials with the `KK_CLOUDSHADOW` define; `atmo.patch(scene)` opts every
+  lit material in just before the shaders are compiled (no extra texture unit: the terrain shader already uses 16).
+- **Aerial haze**: `fog_fragment` tints the fog by view direction (warm towards the sun, blue away), a little less haze
+  looking up; density 0.0002 (was 0.00007: 15 % at 2 km, 95 % at 8.6 km). The sky's horizon uses the same colour.
+- **Land beyond the map** (`buildOuterLand`): a 50 m → 700 m tensor grid out to 8.8 km, heights continuing the map edge
+  and rising into rolling hills and ridges, a 512² canvas texture (straw steppe, olive patches, ploughed fields) that
+  blends into a thumbnail of the map's macro texture near the edge; the river valley continues outwards over a water
+  plane at −0.5 m. The survey's outermost row of heights was pinned at ~40 m (walls up to 70 m high round the map):
+  it now continues the ground just inside it (`index.html`, after `editCesnigirTerrain`).
+- **Grade**: `CustomToneMapping` = AgX + saturation ×1.16, a slight contrast curve and a touch of warmth.
+- **Trees**: leaf colour a bit greyer, and light through the crowns (glow looking towards the sun, wrap on the shaded
+  side) in the canopy shader.
+- **Wood smoke**: `buildVillage` returns the chimney and stove-pipe tops (no random draws); about 16 % of the chimneys
+  and half of the stove pipes smoke. Point sprites, all motion in the vertex shader, faded out beyond 450 m.
+- **Birds**: three flocks (pigeons / jackdaws over the çarşı and east of it, gulls over the reservoir), one instanced
+  draw each, flapping in bursts and gliding.
+- **Sound** (`src/ambience.js`, checkbox "Nature sounds" under Layers, remembered in `localStorage.kk_amb`): wind
+  (brown + pink noise, gusts, louder and brighter with height and in the open), sparrow chirps / short songs near the
+  houses, a crow every 15–45 s, waves when the shore is within 35–90 m, grasshoppers outside the village. Starts with
+  the first tap or key (browser rule), quieter in the map view and in the Toros.
+- Cost, measured in the software renderer with a phone viewport (844 × 390): 2–14 % more time per frame depending on
+  the view (most where much sky or far land is on screen). Real-phone frame rates not measured.
+
+Before / after: `docs/screenshots/v1.21_walk_before_after.jpg`, `v1.21_overview_before_after.jpg`.
+
 ## v1.17 — old, lived-in houses; checked against the Google satellite layer (Nov 2026)
 
 Owner's request: check the model against Google Maps, Street View and common sense, and make the houses older and
