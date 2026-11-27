@@ -67,6 +67,10 @@ canvas { display: block; touch-action: none; }
 
 .panel { position: fixed; z-index: 45; top: 74px; left: 12px; width: 300px; max-height: calc(100% - 90px); overflow: auto; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 6px 24px rgba(40, 30, 20, 0.12); }
 .panel.hidden { display: none; }
+.panel [hidden] { display: none !important; }
+.adv summary { font: 600 13px/1 var(--display); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); cursor: pointer; list-style: none; }
+.adv summary::-webkit-details-marker { display: none; }
+.adv summary::after { content: ' ▸'; } .adv[open] summary::after { content: ' ▾'; }
 .group-title { font: 600 13px/1 var(--display); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
 .row { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip, .pbtn { font: 600 13px/1 var(--body); color: var(--ink); background: #fff; border: 1px solid var(--line); border-radius: 999px; padding: 7px 11px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
@@ -226,7 +230,7 @@ body:not(.is-touch)[data-mode="game"] .hint { right: auto; left: 50%; transform:
 <div id="perf" aria-live="off">– FPS</div>
 
 <div class="topbar">
-  <div class="brand"><h1>Köprüköy</h1><div class="sub">Keskin · Kırıkkale, Türkiye — 3D v1.16</div></div>
+  <div class="brand"><h1>Köprüköy</h1><div class="sub">Keskin · Kırıkkale, Türkiye — 3D v1.21</div></div>
   <div class="modes" id="modes" role="tablist" aria-label="Navigation mode">
     <button data-mode="orbit" class="on">Orbit</button>
     <button data-mode="walk" title="Walk through the village">Walk</button>
@@ -240,7 +244,7 @@ body:not(.is-touch)[data-mode="game"] .hint { right: auto; left: 50%; transform:
 </div>
 
 <aside class="panel hidden" id="panel">
-  <div>
+  <div id="viewGroup">
     <div class="group-title">Viewpoint</div>
     <div class="row" id="views">
       <button class="pbtn" data-view="genel">Overview</button>
@@ -279,7 +283,7 @@ body:not(.is-touch)[data-mode="game"] .hint { right: auto; left: 50%; transform:
       <button class="pbtn" data-q="smooth" title="Low shadows, hazy beyond ~600 m, no far grass or small details, lower resolution">Smooth</button>
       <button class="pbtn" data-q="quality" title="Full-size shadows and resolution">Quality</button>
     </div>
-    <p class="note">Deathmatch in the village: the bots roam the real lanes, spot you, chase, strafe, fall back to reload and shoot with the same rifles. Primary + Desert Eagle + knife (1 / 2 / 3, Q, wheel), R reload, right mouse = AWP scope. 5-minute rounds, score = kills : deaths.</p>
+    <p class="note">5-minute deathmatch. Keys: 1 / 2 / 3 weapons, R reload, right mouse AWP scope.</p>
   </div>
   <div id="carGroup" hidden>
     <div class="group-title">Toros</div>
@@ -292,7 +296,7 @@ body:not(.is-touch)[data-mode="game"] .hint { right: auto; left: 50%; transform:
     </div>
   </div>
   <div>
-    <div class="group-title">Layers</div>
+    <div class="group-title">Show</div>
     <div class="row">
       <label class="chip"><input type="checkbox" id="lyBina" checked> Buildings</label>
       <label class="chip"><input type="checkbox" id="lyAgac" checked> Trees and rocks</label>
@@ -301,27 +305,24 @@ body:not(.is-touch)[data-mode="game"] .hint { right: auto; left: 50%; transform:
       <label class="chip" title="Wind, birds, water and insects, depending on where you are"><input type="checkbox" id="optAmb" checked> Nature sounds</label>
     </div>
   </div>
-  <div>
-    <div class="group-title">Controls</div>
-    <label class="chip" style="width:100%;justify-content:space-between"><span>Look sensitivity <b id="sensVal">1.0×</b></span>
+  <!-- v1.21: the rarely used settings fold away -->
+  <details class="adv">
+    <summary>More settings</summary>
+    <label class="chip" style="width:100%;justify-content:space-between;margin-top:10px"><span>Look sensitivity <b id="sensVal">1.0×</b></span>
       <input type="range" id="optSens" min="0.3" max="3" step="0.1" value="1" style="flex:1;margin-left:10px" aria-label="Mouse and touch look sensitivity"></label>
     <label class="chip" style="width:100%;justify-content:space-between;margin-top:8px"><span>Field of view <b id="fovVal">55°</b></span>
       <input type="range" id="optFov" min="55" max="90" step="1" value="55" style="flex:1;margin-left:10px" aria-label="Field of view on foot"></label>
-    <div class="row" style="margin-top:8px"><label class="chip"><input type="checkbox" id="optTP" checked> Walk: see the character (third person)</label></div>
-  </div>
-  <div>
-    <div class="group-title">Performance</div>
-    <div class="row">
-      <label class="chip"><input type="checkbox" id="optFps" checked> Show FPS</label>
+    <div class="row" style="margin-top:8px">
+      <label class="chip"><input type="checkbox" id="optTP" checked> Walk in third person</label>
+      <label class="chip"><input type="checkbox" id="optFps"> Show FPS</label>
       <label class="chip"><input type="checkbox" id="optAutoRes" checked> Auto resolution</label>
     </div>
-  </div>
+  </details>
   <div hidden><!-- sun: disabled for now, fixed at 15:00 -->
     <div class="group-title">Sun</div>
     <label class="chip" style="width:100%;justify-content:space-between"><span>Time <b id="sunVal">15:00</b></span>
       <input type="range" id="sun" min="6" max="20" step="0.25" value="15" style="flex:1;margin-left:10px" aria-label="Time of day"></label>
   </div>
-  <p class="note"><strong>v0.9.5 — as Street View shows it.</strong> The village checked against the 86 Street View panoramas and the Google building layer: real-size footprints (fused roofs split into house and barn), one house in six two storeys, 2–3 windows per front, roads re-fitted to the lanes visible in the satellite image and lying flush on the ground, mahalle lanes earth and gravel, boulders off the streets, plots green in spring. Storey counts away from Street View coverage are still estimates.</p>
 </aside>
 
 <div class="hud" id="hud"><div class="speedo"><b id="spd">0</b><span id="gearTxt">km/h · N</span></div></div>
@@ -423,7 +424,7 @@ function setShadowMapSize(n) {
   sun.shadow.mapSize.set(n, n); if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; } sun.shadow.needsUpdate = true;
 }
 // v1.1: Game mode quality presets (Settings › Game › Performance, kept in localStorage). They set the BASE the game
-// renders at; the automatic resolution (Settings › Performance) still scales down from that base when frames are slow.
+// renders at; the automatic resolution (Settings › More settings) still scales down from that base when frames are slow.
 //   auto     smaller shadow map, the whole map in view, phones at 1.25× pixel density (the v1.0 phone setting)
 //   smooth   1024² shadows, the view ends in haze at ~650 m, small details / grass / shrubs only at 60 % of their
 //            usual distance, 1× pixel density; details popping in or out do not force a shadow redraw
@@ -1014,6 +1015,7 @@ function setMode(m) {
   document.body.dataset.mode = m;
   document.getElementById('cross').style.display = m === 'walk' || m === 'fly' || m === 'game' ? 'block' : 'none';
   document.getElementById('gameGroup').hidden = m !== 'game';
+  document.getElementById('viewGroup').hidden = m !== 'orbit';   // v1.21: viewpoints only where they apply (they switch to Orbit)
   const show = (ids, on) => ids.forEach(id => document.getElementById(id).classList.toggle('show', on && isTouch));
   show(['joyZone'], m === 'walk' || m === 'fly' || m === 'game' || m === 'car'); show(['tUp', 'tDn'], m === 'fly'); show(['tGas', 'tBrake', 'tCam'], m === 'car');
   endJoy(null); document.getElementById('joyLabel').textContent = m === 'car' ? 'STEER' : 'MOVE';
@@ -1132,7 +1134,7 @@ const fitSoon = () => { fit(); mmD = 0; setTimeout(fit, 120); setTimeout(fit, 50
 for (const ev of ['resize', 'orientationchange', 'pageshow']) addEventListener(ev, fitSoon);
 if (window.visualViewport) visualViewport.addEventListener('resize', fitSoon);
 fitSoon();
-// v1.0: FPS meter + automatic resolution (src/perf.js); both can be switched off under Settings › Performance
+// v1.0: FPS meter + automatic resolution (src/perf.js); both can be switched off under Settings › More settings
 const perf = createPerfMeter(renderer, document.getElementById('perf'), basePixelRatio, () => [VP.w, VP.h]);
 const loadPref = (k, d) => { try { const v = localStorage.getItem(k); return v === null ? d : v === '1'; } catch (_) { return d; } };
 const savePref = (k, v) => { try { localStorage.setItem(k, v ? '1' : '0'); } catch (_) {} };
