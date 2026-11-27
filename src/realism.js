@@ -86,7 +86,7 @@ export async function setupRealism(ctx) {
   const VM = (ctx.village || !off.has('no-park')) ? villageMaterials(lib, { quality }) : null;
   if (ctx.village && !off.has('no-village')) {
     const M = VM;
-    const v = buildVillage(ctx, ctx.village, M);
+    const v = buildVillage(ctx, ctx.village, M); ctx.smokeSources = v.smoke;
     ctx.scene.add(v.group);
     v.group.traverse(o => {
       if (!o.isMesh && !o.isLineSegments) return;
@@ -125,7 +125,7 @@ export async function setupRealism(ctx) {
   }
   log('tiles');
 
-  return { lib, swapped, update(now) {
+  return { lib, swapped, smoke: ctx.smokeSources || [], update(now) {
     if (waterMat && waterMat.userData.shader) waterMat.userData.shader.uniforms.uTime.value = now * 0.001;
     if (cover) cover.update(now);
   } };
