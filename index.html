@@ -353,6 +353,7 @@ import { createAtmosphere, buildOuterLand } from './src/atmosphere.js';
 import { tagBuildings } from './src/buildings.js';
 import { buildVillageLayout, buildCentreLayout, roadSamples, squareSamples, carsiBoxes, buildingBoxes, inRegion, inCentreZone } from './src/village_layout.js';
 import { pruneOldVillage, pruneRocks, LIFT } from './src/village.js';
+import { bridgeDeckY, onBridge, bridgeParapetBoxes, bridgeRampSamples } from './src/bridge.js';
 import { editCesnigirTerrain, syncTerrainMesh, pruneCesnigir, cesnigirSamples, cesnigirBoxes, PHOTO_VIEW } from './src/cesnigir.js';
 import { createGame } from './src/game.js';
 import { buildToros, COLORS, WB, TRACK, WR, EYE as DRIVER_EYE } from './src/toros.js';
@@ -505,6 +506,8 @@ function surfaceInto(out, x, z, refY = 1e9) {
     const L = roadHash.get(key(i, j)); if (!L) continue;
     for (const k of L) { const dx = x - R[k], dz = z - R[k + 1], hw = R[k + 3]; if (dx * dx + dz * dz < hw * hw) { const ry = R[k + 2]; if (ry <= refY + 1.4 && ry >= y - 0.8) { y = Math.max(y, ry); road = true; } } }
   }
+  // v1.22: the Çeşnigir Bridge deck (src/bridge.js), with the same rule: under it (on the water) it is not the ground
+  const by = bridgeDeckY(x, z); if (by <= refY + 1.4 && by >= y - 0.8) { y = Math.max(y, by); road = true; }
   out.y = y; out.road = road; out.water = !road && t < 0.15; return out;
 }
 let bldStamp = null, bldStampN = 0;
@@ -590,10 +593,13 @@ async function loadAll() {
   } else VILLAGE = buildCentreLayout(terrH);
   D.roads = D.roads.concat(squareSamples(VILLAGE.sites, terrH, LIFT.square));   // the çarşı square is walkable / drivable ground
   D.roads = D.roads.concat(cesnigirSamples(terrH));   // v1.10: Çeşnigir park, plazas and pier
+  // v1.22: the bridge deck is walkable / drivable through bridgeDeckY() (src/bridge.js); the old road samples on it
+  // (only on its western part since v0.8, and floating up to 40 cm over the deck) are dropped
+  { const R = D.roads, keep = []; for (let k = 0; k < R.length; k += 4) if (!onBridge(R[k], R[k + 1])) keep.push(R[k], R[k + 1], R[k + 2], R[k + 3]); D.roads = keep.concat(bridgeRampSamples()); }
   const inZone = FULL_VILLAGE ? inRegion : inCentreZone;
   const oldB = D.buildings, keepB = [];
   for (let k = 0; k < oldB.length; k += 5) if (!inZone(oldB[k], oldB[k + 1])) keepB.push(...oldB.slice(k, k + 5));
-  D.buildings = keepB.concat(buildingBoxes(VILLAGE.buildings), carsiBoxes(VILLAGE.sites), cesnigirBoxes());
+  D.buildings = keepB.concat(buildingBoxes(VILLAGE.buildings), carsiBoxes(VILLAGE.sites), cesnigirBoxes(), bridgeParapetBoxes());
   buildHashes();
   controls.heightAt = (x, z, y) => surfaceAt(x, z, y).y; controls.bounds = { x0: X0 + 20, z0: Z0 + 20, x1: X0 + TSZ - 20, z1: Z0 + TSZ - 20 };
   const bin = atob(b64), buf = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
@@ -717,7 +723,7 @@ let thirdPerson = true; try { thirdPerson = localStorage.getItem('kk_tp') !== '0
 let avatar = null, avatarAdded = false, solids = null;
 // v1.18: walls, kerbs, fences, steps, posts … as a collision grid read from the finished scene (src/solids.js)
 function buildSolids() {
-  if (solids) return; solids = createSolids({ scene, terrH, exclude: [car, ...(avatar ? [avatar.root] : [])] });
+  if (solids) return; solids = createSolids({ scene, terrH, baseH: (x, z) => Math.max(terrH(x, z), bridgeDeckY(x, z, 0.9)), exclude: [car, ...(avatar ? [avatar.root] : [])] });
   solids.build(window.__solidsSlice || 8).then(s => console.log('[solids]', s.chunks, 'chunks in', Math.round(s.ms), 'ms'));
 }
 function getAvatar() {

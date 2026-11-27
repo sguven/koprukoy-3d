@@ -23,7 +23,10 @@ const SAMPLE = 0.2;                 // sample spacing on a triangle (m)
 // meshes that are not obstacles: ground and road surfaces, foliage and grass, glass, water, the car and the character
 const SKIP = /^(Arazi|Su_|Yol|Toprak_Yol|Otlar|Calilar|Gezi_Alani|Pencereler|Cim|Toros|V_road|V_lawn|V_csLawn|V_glass|Cam$|V_vine|V_grape|V_flagTR|V_canvas|V_csLampGlass|.*Yaprak)/;
 
-export function createSolids({ scene, terrH, exclude = [] }) {
+// v1.22: heights are measured from `baseH` (the terrain, or the deck of the Çeşnigir Bridge where it stands over it).
+// Measured from the riverbed, the bridge's piers came out as tall solids right across the deck, so the walker could
+// not cross; what lies under the deck (piers, arches) is now not an obstacle on it.
+export function createSolids({ scene, terrH, baseH = terrH, exclude = [] }) {
   const chunks = new Map();
   const ckey = (ci, cj) => ci * 100003 + cj;
   function chunkAt(ci, cj, make) {
@@ -32,7 +35,7 @@ export function createSolids({ scene, terrH, exclude = [] }) {
     return c;
   }
   function put(x, y, z) {
-    const g = terrH(x, z), h = y - g;
+    const g = baseH(x, z), h = y - g;
     if (h < -0.3 || h > TALL_TO) return;
     const i = Math.floor(x / CELL), j = Math.floor(z / CELL), ci = Math.floor(i / CH), cj = Math.floor(j / CH);
     const c = chunkAt(ci, cj, true), n = (i - ci * CH) + (j - cj * CH) * CH;
@@ -68,8 +71,8 @@ export function createSolids({ scene, terrH, exclude = [] }) {
         const t = J.tri * 3, ia = idx ? idx.getX(t) : t, ib = idx ? idx.getX(t + 1) : t + 1, ic = idx ? idx.getX(t + 2) : t + 2;
         a.fromBufferAttribute(pos, ia).applyMatrix4(J.mat); b.fromBufferAttribute(pos, ib).applyMatrix4(J.mat); c.fromBufferAttribute(pos, ic).applyMatrix4(J.mat);
         // skip triangles wholly above TALL_TO or below the ground (cheap test at the centroid)
-        const cx = (a.x + b.x + c.x) / 3, cz = (a.z + b.z + c.z) / 3, gy = terrH(cx, cz);
-        if (Math.min(a.y, b.y, c.y) > gy + TALL_TO || Math.max(a.y, b.y, c.y) < gy - 0.3) continue;
+        const cx = (a.x + b.x + c.x) / 3, cz = (a.z + b.z + c.z) / 3, gy = baseH(cx, cz);
+        if (Math.min(a.y, b.y, c.y) > gy + TALL_TO || Math.max(a.y, b.y, c.y) < terrH(cx, cz) - 0.3) continue;
         e1.subVectors(b, a); e2.subVectors(c, a);
         const n1 = Math.max(1, Math.ceil(e1.length() / SAMPLE)), n2 = Math.max(1, Math.ceil(e2.length() / SAMPLE));
         if (n1 * n2 > 40000) continue;   // a huge triangle (a ground plate): not an obstacle
@@ -101,7 +104,7 @@ export function createSolids({ scene, terrH, exclude = [] }) {
         const dx = (i + 0.5) * CELL - x, dz = (j + 0.5) * CELL - z; if (dx * dx + dz * dz > r2) continue;
         const ci = Math.floor(i / CH), cj = Math.floor(j / CH), ch = chunks.get(ckey(ci, cj)); if (!ch) continue;
         const n = (i - ci * CH) + (j - cj * CH) * CH;
-        if (ch.tall[n]) { if (ch.top[n] > terrH((i + 0.5) * CELL, (j + 0.5) * CELL) + LOW - 0.5) return Infinity; }
+        if (ch.tall[n]) { if (ch.top[n] > baseH((i + 0.5) * CELL, (j + 0.5) * CELL) + LOW - 0.5) return Infinity; }
         const t = ch.top[n]; if (t > above && t > best) best = t;
       }
       return best;
