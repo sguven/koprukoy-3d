@@ -181,6 +181,7 @@ body[data-mode="car"] .joyzone .jlabel { width: 184px; bottom: calc(126px + var(
 #gameHud #ghMpDlg .row button { font: 700 16px var(--display); padding: 11px 18px; border-radius: 10px; border: 1px solid #b9ab92; background: #fff; color: #2a241d; cursor: pointer; }
 #gameHud #ghMpDlg #ghMpGo { background: #2f7fe0; border-color: #2f7fe0; color: #fff; }
 #gameHud #ghMpDlg small { font: 600 13px var(--body, sans-serif); color: #a2482f; opacity: 1; }
+body:has(#ghMpDlg[style*="grid"]) #cross { visibility: hidden; }
 #mpLabels { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
 #mpLabels span { position: absolute; left: 0; top: 0; display: none; font: 700 13px var(--display); color: #fff; background: rgba(47,127,224,0.85); padding: 2px 8px; border-radius: 8px; white-space: nowrap; will-change: transform; }
 #mpLabels span.dead { background: rgba(80,80,80,0.75); }
