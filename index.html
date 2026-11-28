@@ -149,7 +149,7 @@ body[data-mode="car"] .joyzone .jlabel { width: 184px; bottom: calc(126px + var(
 #gameHud .gh-slots { position: absolute; right: 24px; bottom: 96px; display: flex; gap: 6px; font: 600 12px var(--display); } #gameHud .gh-slots span { background: rgba(30,27,23,0.5); padding: 3px 8px; border-radius: 6px; opacity: 0.6; } #gameHud .gh-slots span.on { opacity: 1; background: rgba(162,72,47,0.8); }
 #gameHud .gh-scope { position: absolute; inset: 0; display: none; background: radial-gradient(circle at center, rgba(0,0,0,0) 0, rgba(0,0,0,0) 38vmin, rgba(0,0,0,0.97) 39vmin); }
 #gameHud .gh-scope i { position: absolute; left: 50%; top: 50%; width: 76vmin; height: 76vmin; transform: translate(-50%, -50%); background: linear-gradient(#000, #000) center / 100% 1px no-repeat, linear-gradient(#000, #000) center / 1px 100% no-repeat; }
-#gameHud { position: fixed; inset: 0; pointer-events: none; display: none; font-family: var(--display); color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.7); }
+#gameHud { position: fixed; inset: 0; z-index: 31; pointer-events: none; display: none; font-family: var(--display); color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.7); }
 #gameHud .gh-top { position: absolute; top: 70px; left: 50%; transform: translateX(-50%); display: flex; gap: 22px; font: 800 24px var(--display); background: rgba(30,27,23,0.55); padding: 6px 18px; border-radius: 10px; letter-spacing: 0.04em; }
 #gameHud .gh-feed { position: absolute; top: 120px; left: 50%; transform: translateX(-50%); font: 600 14px var(--display); text-align: center; }
 #gameHud .gh-health { position: absolute; left: 20px; bottom: 22px; display: flex; align-items: center; gap: 10px; font: 800 26px var(--display); }
