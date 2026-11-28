@@ -1,4 +1,4 @@
-// v1.24: the guns in the player's hands, built from side profiles of the real weapons (extruded, slightly bevelled)
+// v1.25: the guns in the player's hands, built from side profiles of the real weapons (extruded, slightly bevelled)
 // instead of boxes, held by two gloved hands. Real sizes in metres. Frame as before: barrel along -Z, grip down,
 // x to the right. Every gun is merged into one mesh per material (3–5 draw calls); the parts that move on their own
 // (pistol slides, the shotgun's pump, the AWP's bolt) stay separate and are returned in userData.moving.

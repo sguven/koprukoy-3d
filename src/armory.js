@@ -1,4 +1,4 @@
-// v1.24 Game extras: hand grenades and smoke grenades, the first-aid post in front of the old municipality where
+// v1.25 Game extras: hand grenades and smoke grenades, the first-aid post in front of the old municipality where
 // health comes back, and the gun shop in Güvendioğlu Market across the square (money from kills buys guns, grenades,
 // a steel vest and ammunition).
 //
