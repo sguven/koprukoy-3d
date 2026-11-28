@@ -282,7 +282,7 @@ body:not(.is-touch)[data-mode="game"] .hint { right: auto; left: 50%; transform:
 
 <div class="topbar">
   <button class="gear siteBtn" id="siteBtn" hidden aria-label="Çeşnigir-Der sitesine dön">‹ Site</button>
-  <div class="brand"><h1>Köprüköy</h1><div class="sub">Keskin · Kırıkkale, Türkiye — 3D v1.25</div></div>
+  <div class="brand"><h1>Köprüköy</h1><div class="sub">Keskin · Kırıkkale, Türkiye — 3D v1.26</div></div>
   <div class="modes" id="modes" role="tablist" aria-label="Navigation mode">
     <button data-mode="orbit" class="on">Orbit</button>
     <button data-mode="walk" title="Walk through the village">Walk</button>
@@ -439,7 +439,7 @@ const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'hi
 let mode = 'orbit';
 // v1.20: on a phone the moving modes (Walk, Fly, Toros) start at 1.35× (was 1.6×): ~30 % fewer pixels, steadier frames
 // while the view turns; Orbit keeps 1.6× for crisp map views
-// v1.25: a touch screen also has a pixel budget (~1.2 M drawn pixels): a tablet (an iPad is ~4× a phone's screen area)
+// v1.26: a touch screen also has a pixel budget (~1.2 M drawn pixels): a tablet (an iPad is ~4× a phone's screen area)
 // is drawn at the density that fits it instead of the phone's 1.35×; phones are under the budget and keep theirs
 const TOUCH_PX = 1.2e6;
 const basePixelRatio = () => {
@@ -1205,7 +1205,7 @@ function fit(force) {
   if (!measureVP() && force !== true) return;
   camera.aspect = VP.w / VP.h; if (mode === 'orbit' || mode === 'car') camera.fov = stdFov();
   camera.updateProjectionMatrix(); renderer.setSize(VP.w, VP.h);
-  if (isTouch) try { perf.refresh(); } catch (_) {}   // v1.25: the touch pixel budget depends on the size (perf is set up below)
+  if (isTouch) try { perf.refresh(); } catch (_) {}   // v1.26: the touch pixel budget depends on the size (perf is set up below)
 }
 // phones report the new size late after a turn or when the browser bars slide away: listen widely, and look again shortly after
 const fitSoon = () => { fit(); mmD = 0; setTimeout(fit, 120); setTimeout(fit, 500); setTimeout(() => { mmD = 0; }, 520); };
@@ -1214,7 +1214,7 @@ if (window.visualViewport) visualViewport.addEventListener('resize', fitSoon);
 fitSoon();
 // v1.0: FPS meter + automatic resolution (src/perf.js); both can be switched off under Settings › More settings
 const perf = createPerfMeter(renderer, document.getElementById('perf'), basePixelRatio, () => [VP.w, VP.h]);
-// v1.25: if the browser takes the WebGL context away (iOS does under memory pressure, e.g. on a tablet at full screen),
+// v1.26: if the browser takes the WebGL context away (iOS does under memory pressure, e.g. on a tablet at full screen),
 // the picture used to freeze for good. three.js rebuilds everything when the context comes back; until then a note is
 // shown, and if it does not come back within 5 s the page reloads
 {
@@ -1367,7 +1367,7 @@ renderer.setAnimationLoop(now => {
   // v1.20: a phone driving the Toros: the map covers 190 m and is redrawn every 40 m (every 24 m it was a full redraw
   // ~1.7 times a second at 150 km/h, each one a visible hitch on a phone)
   const phoneCar = driving && isTouch;
-  // v1.25, Fly: the map was 140 m around the camera and redrawn every 6 m, i.e. 7 to 20 full shadow redraws a second at
+  // v1.26, Fly: the map was 140 m around the camera and redrawn every 6 m, i.e. 7 to 20 full shadow redraws a second at
   // flying speed (40 / 120 m/s): the stutter on a phone. Now it grows with the height over the ground (in 40 m steps),
   // sits ahead of the camera, where the view goes, and is redrawn after a third of its size (phones; desktop a sixth)
   let flyExt = 0;
@@ -1382,7 +1382,7 @@ renderer.setAnimationLoop(now => {
   const step = mode === 'orbit' ? ext * 0.04 : flyExt ? flyExt * (isTouch ? 0.3 : 0.16) : phoneCar ? 40 : mover ? 24 : 6;
   // small village details and far grass patches: shown / hidden by distance (re-checked every 4 m of camera movement);
   // the shadow map only needs a refresh when something inside it appeared or went
-  // (v1.25: not when flying on a phone either: small details popping in or out redrew the whole map every few metres)
+  // (v1.26: not when flying on a phone either: small details popping in or out redrew the whole map every few metres)
   const cullChanged = culler.update(camera.position, false, (inGame && !GAME_PRESETS[gamePreset].shadowOnCull) || (flyExt && isTouch) ? 0 : ext); if (cullChanged) sun.shadow.needsUpdate = true;
   if (sun.shadow.needsUpdate || shadowFocus.distanceToSquared(focus) > step * step || Math.abs(ext - shadowExt) > shadowExt * 0.08) {
     const sc = sun.shadow.camera; if (sc.right !== ext) { sc.left = -ext; sc.right = ext; sc.top = ext; sc.bottom = -ext; sc.near = 1; sc.far = 4000; sc.updateProjectionMatrix(); }
