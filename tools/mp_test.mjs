@@ -1,4 +1,4 @@
-// v1.23 "Birlikte oyna" test: two headless pages in one browser, joined through ?mp=local (BroadcastChannel), play the
+// v1.24 "Birlikte oyna" test: two headless pages in one browser, joined through ?mp=local (BroadcastChannel), play the
 // team room (shared bots, no friendly fire, a bot killed by the guest, the host leaving) and the players-against-players
 // room. Needs `npm i --no-save three@0.170.0` and playwright resolvable from the repo. Usage: node tools/mp_test.mjs
 // (screenshots in /tmp/mp_shots; set OUT to change)

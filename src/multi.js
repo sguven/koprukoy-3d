@@ -1,4 +1,4 @@
-// v1.23 "Birlikte oyna": the Game played together by everyone who has it open (Nov 2026).
+// v1.24 "Birlikte oyna": the Game played together by everyone who has it open (Nov 2026).
 //
 // No game server: the players talk through a Supabase Realtime broadcast channel (the cesnigirder.org project's own
 // Supabase, publishable key; broadcast needs no table and no SQL). Each player sends their own position a few times a

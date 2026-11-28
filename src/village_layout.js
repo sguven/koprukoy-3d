@@ -546,6 +546,10 @@ const OWNER_FIX = [
   { xz: [475.5, 665.3], set: { yaw: 2.05, wall: 'none', tree: false, faceFix: 0.48 }, note: 'the long workshop building west of the school road: its long axis runs NW–SE (the tracer had it mirrored)' },
   { xz: [491.8, 698.7], set: { x: 490.5, z: 696.0, w: 22.0, d: 9.5, yaw: 2.05, wall: 'none', tree: false, faceFix: 0.48 }, note: 'the tyre shop (lastikçi) south of it: same axis, open bays on the road side' },
   { xz: [436.0, 362.8], set: { barn: true, plain: true, ownWall: 'Duvar_Okr', wall: 'none', tree: false }, note: 'the small tan hut in the park' },
+  // v1.23 (owner's phone screenshot of 27 Nov 2026): a blue-roofed house stood across the north-east carriageway of the
+  // D.260 by the lake, a cypress beside it. In the satellite mosaic there is no roof there: the tracer had read the blue
+  // D260 route shield printed on the map as a sheet roof. `gone` also drops its plot trees and chimney smoke.
+  { xz: [-175.1, 213.6], set: { gone: true }, note: 'not a house: the blue D260 route shield on the satellite map, on the carriageway' },
 ];
 // v1.5: what the three panoramas show besides the houses. Model metres (x east, z south). Nothing here takes a draw
 // from the village's random stream, so every other house, tree and detail stays where it was.
