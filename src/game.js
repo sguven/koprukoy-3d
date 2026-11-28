@@ -11,6 +11,8 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { createBotCrowd } from './botchar.js';
+import { viewGun, viewGrenade } from './gunmodels.js';
+import { createArmory } from './armory.js';
 import { joinRoom, ROOMS } from './multi.js';
 
 const BOT_NAMES = ['Keskinli', 'Kırıkkaleli', 'Çeşnigir', 'Kapulukaya', 'Hırka', 'Köprübaşı', 'Kızılırmak', 'Bozkır', 'Karakeçili', 'Ceritler', 'Yeşilyurt', 'Göçeri'];
@@ -24,7 +26,13 @@ export const WEAPONS = {
   awp:   { name: 'AWP',          slot: 1, dmg: 115, head: 4.0, rate: 0.68, mag: 10, reserve: 30,  reload: 3.6, spread: 0.0012, moveSpread: 0.06,  kick: 2.6, climb: 0,      auto: false, range: 400, botAcc: 0.55, scope: true },
   deagle:{ name: 'Desert Eagle', slot: 2, dmg: 54, head: 4.0, rate: 3.3,  mag: 7,  reserve: 35,  reload: 2.2, spread: 0.0070, moveSpread: 0.024, kick: 2.2, climb: 0.004,  auto: false, range: 200, botAcc: 0.32 },
   knife: { name: 'Knife',        slot: 3, dmg: 40, head: 2.0, rate: 1.4,  mag: Infinity, reserve: 0, reload: 0, spread: 0, moveSpread: 0, kick: 0.3, climb: 0, auto: true, range: 2.3, melee: true },
+  // v1.25: three more guns, sold in the shop (Güvendioğlu Market became the gun shop in the Game)
+  glock: { name: 'Glock-18',     slot: 2, dmg: 25, head: 4.0, rate: 6.5,  mag: 20, reserve: 120, reload: 2.0, spread: 0.0060, moveSpread: 0.018, kick: 0.9, climb: 0.002,  auto: false, range: 150, botAcc: 0.25 },
+  m3:    { name: 'Pompalı M3',   slot: 1, dmg: 19, head: 2.0, rate: 1.15, mag: 8,  reserve: 32,  reload: 3.0, spread: 0.045,  moveSpread: 0.06,  kick: 3.2, climb: 0,      auto: false, range: 45,  botAcc: 0.3, pellets: 9 },
+  m249:  { name: 'M249',         slot: 1, dmg: 31, head: 4.0, rate: 12.5, mag: 100, reserve: 200, reload: 4.6, spread: 0.0055, moveSpread: 0.03, kick: 0.85, climb: 0.0022, auto: true,  range: 260, botAcc: 0.3 },
 };
+// shop prices (Turkish lira of the game); the knife is free and always with you
+export const PRICES = { glock: 200, deagle: 650, mp5: 1500, m3: 1700, ak47: 2700, m4a1: 3100, awp: 4750, m249: 5200, he: 300, smoke: 300, armor: 650, ammo: 100 };
 
 export function createGame(ctx) {
   const { scene, camera, P, D, terrH, surfaceAt, pushOut, kd, isTouch, EYE, village } = ctx;
@@ -42,7 +50,7 @@ export function createGame(ctx) {
   const rnd = () => Math.random();   // looked up at each call: the benchmark swaps in a seeded generator
   const G = {
     on: false, bots: [], botCount: 8, difficulty: 1.0, primary: 'ak47',
-    health: 100, weapon: 'ak47', lastWeapon: 'deagle', ammo: {}, reloading: 0, fireCd: 0, swapT: 0, heat: 0, scoped: false,
+    health: 100, weapon: 'ak47', lastWeapon: 'deagle', secondary: 'deagle', armor: 0, money: 800, nades: { he: 1, smoke: 1 }, shake: 0, rq: 0, rqBack: 0, rqT: 0, spawnSafe: 0, shopOpen: false, ammo: {}, reloading: 0, fireCd: 0, swapT: 0, heat: 0, scoped: false,
     kills: 0, deaths: 0, dead: 0, roundT: 300, roundOver: false, kick: 0, bob: 0, lastShot: -1, feed: [], hurt: 0, firing: false, fired: false, time: 0,
   };
   const resetAmmo = () => { for (const k in WEAPONS) G.ammo[k] = { mag: WEAPONS[k].mag, reserve: WEAPONS[k].reserve }; };
@@ -176,7 +184,7 @@ export function createGame(ctx) {
     try {
       if (!ac) ac = new (window.AudioContext || window.webkitAudioContext)();
       if (ac.state === 'suspended') ac.resume();
-      for (const [dur, decay] of [[0.5, 1.8], [0.25, 2.2], [0.12, 3], [0.08, 4], [0.18, 2.5], [0.1, 3]]) noiseBuf(dur, decay);
+      for (const [dur, decay] of [[0.5, 1.8], [0.25, 2.2], [0.12, 3], [0.08, 4], [0.18, 2.5], [0.1, 3], [0.5, 2.5]]) noiseBuf(dur, decay);
       getDeath();
     } catch (e) { /* no audio */ }
   };
@@ -187,21 +195,34 @@ export function createGame(ctx) {
       if (kind === 'death') { getDeath().then(playDeath); return; }
       getDeath();
       const t = ac.currentTime, att = 1 / (1 + dist / 30);
-      const noise = (dur, cutoff, gain, decay = 2.5) => {
+      const noise = (dur, cutoff, gain, decay = 2.5, delay = 0) => {
         const buf = noiseBuf(dur, decay);   // v1.0: one noise buffer per shape, made once
         const n = ac.createBufferSource();
         n.buffer = buf; const f = ac.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = cutoff; const g = ac.createGain(); g.gain.value = gain;
-        n.connect(f); f.connect(g); g.connect(ac.destination); n.start(t);
+        n.connect(f); f.connect(g); g.connect(ac.destination); n.start(t + delay);
       };
       const thump = (f0, f1, dur, gain) => { const o = ac.createOscillator(), g = ac.createGain(); o.type = 'square'; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + dur); g.gain.setValueAtTime(gain, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur + 0.02); o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + dur + 0.03); };
+      const click = (f, at, gain) => { const o = ac.createOscillator(), g = ac.createGain(); o.type = 'square'; o.frequency.value = f; g.gain.setValueAtTime(gain, t + at); g.gain.exponentialRampToValueAtTime(0.001, t + at + 0.04); o.connect(g); g.connect(ac.destination); o.start(t + at); o.stop(t + at + 0.05); };
       if (kind === 'shot') {
         const w = weapon;
         if (w === 'awp') { noise(0.5, 1800, 0.7 * att, 1.8); thump(120, 30, 0.3, 0.4 * att); }
         else if (w === 'deagle') { noise(0.25, 2200, 0.6 * att, 2.2); thump(160, 40, 0.16, 0.35 * att); }
         else if (w === 'mp5') { noise(0.12, 3200, 0.35 * att, 3); thump(240, 70, 0.07, 0.15 * att); }
+        else if (w === 'glock') { noise(0.12, 3400, 0.38 * att, 3); thump(260, 80, 0.06, 0.16 * att); }
+        else if (w === 'm3') { noise(0.5, 1500, 0.8 * att, 1.8); thump(110, 28, 0.25, 0.45 * att); if (!dist) { click(500, 0.32, 0.06); click(380, 0.48, 0.06); } }
         else if (w === 'knife') { noise(0.08, 4000, 0.12, 4); }
         else { noise(0.18, 2600, 0.5 * att, 2.5); thump(190, 45, 0.11, 0.25 * att); }
-      } else if (kind === 'hit') { const o = ac.createOscillator(), g = ac.createGain(); o.type = 'triangle'; o.frequency.value = 1500; g.gain.setValueAtTime(0.14, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.07); o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + 0.08); }
+        // v1.25: the village answers: a soft late echo off the houses (not for the knife)
+        if (w !== 'knife' && att > 0.25) noise(0.25, 800, 0.12 * att, 2.2, 0.13 + rnd() * 0.06);
+      } else if (kind === 'boom') {   // hand grenade
+        noise(0.5, 900, 1.0 * att, 1.8); noise(0.5, 3000, 0.35 * att, 2.5); thump(90, 22, 0.45, 0.6 * att); noise(0.5, 500, 0.3 * att, 1.8, 0.2);
+      } else if (kind === 'pop') {    // smoke grenade going off: a pop and a long hiss
+        thump(300, 90, 0.05, 0.2 * att); const n = ac.createBufferSource(); n.buffer = noiseBuf(0.5, 1.8); n.loop = true; const f = ac.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 2500;
+        const g = ac.createGain(); g.gain.setValueAtTime(0.0, t); g.gain.linearRampToValueAtTime(0.12 * att, t + 0.2); g.gain.linearRampToValueAtTime(0.0001, t + 3.5); n.connect(f); f.connect(g); g.connect(ac.destination); n.start(t); n.stop(t + 3.6);
+      } else if (kind === 'throw') { noise(0.1, 1200, 0.15, 3); click(1200, 0, 0.04); }
+      else if (kind === 'bounce') { click(900 + rnd() * 300, 0, 0.05 * att); }
+      else if (kind === 'buy') { click(700, 0, 0.06); click(1050, 0.07, 0.06); }
+      else if (kind === 'heal') { const o = ac.createOscillator(), g = ac.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(660, t); o.frequency.linearRampToValueAtTime(990, t + 0.12); g.gain.setValueAtTime(0.06, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.18); o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + 0.2); } else if (kind === 'hit') { const o = ac.createOscillator(), g = ac.createGain(); o.type = 'triangle'; o.frequency.value = 1500; g.gain.setValueAtTime(0.14, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.07); o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + 0.08); }
       else if (kind === 'headshot') { const o = ac.createOscillator(), g = ac.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(900, t); o.frequency.exponentialRampToValueAtTime(1800, t + 0.08); g.gain.setValueAtTime(0.2, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.15); o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + 0.16); }
       else if (kind === 'hurt') { thump(140, 60, 0.22, 0.3); noise(0.1, 900, 0.2, 3); }
       else if (kind === 'reload') { for (let i = 0; i < 2; i++) { const o = ac.createOscillator(), g = ac.createGain(); o.type = 'square'; o.frequency.value = 800 + i * 400; g.gain.setValueAtTime(0.07, t + i * 0.55); g.gain.exponentialRampToValueAtTime(0.001, t + i * 0.55 + 0.05); o.connect(g); g.connect(ac.destination); o.start(t + i * 0.55); o.stop(t + i * 0.55 + 0.06); } }
@@ -400,10 +421,10 @@ export function createGame(ctx) {
     attachChar(b);
     return b;
   }
-  function killBot(b, head, by) {   // by: another player in the "together against the bots" room (v1.24), else me
+  function killBot(b, head, by, what) {   // by: another player in the "together against the bots" room (v1.24), else me
     b.dead = 6; b.state = 'dead'; b.hp = 0; if (b.char) b.char.die();
     const w = by && WEAPONS[by.w] ? by.w : G.weapon;
-    if (!by) { G.kills++; feed(`${b.name} ${head ? 'kafadan vuruldu' : 'vuruldu'} — ${WEAPONS[w].name}`); sound(head ? 'headshot' : 'hit'); }
+    if (!by) { G.kills++; const pay = payKill(head); feed(`${b.name} ${head ? 'kafadan vuruldu' : 'vuruldu'} — ${what || WEAPONS[w].name} <i>+${pay} ₺</i>`); sound(head ? 'headshot' : 'hit'); }
     else feed(`${esc(by.name)} → ${b.name} — ${WEAPONS[w].name}`);
     if (G.mp && G.isHost) G.mp.send({ t: 'bk', idx: b.id, by: by ? by.pid : G.mp.id, hd: head ? 1 : 0, w });
   }
@@ -444,7 +465,7 @@ export function createGame(ctx) {
       if (needTrace) losLeft--;
       b.losT = 0.22 + rnd() * 0.15;
       const saw = b.hasLos;
-      b.hasLos = needTrace && !trace(b.x, b.y + 1.6, b.z, ex, P.y + EYE - 0.2, ez, 2.0);
+      b.hasLos = needTrace && !trace(b.x, b.y + 1.6, b.z, ex, P.y + EYE - 0.2, ez, 2.0) && !arm.smokeBlocks(b.x, b.y + 1.6, b.z, ex, P.y + EYE - 0.2, ez);   // v1.25: nor through smoke
       if (b.hasLos) { b.ls.x = ex; b.ls.z = ez; b.lastSeen = b.ls; b.seen = 6; if (!saw) b.aimT = 0; }
     }
     b.seen -= dt; if (b.hasLos) b.aimT += dt;
@@ -558,9 +579,13 @@ export function createGame(ctx) {
   const vmScene = new THREE.Scene(), vmCam = new THREE.PerspectiveCamera(55, camera.aspect, 0.02, 10);
   vmScene.add(vmCam, vm);
   const vmSun = new THREE.DirectionalLight(0xfff1d6, 3.2); vmSun.position.set(0.4, 1, 0.6); vmScene.add(vmSun, new THREE.HemisphereLight(0xcfe3ff, 0x8a7a63, 2.6));
-  const models = {}; for (const k in WEAPONS) { models[k] = weaponModel(k); models[k].visible = false; vm.add(models[k]); }
-  const vmFlash = flashSprite(0.35); vm.add(vmFlash);
-  const REST = { ak47: [0.26, -0.24, -0.5], m4a1: [0.26, -0.24, -0.5], mp5: [0.24, -0.22, -0.42], awp: [0.24, -0.25, -0.5], deagle: [0.2, -0.23, -0.56], knife: [0.22, -0.22, -0.4] };
+  // v1.25: real-size guns from side profiles, held by gloved hands (src/gunmodels.js)
+  const models = {}; for (const k in WEAPONS) { models[k] = viewGun(k); models[k].visible = false; vm.add(models[k]); }
+  const nadeVm = { he: viewGrenade('he'), smoke: viewGrenade('smoke') }; for (const k in nadeVm) { nadeVm[k].visible = false; vmScene.add(nadeVm[k]); }
+  const vmFlash = flashSprite(0.2); vm.add(vmFlash);
+  // where each gun rests in front of the eye [x, y, z, yaw]
+  const REST = { ak47: [0.17, -0.17, -0.45, 0], m4a1: [0.17, -0.18, -0.46, 0.01], mp5: [0.16, -0.165, -0.42, 0.01], awp: [0.17, -0.18, -0.44, 0], m3: [0.17, -0.17, -0.44, 0], m249: [0.18, -0.19, -0.46, 0.01],
+    deagle: [0.11, -0.125, -0.44, 0.06], glock: [0.11, -0.12, -0.42, 0.06], knife: [0.17, -0.17, -0.36, -0.35] };
   /** Second pass, called by the main loop right after the village is drawn: the gun on top, depth cleared. */
   function renderOverlay(renderer) {
     if (!G.on || !vm.visible) return;
@@ -569,7 +594,7 @@ export function createGame(ctx) {
   }
   function setWeapon(k) {
     if (k === G.weapon || G.dead > 0) return;
-    G.lastWeapon = G.weapon; G.weapon = k; G.swapT = 0.45; G.reloading = 0; G.heat = 0; setScope(false); sound('swap');
+    G.lastWeapon = G.weapon; G.weapon = k; G.swapT = 0.32; G.reloading = 0; G.heat = 0; setScope(false); sound('swap');
     for (const m in models) models[m].visible = m === k;
   }
   function setScope(on) {
@@ -601,23 +626,27 @@ export function createGame(ctx) {
   }
   function fire() {
     const W = WEAPONS[G.weapon], A = G.ammo[G.weapon];
-    if (G.dead > 0 || G.roundOver || G.reloading > 0 || G.fireCd > 0 || G.swapT > 0) return;
+    if (G.dead > 0 || G.roundOver || G.reloading > 0 || G.fireCd > 0 || G.swapT > 0 || G.shopOpen || G.throwT > 0) return;
     if (!W.auto && G.fired) return;   // semi-automatic: one shot per click
     if (!W.melee && A.mag <= 0) { reload(); return; }
     if (!W.melee) A.mag--;
     G.fired = true; G.fireQueue = 0; G.fireCd = 1 / W.rate; G.kick = 1; G.lastShot = G.time; sound('shot', 0, G.weapon);
-    if (!W.melee) { vmFlash.visible = true; vmFlash.position.copy(models[G.weapon].userData.muzzle).add(models[G.weapon].position); vmFlash.scale.setScalar(0.25 + rnd() * 0.25); }
-    // camera kick (recoil): up and a little sideways, the AK climbs
-    P.pitch += W.kick * Math.PI / 180 * (0.7 + rnd() * 0.5); P.yaw += (rnd() - 0.5) * W.kick * Math.PI / 180 * 0.5;
-    // direction with spread: standing / moving / scoped, plus heat from holding the trigger
-    const dir = camera.getWorldDirection(_v1);
+    if (!W.melee) { vmFlash.visible = true; vmFlash.position.copy(models[G.weapon].userData.muzzle); vmFlash.scale.setScalar(0.12 + rnd() * 0.12); }
+    // v1.25: the recoil is no longer a jump of the view: each shot adds to a kick that the view takes up over ~50 ms,
+    // and once the trigger is let go the view settles back most of the way (G.rq / G.rqBack in update)
+    const kickR = W.kick * Math.PI / 180 * (0.75 + rnd() * 0.4); G.rq += kickR; G.rqT = 0;
+    P.yaw += (rnd() - 0.5) * W.kick * Math.PI / 180 * 0.35;
     const moving = isMoving();
-    let spread = (moving ? W.moveSpread : W.spread) + G.heat; if (W.scope && !G.scoped) spread = 0.08;
-    const right = _v2.crossVectors(dir, camera.up).normalize(), up = _v3.crossVectors(right, dir).normalize();
-    const r = Math.sqrt(rnd()) * spread, a = rnd() * Math.PI * 2;
-    dir.addScaledVector(right, Math.cos(a) * r).addScaledVector(up, Math.sin(a) * r).normalize();
-    G.heat = Math.min(W.climb * 8, G.heat + W.climb);
+    const camDir = camera.getWorldDirection(_v1), right = _v2.crossVectors(camDir, camera.up).normalize(), up = _v3.crossVectors(right, camDir).normalize();
     const o = _v4.copy(camera.position);
+    let spread = (moving ? W.moveSpread : W.spread) + G.heat; if (W.scope && !G.scoped) spread = 0.08;
+    const pellets = W.pellets || 1, cx = camDir.x, cy = camDir.y, cz = camDir.z, rx = right.x, ry = right.y, rz = right.z, ux = up.x, uy = up.y, uz = up.z;
+    G.heat = Math.min(W.climb * 8, G.heat + W.climb);
+    let hits = null;   // shotgun: damage summed per bot, so nine pellets make one hit sound and one kill
+    for (let pe = 0; pe < pellets; pe++) {
+    const dir = _v1.set(cx, cy, cz);
+    const r = (pellets > 1 ? 0.35 + 0.65 * Math.sqrt(rnd()) : Math.sqrt(rnd())) * spread, a = rnd() * Math.PI * 2;
+    dir.x += (rx * Math.cos(a) + ux * Math.sin(a)) * r; dir.y += (ry * Math.cos(a) + uy * Math.sin(a)) * r; dir.z += (rz * Math.cos(a) + uz * Math.sin(a)) * r; dir.normalize();
     // nearest bot whose body (0.4 m sphere at chest height) or head (0.22 m) the ray passes through
     let bestT = Infinity, bestB = null, bestHead = false;
     for (let i = 0; i < G.bots.length; i++) {
@@ -631,16 +660,27 @@ export function createGame(ctx) {
     }
     const end = _v5.copy(o).addScaledVector(dir, bestB ? bestT : W.range);
     const wall = trace(o.x, o.y, o.z, end.x, end.y, end.z, 1.0);
-    if (wall) { end.set(wall.x, wall.y, wall.z); if (!W.melee) puff(end.x, end.y, end.z); }
+    if (wall) { end.set(wall.x, wall.y, wall.z); if (!W.melee && (pe < 3)) puff(end.x, end.y, end.z, pellets > 1 ? 0.35 : 0.6); }
     else if (bestB) {
-      const falloff = W.melee ? 1 : Math.max(0.5, 1 - bestT / 500), dmg = Math.round(W.dmg * falloff * (bestHead ? W.head : 1) * (0.9 + rnd() * 0.2));
-      puff(end.x, end.y, end.z, 0.45, bloodMat); sound(bestHead ? 'headshot' : 'hit');
-      if (bestB.remote) { mpHit(bestB, dmg, bestHead); }   // v1.24: another player (they take the damage on their side) or a bot run by the room's host
-      else if ((bestB.hp -= dmg) <= 0) killBot(bestB, bestHead); else { if (bestB.char) bestB.char.hit(); alertBot(bestB, P.x, P.z); bestB.hasLos = true; bestB.seen = 6; bestB.aimT = bestB.reaction; }
+      const falloff = W.melee ? 1 : pellets > 1 ? Math.max(0.2, 1 - bestT / W.range) : Math.max(0.5, 1 - bestT / 500), dmg = Math.round(W.dmg * falloff * (bestHead ? W.head : 1) * (0.9 + rnd() * 0.2));
+      puff(end.x, end.y, end.z, 0.45, bloodMat);
+      if (!hits) hits = new Map(); const h = hits.get(bestB) || { dmg: 0, head: false }; h.dmg += dmg; h.head = h.head || bestHead; hits.set(bestB, h);
     }
-    if (!W.melee) { const muzzle = _v2.copy(models[G.weapon].userData.muzzle).add(models[G.weapon].position).applyMatrix4(camera.matrixWorld); tracer(muzzle, end); }
+    if (!W.melee && pe < 3) { const muzzle = _v2.copy(models[G.weapon].userData.muzzle).applyMatrix4(models[G.weapon].matrixWorld).applyMatrix4(vmToWorld()); tracer(muzzle, end); }
+    }
+    if (hits) for (const [b, h] of hits) damageBot(b, h.dmg, h.head, WEAPONS[G.weapon].name);
+    { const mv = models[G.weapon].userData.moving; if (mv.slide || mv.pump || mv.bolt) G.actionT = 1; }
     // bots within earshot turn towards the gunfire
     if (!W.melee) for (const b of G.bots) { if (b.dead <= 0 && !b.hasLos && len2(b.x - P.x, b.z - P.z) < (G.weapon === 'awp' ? 160 : 90) && rnd() < 0.7) alertBot(b, P.x + (rnd() - 0.5) * 8, P.z + (rnd() - 0.5) * 8); }
+  }
+  // the view-model camera sits at the world camera: a point in the view model's frame -> world
+  const _vmw = new THREE.Matrix4();
+  function vmToWorld() { vmCam.position.set(0, 0, 0); vmCam.updateMatrixWorld(); return _vmw.copy(camera.matrixWorld); }
+  function damageBot(b, dmg, head, what) {
+    if (b.dead > 0) return;
+    if (b.remote) { sound(head ? 'headshot' : 'hit'); mpHit(b, dmg, head); return; }   // another player (they take the damage on their side) or a bot run by the room's host
+    b.hp -= dmg; sound(head ? 'headshot' : 'hit');
+    if (b.hp <= 0) killBot(b, head, null, what); else { if (b.char) b.char.hit(); alertBot(b, P.x, P.z); b.hasLos = true; b.seen = 6; b.aimT = b.reaction; }
   }
   function reload() {
     const W = WEAPONS[G.weapon], A = G.ammo[G.weapon];
@@ -650,22 +690,44 @@ export function createGame(ctx) {
   function hurtPlayer(dmg, from) {
     if (botTarget) { if (G.mp) G.mp.send({ t: 'h', to: botTarget.pid, dmg, w: from.weapon, bn: from.name }); return; }   // v1.24: my bot shot a team mate
     if (G.dead > 0) return;
+    if (G.shopOpen || G.spawnSafe > 0) return;   // v1.25: not while buying, nor in the first two seconds after a respawn
+    if (G.armor > 0) { const absorb = Math.min(G.armor, Math.round(dmg * 0.5)); G.armor -= absorb; dmg -= absorb; }   // steel vest: takes half
     if (G.god) dmg = Math.min(dmg, G.health - 1);   // benchmark run (src/bench.js): hit, never killed
     G.health -= dmg; G.hurt = 1;
     if (G.health > 0) sound('hurt');
-    else { G.health = 0; G.dead = 3.5; G.deaths++; setScope(false); sound('death'); feed(`${esc(from.name)} seni vurdu — ${WEAPONS[from.weapon].name}`); mpDied(from); }
+    else { G.health = 0; G.dead = 3.5; G.deaths++; setScope(false); sound('death'); feed(from.name ? `${esc(from.name)} seni vurdu — ${from.what || WEAPONS[from.weapon].name}` : from.what); mpDied(from); }
   }
-  function respawnPlayer() {
-    let [sx, sz] = D.spawn.walk; if (G.mp) { const q = roadPoint({ x: sx, z: sz }, 0, 140); sx = q.x; sz = q.z; } P.x = sx; P.z = sz; P.y = surfaceAt(sx, sz).y; P.vy = 0; G.health = 100; resetAmmo(); G.reloading = 0; G.heat = 0;
-    G.weapon = G.primary; G.lastWeapon = 'deagle'; for (const m in models) models[m].visible = m === G.weapon; G.swapT = 0.3;
+  // v1.25 (owner: "after dying we should come back somewhere else in the village every time"): a respawn after death
+  // picks a random spot on the village's roads at least 45 m from every living bot and player (the farthest of 40
+  // tries if none is) and never the same place twice in a row; a new round still starts on the çarşı square, by the shop.
+  let lastSpawn = null;
+  function spawnPoint() {
+    let best = null, bestD = -1;
+    for (let t = 0; t < 40; t++) {
+      const p = roadPoint(lastSpawn || P, 80, 700);
+      let dmin = 1e9; for (const b of G.bots) if (b.dead <= 0) dmin = Math.min(dmin, len2(b.x - p.x, b.z - p.z));
+      if (dmin > bestD) { best = p; bestD = dmin; } if (dmin > 45) break;   // the first random spot clear of bots: anywhere in the village
+    }
+    return best;
   }
+  function respawnPlayer(random) {
+    let sx, sz; if (random) { const p = spawnPoint(); sx = p.x; sz = p.z; } else { [sx, sz] = D.spawn.walk; if (G.mp) { const q = roadPoint({ x: sx, z: sz }, 0, 140); sx = q.x; sz = q.z; } }
+    lastSpawn = { x: sx, z: sz };
+    P.x = sx; P.z = sz; P.y = surfaceAt(sx, sz).y; P.vy = 0; G.health = 100; G.reloading = 0; G.heat = 0; G.rq = 0; G.rqBack = 0; G.spawnSafe = random ? 2 : 0;
+    if (random) { P.yaw = rnd() * Math.PI * 2; P.pitch = 0; for (const k in WEAPONS) G.ammo[k] = { mag: WEAPONS[k].mag, reserve: WEAPONS[k].reserve }; }
+    else resetAmmo();
+    if (G.nades.he < 1) G.nades.he = 1;   // one hand grenade with every life
+    G.weapon = G.primary; G.lastWeapon = G.secondary; for (const m in models) models[m].visible = m === G.weapon; G.swapT = 0.3;
+  }
+  function payKill(head) { const pay = 300 + (head ? 100 : 0); G.money = Math.min(16000, G.money + pay); return pay; }
   function feed(msg) { G.feedSeq = (G.feedSeq || 0) + 1; G.feed.unshift({ msg, t: 5 }); if (G.feed.length > 5) G.feed.pop(); }
 
   // ------------------------------------------------------------------ HUD
   const hud = document.createElement('div'); hud.id = 'gameHud'; hud.innerHTML = `
     <div class="gh-top"><span id="ghScore">0 : 0</span><span id="ghTime">5:00</span></div>
     <div class="gh-feed" id="ghFeed"></div>
-    <div class="gh-health"><div class="gh-bar"><i id="ghHp"></i></div><b id="ghHpTxt">100</b></div>
+    <div class="gh-health"><div class="gh-bar"><i id="ghHp"></i></div><b id="ghHpTxt">100</b><span class="gh-armor" id="ghArmor"></span><span class="gh-money" id="ghMoney">800 ₺</span></div>
+    <div class="gh-heal" id="ghHeal">+ CAN DOLUYOR</div>
     <div class="gh-ammo"><small id="ghWpn">AK-47</small><div><b id="ghMag">30</b><span id="ghRes">/ 90</span></div><em id="ghRel"></em></div>
     <div class="gh-slots" id="ghSlots"></div>
     <div class="gh-scope" id="ghScope"><i></i></div>
@@ -676,7 +738,10 @@ export function createGame(ctx) {
   const el = (id) => document.getElementById(id);
   const mkBtn = (id, label, cls) => { const d = document.createElement('div'); d.className = 'tc pad ' + cls; d.id = id; d.textContent = label; document.body.appendChild(d); return d; };
   const fireBtn = mkBtn('tFire', 'FIRE', ''), reloadBtn = mkBtn('tReload', 'RELOAD', 'gbtn'), jumpBtn = mkBtn('tJump', 'JUMP', 'gbtn'), scopeBtn = mkBtn('tScope', 'SCOPE', 'gbtn');
-  const touchBtns = [fireBtn, reloadBtn, jumpBtn, scopeBtn];
+  // v1.25: one tap throws a grenade straight along the view (the count is on the button)
+  const heBtn = mkBtn('tNadeHe', '', 'gbtn nbtn'), smokeBtn = mkBtn('tNadeSmoke', '', 'gbtn nbtn');
+  heBtn.innerHTML = 'BOMBA<b id="tHeN">1</b>'; smokeBtn.innerHTML = 'SİS<b id="tSmN">1</b>';
+  const touchBtns = [fireBtn, reloadBtn, jumpBtn, scopeBtn, heBtn, smokeBtn];
   // FIRE: hold to shoot, and drag the thumb on it to aim at the same time (like mobile shooters)
   let fireId = null, fx0 = 0, fy0 = 0;
   // v1.20.1: a press is never lost. A new touch always takes the button over (a finger whose release the browser never
@@ -689,6 +754,7 @@ export function createGame(ctx) {
   for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) fireBtn.addEventListener(ev, fireUp);
   const tap = (b, fn) => b.addEventListener('pointerdown', e => { e.stopPropagation(); e.preventDefault(); fn(); b.classList.add('down'); setTimeout(() => b.classList.remove('down'), 140); });
   tap(reloadBtn, () => reload());
+  tap(heBtn, () => arm.throwNade('he')); tap(smokeBtn, () => arm.throwNade('smoke'));
   tap(scopeBtn, () => { if (WEAPONS[G.weapon].scope && G.reloading <= 0 && G.dead <= 0) setScope(!G.scoped); });
   jumpBtn.addEventListener('pointerdown', e => { e.stopPropagation(); e.preventDefault(); touchIn.jump = true; jumpBtn.classList.add('down'); });
   for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) jumpBtn.addEventListener(ev, () => { touchIn.jump = false; jumpBtn.classList.remove('down'); });
@@ -696,6 +762,16 @@ export function createGame(ctx) {
   el('ghSlots').addEventListener('pointerdown', e => { const t = e.target.closest('[data-w]'); if (!t || !G.on) return; e.stopPropagation(); e.preventDefault(); setWeapon(t.dataset.w); });
   el('ghEnd').addEventListener('click', () => { if (G.on && G.roundOver) newRound(); });
   const cross = document.getElementById('cross');
+  // v1.25: grenades, the first-aid post and the gun shop (src/armory.js)
+  function equip(k) {
+    const W = WEAPONS[k]; G.ammo[k] = { mag: W.mag, reserve: W.reserve };
+    if (W.slot === 1) G.primary = k; else if (W.slot === 2) G.secondary = k;
+    G.weapon = null; setWeapon(k);
+  }
+  let hintT = null;
+  const arm = createArmory({ group, camera, P, G, EYE, terrH, surfaceAt, inBuilding, trace, sound, puff, feed, damageBot, hurtPlayer, alertBot, isTouch, WEAPONS, PRICES, equip, hud,
+    bots: () => G.bots, onShop: () => { hudCache.delete('ghShopHint'); },
+    hint: (t) => feed(t) });
   let slotsHtml = '';
   // v1.0: the HUD is written only where a value changed (it rewrote ~15 DOM properties and the kill feed every frame)
   const hudCache = new Map();
@@ -708,13 +784,17 @@ export function createGame(ctx) {
     const W = WEAPONS[G.weapon], A = G.ammo[G.weapon];
     if (changed('score', G.kills * 100000 + G.deaths)) setText('ghScore', `${G.kills} : ${G.deaths}`);
     const t = G.mp ? -1 : Math.max(0, Math.ceil(G.roundT)); if (changed('time', t)) setText('ghTime', t < 0 ? '∞' : `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`);
+    if (changed('money', G.money)) setText('ghMoney', `${G.money} ₺`);
+    if (changed('armor', G.armor)) { setText('ghArmor', G.armor > 0 ? `YELEK ${G.armor}` : ''); }
+    if (changed('healing', !!G.healing)) el('ghHeal').style.display = G.healing ? 'block' : 'none';
+    if (changed('nades', G.nades.he * 10 + G.nades.smoke)) { setText('tHeN', String(G.nades.he)); setText('tSmN', String(G.nades.smoke)); heBtn.classList.toggle('empty', G.nades.he <= 0); smokeBtn.classList.toggle('empty', G.nades.smoke <= 0); }
     if (changed('hp', G.health)) { setStyle('ghHp', 'width', `${G.health}%`); setStyle('ghHp', 'background', G.health > 50 ? '#7cc26b' : G.health > 25 ? '#e0b24a' : '#d14b3a'); setText('ghHpTxt', String(G.health)); }
     if (changed('wpn', G.weapon)) setText('ghWpn', W.name);
     if (changed('mag', W.melee ? -1 : A.mag)) setText('ghMag', W.melee ? '—' : String(A.mag));
     if (changed('res', W.melee ? -1 : A.reserve)) setText('ghRes', W.melee ? '' : `/ ${A.reserve}`);
     setText('ghRel', G.reloading > 0 ? 'reloading' : (!W.melee && A.mag === 0 ? 'R: reload' : ''));
-    if (changed('slots', G.primary + '|' + G.weapon)) {
-      const sh = [G.primary, 'deagle', 'knife'].map((k, i) => `<span data-w="${k}" class="${k === G.weapon ? 'on' : ''}">${isTouch ? '' : (i + 1) + ' '}${WEAPONS[k].name}</span>`).join('');
+    if (changed('slots', G.primary + '|' + G.secondary + '|' + G.weapon)) {
+      const sh = [G.primary, G.secondary, 'knife'].map((k, i) => `<span data-w="${k}" class="${k === G.weapon ? 'on' : ''}">${isTouch ? '' : (i + 1) + ' '}${WEAPONS[k].name}</span>`).join('');
       if (sh !== slotsHtml) { el('ghSlots').innerHTML = sh; slotsHtml = sh; }
     }
     // v1.20.1: FIRE greys out while it cannot shoot (dead, reloading, swapping, the AWP's bolt), so a press that does
@@ -744,7 +824,7 @@ export function createGame(ctx) {
   // side and tell everyone when it killed them, so there is nothing to keep in sync but positions. See src/multi.js.
   const esc = (t) => String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const cleanName = (t) => String(t || '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 16) || 'Misafir';
-  const MP_GUN = { ak47: 'ak47', m4a1: 'm4a1', mp5: 'mp5', deagle: 'deagle', awp: 'm4a1', knife: 'deagle' };   // what the figure holds
+  const MP_GUN = { ak47: 'ak47', m4a1: 'm4a1', mp5: 'mp5', deagle: 'deagle', awp: 'm4a1', knife: 'deagle', glock: 'deagle', m3: 'ak47', m249: 'm4a1' };   // what the figure holds
   const remotes = new Map();   // player id → entry in G.bots
   let mpSendT = 0, mpListT = 0, mpConnecting = false, myName = '';
   try { myName = localStorage.getItem('kk_mp_name') || ''; } catch (_) {}
@@ -813,7 +893,7 @@ export function createGame(ctx) {
       if (G.dead <= 0) { const a = Math.atan2(b.x - P.x, b.z - P.z); G.hitFrom = a; }
     } else if (m.t === 'k' && b) {
       const wn = WEAPONS[m.w] ? WEAPONS[m.w].name : '';
-      if (m.by === G.mp.id) { G.kills++; sound(m.hd ? 'headshot' : 'hit'); feed(`${esc(b.name)} ${m.hd ? 'kafadan vuruldu' : 'vuruldu'} — ${wn}`); }
+      if (m.by === G.mp.id) { G.kills++; const pay = payKill(m.hd); sound(m.hd ? 'headshot' : 'hit'); feed(`${esc(b.name)} ${m.hd ? 'kafadan vuruldu' : 'vuruldu'} — ${wn} <i>+${pay} ₺</i>`); }
       else { const k = remotes.get(m.by); feed(`${esc(k ? k.name : cleanName(m.bn))} → ${esc(b.name)}${wn ? ' — ' + wn : ''}`); }
     } else if (m.t === 'b' && G.mode === 'takim' && !G.isHost && b && b.pid === hostId()) onBots(m);
     else if (m.t === 'bh' && G.isHost && b && Number.isFinite(m.dmg)) {   // a team mate hit one of my bots
@@ -823,7 +903,7 @@ export function createGame(ctx) {
     } else if (m.t === 'bk' && !G.isHost && b) {
       const sh = shadows[m.idx], nm = sh ? sh.name : botName(m.idx), wn = WEAPONS[m.w] ? WEAPONS[m.w].name : '';
       if (sh && !sh.dead) { sh.dead = 1; sh.firing = false; if (sh.char) sh.char.die(); }
-      if (m.by === G.mp.id) { G.kills++; sound(m.hd ? 'headshot' : 'hit'); feed(`${nm} ${m.hd ? 'kafadan vuruldu' : 'vuruldu'} — ${wn}`); }
+      if (m.by === G.mp.id) { G.kills++; const pay = payKill(m.hd); sound(m.hd ? 'headshot' : 'hit'); feed(`${nm} ${m.hd ? 'kafadan vuruldu' : 'vuruldu'} — ${wn} <i>+${pay} ₺</i>`); }
       else { const k = remotes.get(m.by); feed(`${esc(k ? k.name : '?')} → ${nm}${wn ? ' — ' + wn : ''}`); }
     } else if (m.t === 'bc' && G.isHost && Number.isFinite(m.n)) { const n = Math.max(0, Math.min(100, m.n | 0)); setBots(n); document.querySelectorAll('#botCount .pbtn').forEach(o => o.classList.toggle('on', +o.dataset.bots === n)); }
     else if (m.t === 'bye' && b) removeRemote(b);
@@ -996,7 +1076,7 @@ export function createGame(ctx) {
   // ------------------------------------------------------------------ lifecycle
   function start() {
     G.on = true; group.visible = true; hud.style.display = 'block';
-    if (isTouch) for (const b of [fireBtn, reloadBtn, jumpBtn]) b.classList.add('show');
+    if (isTouch) for (const b of [fireBtn, reloadBtn, jumpBtn, heBtn, smokeBtn]) b.classList.add('show');
     vm.visible = true; warmAudio();
     if (!G.bots.length) for (let i = 0; i < G.botCount; i++) G.bots.push(spawnBot(i));
     crowd.load().then(() => { for (const b of G.bots) attachChar(b); }).catch(e => console.warn('bot characters', e));
@@ -1004,11 +1084,13 @@ export function createGame(ctx) {
     if (wantMp && !G.mp) { el('ghMpName').value = myName; mpDlg.style.display = 'grid'; }
   }
   function newRound() {
-    G.kills = 0; G.deaths = 0; G.roundT = 300; G.roundOver = false; G.dead = 0; G.feed = []; respawnPlayer();
+    G.kills = 0; G.deaths = 0; G.roundT = 300; G.roundOver = false; G.dead = 0; G.feed = [];
+    G.money = 800; G.armor = 0; G.nades.he = 1; G.nades.smoke = 1; G.secondary = 'deagle'; G.primary = G.basePrimary || G.primary; arm.reset();
+    respawnPlayer();
     for (const b of G.bots) if (!b.remote) respawnBot(b);
   }
   function stop() {
-    mpLeave(); look.assist = 1; G.on = false; group.visible = false; hud.style.display = 'none'; for (const b of touchBtns) b.classList.remove('show'); setScope(false); vm.visible = false; for (const l of tracers) l.visible = false; for (const p of puffs) p.visible = false; G.firing = false; fireId = null; touchIn.jump = false; if (cross) { cross.classList.remove('off'); cross.style.removeProperty('--gap'); } hudCache.clear(); for (const k in hudNum) delete hudNum[k];
+    mpLeave(); arm.stop(); look.assist = 1; G.on = false; group.visible = false; hud.style.display = 'none'; for (const b of touchBtns) b.classList.remove('show'); setScope(false); vm.visible = false; for (const l of tracers) l.visible = false; for (const p of puffs) p.visible = false; G.firing = false; fireId = null; touchIn.jump = false; if (cross) { cross.classList.remove('off'); cross.style.removeProperty('--gap'); } hudCache.clear(); for (const k in hudNum) delete hudNum[k];
   }
   /** Loading: show (then hide again) one of everything the game draws, so a frame rendered in between prepares it all. */
   function warm(on) {
@@ -1016,6 +1098,8 @@ export function createGame(ctx) {
     for (const k in models) models[k].visible = on || (G.on && k === G.weapon);
     for (const l of tracers) l.visible = on; for (const p of puffs) p.visible = on;
     for (const k in IM) { IM[k].count = on ? 1 : 0; IM[k].visible = on; }
+    for (const k in nadeVm) nadeVm[k].visible = on;
+    arm.warm(on);
   }
   function setBots(n) {
     G.botCount = n;
@@ -1030,18 +1114,26 @@ export function createGame(ctx) {
     while (ai.length < n) ai.push(spawnBot(ai.length));
     G.bots = ai.concat(rem);
   }
-  function setPrimary(k) { if (!WEAPONS[k] || WEAPONS[k].slot !== 1) return; G.primary = k; if (G.on) { G.ammo[k] = { mag: WEAPONS[k].mag, reserve: WEAPONS[k].reserve }; setWeapon(k); } }
+  function setPrimary(k) { if (!WEAPONS[k] || WEAPONS[k].slot !== 1) return; G.primary = k; G.basePrimary = k; if (G.on) { G.ammo[k] = { mag: WEAPONS[k].mag, reserve: WEAPONS[k].reserve }; setWeapon(k); } }
   function setDifficulty(d) { G.difficulty = d; }
-  function cycleWeapon(dir) { const order = [G.primary, 'deagle', 'knife'], i = order.indexOf(G.weapon); setWeapon(order[(i + dir + 3) % 3]); }
+  function cycleWeapon(dir) { const order = [G.primary, G.secondary, 'knife'], i = order.indexOf(G.weapon); setWeapon(order[(i + dir + 3) % 3]); }
   function update(dt, now) {
     if (!G.on) return;
     G.time += dt;
     if (!G.roundOver && !G.mp) { G.roundT -= dt; if (G.roundT <= 0) { G.roundOver = true; el('ghEndTxt').textContent = `${G.kills} vuruş · ${G.deaths} ölüm`; setScope(false); } }
-    if (G.dead > 0) { G.dead -= dt; if (G.dead <= 0) respawnPlayer(); }
+    if (G.dead > 0) { G.dead -= dt; if (G.dead <= 0) respawnPlayer(true); }
+    G.spawnSafe = Math.max(0, G.spawnSafe - dt);
     G.hurt = Math.max(0, G.hurt - dt * 1.6); G.fireCd = Math.max(0, G.fireCd - dt); G.swapT = Math.max(0, G.swapT - dt); G.heat = Math.max(0, G.heat - dt * 0.02);
     const W = WEAPONS[G.weapon], A = G.ammo[G.weapon];
     if (G.reloading > 0) { G.reloading -= dt; if (G.reloading <= 0) { const need = W.mag - A.mag, take = Math.min(need, A.reserve); A.mag += take; A.reserve -= take; G.reloading = 0; } }
     G.fireQueue = Math.max(0, (G.fireQueue || 0) - dt);
+    // v1.25: recoil taken up smoothly, then most of it given back once the trigger rests
+    if (G.rq > 0) { const d = G.rq * Math.min(1, dt * 22); P.pitch = Math.min(1.45, P.pitch + d); G.rq -= d; G.rqBack += d; if (G.rq < 1e-5) G.rq = 0; }
+    G.rqT += dt;
+    if (G.rqBack > 0 && G.rqT > 0.14 && !G.firing) { const d = Math.min(G.rqBack, G.rqBack * dt * 7 + dt * 0.004); P.pitch -= d * 0.75; G.rqBack -= d; }
+    if (G.firing && G.rqT > 0.4) G.rqBack = 0;   // a long burst that the player pulled down himself: nothing to give back
+    G.throwT = Math.max(0, (G.throwT || 0) - dt);
+    arm.update(dt);
     if ((G.firing || G.fireQueue > 0) && G.dead <= 0) { const wasFired = G.fired; if (!G.firing) G.fired = false; fire(); if (!G.firing) G.fired = wasFired; }
     for (let i = 0; i < G.feed.length; i++) G.feed[i].t -= dt;
     while (G.feed.length && G.feed[G.feed.length - 1].t <= 0) G.feed.pop();   // newest first: the oldest lines expire at the end
@@ -1050,15 +1142,32 @@ export function createGame(ctx) {
     mpUpdate(dt);
     if (isTouch) aimAssist();
     animateChars(dt);
-    // view model: bob while walking, kick on firing, lowered while reloading / swapping
+    // view model: bob while walking, kick on firing, lowered while reloading / swapping / throwing.
+    // v1.25: smoother: the gun lags a little behind the turning view (sway), the kick is a spring rather than a jump,
+    // the swap raises it with an ease-out, and slides / the pump / the bolt work after each shot
     const moving = isMoving();
     G.bob += dt * (moving ? (isRunning() ? 11 : 7) : 2);
-    G.kick = Math.max(0, G.kick - dt * 9);
-    const rel = G.reloading > 0 ? Math.sin(Math.min(Math.PI, (W.reload - G.reloading) / W.reload * Math.PI)) : 0, swap = G.swapT / 0.45;
+    G.kick = Math.max(0, G.kick - dt * 11);
+    const dyaw = Math.atan2(Math.sin(P.yaw - (G.lastYaw ?? P.yaw)), Math.cos(P.yaw - (G.lastYaw ?? P.yaw))), dpit = P.pitch - (G.lastPitch ?? P.pitch);
+    G.lastYaw = P.yaw; G.lastPitch = P.pitch;
+    const sk = Math.min(1, dt * 10); G.swayX = (G.swayX || 0) + (Math.max(-0.05, Math.min(0.05, -dyaw * 0.6)) - (G.swayX || 0)) * sk; G.swayY = (G.swayY || 0) + (Math.max(-0.04, Math.min(0.04, -dpit * 0.6)) - (G.swayY || 0)) * sk;
+    const rel = G.reloading > 0 ? Math.sin(Math.min(Math.PI, (W.reload - G.reloading) / W.reload * Math.PI)) : 0;
+    const sw = Math.min(1, G.swapT / 0.32), swap = sw * sw;
+    const th = G.throwT > 0 ? Math.sin(Math.min(1, (0.55 - G.throwT) / 0.55) * Math.PI) : 0;
     const rest = REST[G.weapon], rx = rest[0], ry = rest[1], rz = rest[2];
-    vm.position.set(rx + Math.sin(G.bob) * 0.007 * (moving ? 1 : 0.3), ry + Math.abs(Math.cos(G.bob)) * 0.009 * (moving ? 1 : 0.3) - rel * 0.14 - swap * 0.35, rz + G.kick * 0.07 * W.kick);
-    vm.rotation.set(0.02 - G.kick * 0.1 * W.kick + rel * 0.55 + swap * 0.6, 0.06 + (G.weapon === 'knife' ? -0.5 : 0) + G.kick * (G.weapon === 'knife' ? -0.8 : 0), rel * 0.2);
+    const kz = G.kick * G.kick, run = moving && isRunning() ? 1 : 0;
+    G.runK = (G.runK || 0) + (run - (G.runK || 0)) * Math.min(1, dt * 8);
+    vm.position.set(rx + Math.sin(G.bob) * 0.006 * (moving ? 1 : 0.3) + G.swayX * 0.5 + G.runK * 0.02, ry + Math.abs(Math.cos(G.bob)) * 0.007 * (moving ? 1 : 0.3) - rel * 0.1 - swap * 0.25 - th * 0.3 + G.swayY * 0.5 - G.runK * 0.03, rz + kz * 0.045 * Math.min(2, W.kick));
+    vm.rotation.set(0.01 + kz * 0.06 * Math.min(2.5, W.kick) + rel * 0.5 + swap * 0.7 + th * 0.5 + G.swayY - G.runK * 0.15, rest[3] + G.swayX + G.runK * 0.35 + (G.weapon === 'knife' ? G.kick * -0.8 : 0), rel * 0.25 + G.swayX * 0.5);
+    // moving parts after a shot
+    G.actionT = Math.max(0, (G.actionT || 0) - dt * (W.pellets ? 1.6 : W.scope ? 1.2 : 14));
+    { const mv = models[G.weapon].userData.moving, a = G.actionT; if (mv.slide) mv.slide.position.z = Math.sin(a * Math.PI) * 0.035; if (mv.pump) { const k = a > 0 && a < 0.75 ? Math.sin((0.75 - a) / 0.75 * Math.PI) : 0; mv.pump.position.z = k * 0.08; } if (mv.bolt) { const k = a > 0 && a < 0.8 ? Math.sin((0.8 - a) / 0.8 * Math.PI) : 0; mv.bolt.rotation.z = k * 1.2; mv.bolt.position.z = 0.06 + k * 0.07; } }
+    // the grenade in the hand while throwing
+    for (const k in nadeVm) { const n = nadeVm[k], on = G.throwT > 0 && G.throwKind === k && G.dead <= 0; n.visible = on && vm.visible; if (on) { const t = 1 - G.throwT / 0.55; n.position.set(0.16 - t * 0.1, -0.16 + Math.sin(t * Math.PI) * 0.12, -0.32 - t * 0.25); n.rotation.set(-t * 1.2, 0, 0); n.visible = t < 0.55 && vm.visible; } }
     vmFlash.visible = G.time - G.lastShot < 0.035 && !W.melee;
+    // explosion shake
+    if (G.shake > 0) { G.shake = Math.max(0, G.shake - dt * 1.8); const a = G.shake * G.shake * 0.02; camera.rotation.x += (rnd() - 0.5) * a; camera.rotation.y += (rnd() - 0.5) * a; }
+    G.lastPX = P.x; G.lastPZ = P.z; G.lastDt = dt;
     updateFx(dt);
     syncBotInstances();
     updateHud();
@@ -1083,20 +1192,23 @@ export function createGame(ctx) {
   }
   /** bots on the minimap: red dots, only within 60 m (no wallhack radar) */
   function drawMinimap(mctx, toPx) {
+    arm.drawMinimap(mctx, toPx);
     for (let i = 0; i < G.bots.length; i++) { const b = G.bots[i]; if (b.dead > 0 || ((!b.remote || b.shadow) && len2(b.x - P.x, b.z - P.z) > 60)) continue; const pt = toPx(b.x, b.z), u = pt[0], v = pt[1]; mctx.fillStyle = b.remote && !b.shadow ? '#2f7fe0' : '#d13b2a'; mctx.beginPath(); mctx.arc(u, v, 3, 0, 6.283); mctx.fill(); }
   }
   // ------------------------------------------------------------------ input
-  addEventListener('mousedown', e => { if (!G.on || !document.pointerLockElement) return; if (e.button === 0) { G.firing = true; G.fired = false; } if (e.button === 2 && WEAPONS[G.weapon].scope) setScope(!G.scoped); });
+  addEventListener('mousedown', e => { if (!G.on || !document.pointerLockElement || G.shopOpen) return; if (e.button === 0) { G.firing = true; G.fired = false; } if (e.button === 2 && WEAPONS[G.weapon].scope) setScope(!G.scoped); });
   addEventListener('mouseup', e => { if (e.button === 0) { G.firing = false; G.fired = false; } });
   addEventListener('contextmenu', e => { if (G.on && document.pointerLockElement) e.preventDefault(); });
   addEventListener('wheel', e => { if (G.on && document.pointerLockElement) cycleWeapon(e.deltaY > 0 ? 1 : -1); }, { passive: true });
   addEventListener('keydown', e => {
     if (!G.on || (e.target && e.target.tagName === 'INPUT')) return;
     if (e.code === 'KeyR') reload();
-    if (e.code === 'Digit1') setWeapon(G.primary); if (e.code === 'Digit2') setWeapon('deagle'); if (e.code === 'Digit3') setWeapon('knife');
+    if (G.shopOpen) return;
+    if (e.code === 'Digit1') setWeapon(G.primary); if (e.code === 'Digit2') setWeapon(G.secondary); if (e.code === 'Digit3') setWeapon('knife');
+    if (e.code === 'KeyG' || e.code === 'Digit4') arm.throwNade('he'); if (e.code === 'KeyF' || e.code === 'Digit5') arm.throwNade('smoke');
     if (e.code === 'KeyQ') setWeapon(G.lastWeapon);
     if (e.code === 'Enter' && G.roundOver) newRound();
   });
 
-  return { start, stop, update, renderOverlay, drawMinimap, setBots, setPrimary, setDifficulty, fire, reload, setWeapon, setScope, warm, state: G, newRound, WEAPONS };
+  return { start, stop, update, renderOverlay, drawMinimap, setBots, setPrimary, setDifficulty, fire, reload, setWeapon, setScope, warm, state: G, newRound, WEAPONS, arm };
 }

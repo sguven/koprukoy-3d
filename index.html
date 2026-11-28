@@ -145,6 +145,27 @@ body[data-mode="car"] .joyzone .jlabel { width: 184px; bottom: calc(126px + var(
 #tJump { right: calc(44px + var(--sr)); bottom: calc(148px + var(--sb)); width: 62px; height: 62px; }
 #tScope { right: calc(142px + var(--sr)); bottom: calc(106px + var(--sb)); width: 62px; height: 62px; }
 #tScope.on { background: rgba(162,72,47,0.85); }
+/* v1.25: grenades, money, first aid, the gun shop */
+.nbtn { flex-direction: column; gap: 1px; font-size: 11px; } .nbtn b { font: 800 15px var(--display); } .nbtn.empty { opacity: 0.4; }
+#tNadeHe { right: calc(214px + var(--sr)); bottom: calc(134px + var(--sb)); width: 56px; height: 56px; }
+#tNadeSmoke { right: calc(276px + var(--sr)); bottom: calc(134px + var(--sb)); width: 56px; height: 56px; }
+#tShop { left: 50%; transform: translateX(-50%); bottom: calc(84px + var(--sb)); padding: 12px 22px; background: rgba(217,164,65,0.92); color: #1d1b19; border-color: #fff3d0; font-size: 16px; z-index: 31; }
+#gameHud .gh-money { font: 800 18px var(--display); color: #f2c35b; margin-left: 6px; } #gameHud .gh-armor { font: 700 13px var(--display); color: #b9c6d6; }
+#gameHud .gh-feed i { color: #f2c35b; font-style: normal; }
+#gameHud .gh-heal { position: absolute; left: 50%; bottom: 33%; transform: translateX(-50%); display: none; font: 800 16px var(--display); color: #7ff09a; letter-spacing: 0.08em; }
+#ghShop { position: fixed; inset: 0; display: none; place-items: center; background: rgba(15,12,10,0.55); pointer-events: auto; z-index: 60; font-family: var(--display); color: #fff; touch-action: pan-y; }
+#ghShop .gs-box { width: min(760px, calc(100vw - 24px)); max-height: calc(100vh - 24px); overflow: auto; background: rgba(29,27,25,0.96); border: 2px solid #d9a441; border-radius: 14px; padding: 12px 14px; display: grid; gap: 8px; -webkit-overflow-scrolling: touch; }
+#ghShop .gs-head { display: flex; align-items: center; gap: 14px; } #ghShop .gs-head b { font: 900 24px var(--display); color: #f2c35b; letter-spacing: 0.08em; } #ghShop .gs-head span { font: 800 20px var(--display); flex: 1; }
+#ghShop .gs-head button { font: 800 15px var(--display); padding: 10px 16px; border-radius: 10px; border: 2px solid rgba(255,255,255,0.5); background: rgba(162,72,47,0.9); color: #fff; }
+#ghShop .gs-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; }
+#ghShop .gs-group { grid-column: 1 / -1; font: 700 12px var(--display); letter-spacing: 0.12em; text-transform: uppercase; opacity: 0.7; margin-top: 2px; }
+#ghShop .gs-item { position: relative; text-align: left; display: grid; gap: 2px; padding: 9px 10px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.3); background: rgba(255,255,255,0.08); color: #fff; font-family: var(--display); min-height: 64px; touch-action: manipulation; }
+#ghShop .gs-item b { font: 800 15px var(--display); } #ghShop .gs-item span { font: 500 11px var(--display); opacity: 0.75; } #ghShop .gs-item i { font: 800 14px var(--display); font-style: normal; color: #f2c35b; }
+#ghShop .gs-item em { position: absolute; right: 8px; top: 6px; font: 700 11px var(--display); opacity: 0.5; font-style: normal; }
+#ghShop .gs-item:active { background: rgba(217,164,65,0.45); } #ghShop .gs-item.no { opacity: 0.45; } #ghShop .gs-item.no i { color: #ccc; font-weight: 600; }
+#ghShop .gs-box > small { opacity: 0.6; font: 500 12px var(--display); }
+@media (max-width: 560px), (max-height: 430px) { #ghShop .gs-grid { grid-template-columns: repeat(4, 1fr); gap: 5px; } #ghShop .gs-item { min-height: 50px; padding: 6px 7px; } #ghShop .gs-item b { font-size: 13px; } #ghShop .gs-item span { display: none; } #ghShop .gs-box { padding: 8px 10px; gap: 5px; } #ghShop .gs-head b { font-size: 18px; } }
+@media (max-width: 560px) { #ghShop .gs-grid { grid-template-columns: repeat(3, 1fr); } }
 #gameHud .gh-ammo { flex-direction: column; align-items: flex-end; gap: 0; } #gameHud .gh-ammo small { font: 700 13px var(--display); letter-spacing: 0.1em; opacity: 0.85; } #gameHud .gh-ammo div { display: flex; align-items: baseline; gap: 8px; }
 #gameHud .gh-slots { position: absolute; right: 24px; bottom: 96px; display: flex; gap: 6px; font: 600 12px var(--display); } #gameHud .gh-slots span { background: rgba(30,27,23,0.5); padding: 3px 8px; border-radius: 6px; opacity: 0.6; } #gameHud .gh-slots span.on { opacity: 1; background: rgba(162,72,47,0.8); }
 #gameHud .gh-scope { position: absolute; inset: 0; display: none; background: radial-gradient(circle at center, rgba(0,0,0,0) 0, rgba(0,0,0,0) 38vmin, rgba(0,0,0,0.97) 39vmin); }
@@ -212,6 +233,8 @@ body.is-touch #gameHud .gh-end { pointer-events: auto; }
   body.is-touch #gameHud .gh-ammo { right: calc(18px + var(--sr)); bottom: calc(272px + var(--sb)); }
   body.is-touch #gameHud .gh-slots { right: calc(14px + var(--sr)); bottom: calc(222px + var(--sb)); }
   body.is-touch #gameHud .gh-slots span { padding: 9px 8px; font-size: 13px; }
+  #tNadeHe { right: calc(18px + var(--sr)); bottom: calc(330px + var(--sb)); }
+  #tNadeSmoke { right: calc(80px + var(--sr)); bottom: calc(330px + var(--sb)); }
 }
 .fsbtn { display: inline-flex; align-items: center; justify-content: center; padding: 8px 10px; }
 .fsbtn[hidden] { display: none; }
@@ -259,7 +282,7 @@ body:not(.is-touch)[data-mode="game"] .hint { right: auto; left: 50%; transform:
 
 <div class="topbar">
   <button class="gear siteBtn" id="siteBtn" hidden aria-label="Çeşnigir-Der sitesine dön">‹ Site</button>
-  <div class="brand"><h1>Köprüköy</h1><div class="sub">Keskin · Kırıkkale, Türkiye — 3D v1.24</div></div>
+  <div class="brand"><h1>Köprüköy</h1><div class="sub">Keskin · Kırıkkale, Türkiye — 3D v1.25</div></div>
   <div class="modes" id="modes" role="tablist" aria-label="Navigation mode">
     <button data-mode="orbit" class="on">Orbit</button>
     <button data-mode="walk" title="Walk through the village">Walk</button>
@@ -300,6 +323,8 @@ body:not(.is-touch)[data-mode="game"] .hint { right: auto; left: 50%; transform:
       <button class="pbtn" data-wpn="m4a1">M4A1</button>
       <button class="pbtn" data-wpn="mp5">MP5</button>
       <button class="pbtn" data-wpn="awp">AWP</button>
+      <button class="pbtn" data-wpn="m3">M3</button>
+      <button class="pbtn" data-wpn="m249">M249</button>
     </div>
     <div class="row" id="difficulty" style="margin-top:8px">
       <button class="pbtn" data-diff="0.6">Easy</button>
@@ -312,7 +337,7 @@ body:not(.is-touch)[data-mode="game"] .hint { right: auto; left: 50%; transform:
       <button class="pbtn" data-q="smooth" title="Low shadows, hazy beyond ~600 m, no far grass or small details, lower resolution">Smooth</button>
       <button class="pbtn" data-q="quality" title="Full-size shadows and resolution">Quality</button>
     </div>
-    <p class="note">5-minute deathmatch. Keys: 1 / 2 / 3 weapons, R reload, right mouse AWP scope.</p>
+    <p class="note">5-minute deathmatch. Keys: 1 / 2 / 3 weapons, R reload, right mouse AWP scope, G hand grenade, F smoke grenade, B gun shop (Güvendioğlu Market). Health comes back at the SAĞLIK post in front of the municipality.</p>
   </div>
   <div id="carGroup" hidden>
     <div class="group-title">Toros</div>
@@ -1037,7 +1062,7 @@ const HINTS = {
   walkTP: isTouch ? 'Left thumb: walk (push to the rim to run) · Drag right side: turn the camera · JUMP: jump (over walls too) · VIEW: first person' : 'Click, then turn the camera with the mouse · WASD: walk · Shift: run · Ctrl+Shift: sprint · Space: jump · Wheel: zoom · V: first person · Esc: cursor',
   fly: 'Click, then look with the mouse · WASD: fly · E/Q: up/down · Shift: fast',
   car: isTouch ? 'Left thumb: steer (a light push turns a little) · GAS / BRAKE (hold BRAKE to reverse) · Drag right side: look around · CAMERA: switch view' : '↑/W gas · ↓/S brake/reverse · ←/→ steer · Space handbrake · C camera · L headlights',
-  game: isTouch ? 'Left thumb: move (push to the rim to run) · Drag right side or the FIRE button: aim · Tap a weapon to switch' : 'Click to aim · WASD move · Shift run · Mouse 1 fire · Mouse 2 scope (AWP) · 1/2/3, Q, wheel: weapons · R reload · Esc: cursor',
+  game: isTouch ? 'Left thumb: move (push to the rim to run) · Drag right side or the FIRE button: aim · Tap a weapon to switch · BOMBA / SİS: throw' : 'Click to aim · WASD move · Shift run · Mouse 1 fire · Mouse 2 scope (AWP) · 1/2/3, Q, wheel: weapons · R reload · G grenade · F smoke · B shop · Esc: cursor',
 };
 document.getElementById('hint').textContent = HINTS.orbit;
 function setMode(m) {
