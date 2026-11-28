@@ -230,7 +230,7 @@ body:not(.is-touch)[data-mode="game"] .hint { right: auto; left: 50%; transform:
 <div id="perf" aria-live="off">– FPS</div>
 
 <div class="topbar">
-  <div class="brand"><h1>Köprüköy</h1><div class="sub">Keskin · Kırıkkale, Türkiye — 3D v1.23</div></div>
+  <div class="brand"><h1>Köprüköy</h1><div class="sub">Keskin · Kırıkkale, Türkiye — 3D v1.24</div></div>
   <div class="modes" id="modes" role="tablist" aria-label="Navigation mode">
     <button data-mode="orbit" class="on">Orbit</button>
     <button data-mode="walk" title="Walk through the village">Walk</button>
@@ -354,6 +354,7 @@ import { tagBuildings } from './src/buildings.js';
 import { buildVillageLayout, buildCentreLayout, roadSamples, squareSamples, carsiBoxes, buildingBoxes, inRegion, inCentreZone } from './src/village_layout.js';
 import { pruneOldVillage, pruneRocks, LIFT } from './src/village.js';
 import { bridgeDeckY, onBridge, bridgeParapetBoxes, bridgeRampSamples } from './src/bridge.js';
+import { editRoadbedTerrain, editRoadbedDetail } from './src/roadbed.js';
 import { editCesnigirTerrain, syncTerrainMesh, pruneCesnigir, cesnigirSamples, cesnigirBoxes, PHOTO_VIEW } from './src/cesnigir.js';
 import { createGame } from './src/game.js';
 import { buildToros, COLORS, WB, TRACK, WR, EYE as DRIVER_EYE } from './src/toros.js';
@@ -577,6 +578,7 @@ function makeWaterNormals() {
 async function loadAll() {
   const [{ default: b64 }, { default: data }] = await Promise.all([import('./model4.js'), import('./data4.js')]);
   D = data; CS_EDIT = editCesnigirTerrain(D.grid);   // v1.10: the park east of the tor is dry land, not water
+  editRoadbedTerrain(D.grid, CS_EDIT);   // v1.23: no ground above the D.260 deck (src/roadbed.js)
   // v1.21: the survey's outermost row of heights was pinned to ~40 m, so the map stood on a slab with walls up to 70 m high
   // at its edge; with land beyond the map (src/atmosphere.js) the edge row now carries on the ground just inside it
   { const g = D.grid, W1 = g.seg + 1, H = g.h, put = (k, from) => { if (!CS_EDIT.has(k)) { H[k] = 1.5 * H[from] - 0.5 * H[2 * from - k]; CS_EDIT.set(k, H[k]); } };
@@ -613,7 +615,7 @@ loadAll().then(gltf => {
     o.castShadow = !/^(Arazi|Su_|Yol_|Pencereler|Gezi_Alani)/.test(o.name); o.receiveShadow = true;
     if (o.name === 'Arazi' || o.name === 'Arazi_Detay') o.material.color.setHex(0xeadbc2);
     if (o.name === 'Arazi') { syncTerrainMesh(o, D.grid, CS_EDIT); terrainMesh = o; const t = o.material.map; if (t) { t.anisotropy = renderer.capabilities.getMaxAnisotropy(); t.colorSpace = THREE.SRGBColorSpace; } o.material.roughness = 1; o.material.envMapIntensity = 0.12; }
-    if (o.name === 'Arazi_Detay') { o.material.polygonOffset = true; o.material.polygonOffsetFactor = -1; o.material.polygonOffsetUnits = -1; const t = o.material.map; if (t) t.anisotropy = renderer.capabilities.getMaxAnisotropy(); o.material.envMapIntensity = 0.12; o.renderOrder = 1; }
+    if (o.name === 'Arazi_Detay') { editRoadbedDetail(o); o.material.polygonOffset = true; o.material.polygonOffsetFactor = -1; o.material.polygonOffsetUnits = -1; const t = o.material.map; if (t) t.anisotropy = renderer.capabilities.getMaxAnisotropy(); o.material.envMapIntensity = 0.12; o.renderOrder = 1; }
     if (o.name === 'Su_Kizilirmak') {
       waterMat = new THREE.MeshStandardMaterial({ color: 0x2c7a80, roughness: 0.06, metalness: 0.0, normalMap: makeWaterNormals(), envMapIntensity: 1.1, transparent: true, opacity: 0.93 });
       waterMat.normalScale.set(0.35, 0.35); o.material = waterMat; o.castShadow = false;
@@ -644,7 +646,7 @@ loadAll().then(gltf => {
   // v1.1: build the Game's bots, weapons and effects now and compile every shader of the scene while "Loading…" is
   // still up, so that nothing compiles in the middle of a round (the first look at a material, the first shot, the
   // first bot used to stall a frame for 20–200 ms). The loop draws nothing until the shaders are ready (8 s at most).
-  try { game = createGame({ scene, camera, P, D, terrH, surfaceAt, surfaceInto, pushOut, look: LOOK, kd, isTouch, touchIn, EYE, village: VILLAGE }); } catch (e) { console.error(e); }
+  try { game = createGame({ scene, camera, P, D, terrH, surfaceAt, surfaceInto, pushOut, look: LOOK, kd, isTouch, touchIn, EYE, village: VILLAGE, solids: () => solids }); } catch (e) { console.error(e); }
   try { atmo.patch(scene); } catch (e) { console.error(e); }
   warming = true;
   return Promise.race([renderer.compileAsync(scene, camera), new Promise(r => setTimeout(r, 8000))]).catch(() => {});
@@ -1038,7 +1040,7 @@ function setMode(m) {
   applyGameView();
   if (m === 'walk' && thirdPerson) getAvatar();
   syncAvatar(m === 'walk');
-  if (m === 'game') { if (!game) game = createGame({ scene, camera, P, D, terrH, surfaceAt, surfaceInto, pushOut, look: LOOK, kd, isTouch, touchIn, EYE, village: VILLAGE }); game.start();
+  if (m === 'game') { if (!game) game = createGame({ scene, camera, P, D, terrH, surfaceAt, surfaceInto, pushOut, look: LOOK, kd, isTouch, touchIn, EYE, village: VILLAGE, solids: () => solids }); game.start();
     if (isTouch && innerHeight > innerWidth && !rotateTold) { rotateTold = true; toast('Turn your phone sideways for the best view'); toastT = 3.5; } }
   else if (prev === 'game' && game) game.stop();
   // on foot the field of view is the player's setting; orbit and the Toros keep 55°
@@ -1278,7 +1280,7 @@ renderer.setAnimationLoop(now => {
   // v1.20: a phone driving the Toros: the map covers 190 m and is redrawn every 40 m (every 24 m it was a full redraw
   // ~1.7 times a second at 150 km/h, each one a visible hitch on a phone)
   const phoneCar = driving && isTouch;
-  // v1.23, Fly: the map was 140 m around the camera and redrawn every 6 m, i.e. 7 to 20 full shadow redraws a second at
+  // v1.24, Fly: the map was 140 m around the camera and redrawn every 6 m, i.e. 7 to 20 full shadow redraws a second at
   // flying speed (40 / 120 m/s): the stutter on a phone. Now it grows with the height over the ground (in 40 m steps),
   // sits ahead of the camera, where the view goes, and is redrawn after a third of its size (phones; desktop a sixth)
   let flyExt = 0;
@@ -1293,7 +1295,7 @@ renderer.setAnimationLoop(now => {
   const step = mode === 'orbit' ? ext * 0.04 : flyExt ? flyExt * (isTouch ? 0.3 : 0.16) : phoneCar ? 40 : mover ? 24 : 6;
   // small village details and far grass patches: shown / hidden by distance (re-checked every 4 m of camera movement);
   // the shadow map only needs a refresh when something inside it appeared or went
-  // (v1.23: not when flying on a phone either: small details popping in or out redrew the whole map every few metres)
+  // (v1.24: not when flying on a phone either: small details popping in or out redrew the whole map every few metres)
   const cullChanged = culler.update(camera.position, false, (inGame && !GAME_PRESETS[gamePreset].shadowOnCull) || (flyExt && isTouch) ? 0 : ext); if (cullChanged) sun.shadow.needsUpdate = true;
   if (sun.shadow.needsUpdate || shadowFocus.distanceToSquared(focus) > step * step || Math.abs(ext - shadowExt) > shadowExt * 0.08) {
     const sc = sun.shadow.camera; if (sc.right !== ext) { sc.left = -ext; sc.right = ext; sc.top = ext; sc.bottom = -ext; sc.near = 1; sc.far = 4000; sc.updateProjectionMatrix(); }

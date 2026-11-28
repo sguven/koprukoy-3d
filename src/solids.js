@@ -109,6 +109,41 @@ export function createSolids({ scene, terrH, baseH = terrH, exclude = [] }) {
       }
       return best;
     },
+    /**
+     * v1.23 (Game): where the segment a→b first runs into a solid, as a fraction of the way (0…1), or -1 when it is
+     * clear. Walks the grid cell by cell (no cell is skipped, however thin the wall). A cell blocks when the segment
+     * passes below its top (a wall, a fence, a kerb) or, for a tall solid standing on the ground (a house wall, a post,
+     * a tree trunk), below TALL_TO over the ground. The first and last `skip` metres are not tested, so the shooter's
+     * and the target's own spot (a bench, a post they stand against) never hides them.
+     */
+    segmentHit(ax, ay, az, bx, by, bz, skip = 0.35) {
+      const dx = bx - ax, dz = bz - az, dy = by - ay, L = Math.sqrt(dx * dx + dz * dz);
+      if (L < 1e-6) return -1;
+      const s0 = skip / L, s1 = 1 - skip / L; if (s0 >= s1) return -1;
+      let i = Math.floor(ax / CELL), j = Math.floor(az / CELL);
+      const si = dx > 0 ? 1 : -1, sj = dz > 0 ? 1 : -1, adx = Math.abs(dx), adz = Math.abs(dz);
+      const tdi = adx > 1e-9 ? CELL / adx : Infinity, tdj = adz > 1e-9 ? CELL / adz : Infinity;
+      let tmi = adx > 1e-9 ? (dx > 0 ? (i + 1) * CELL - ax : ax - i * CELL) / adx : Infinity;
+      let tmj = adz > 1e-9 ? (dz > 0 ? (j + 1) * CELL - az : az - j * CELL) / adz : Infinity;
+      let t = 0, lci = NaN, lcj = NaN, ch = null;
+      for (let guard = 0; guard < 8192 && t < s1; guard++) {
+        const te = Math.min(tmi, tmj, 1);
+        if (te > s0) {
+          const ci = Math.floor(i / CH), cj = Math.floor(j / CH);
+          if (ci !== lci || cj !== lcj) { lci = ci; lcj = cj; ch = chunks.get(ckey(ci, cj)); }
+          if (ch) {
+            const n = (i - ci * CH) + (j - cj * CH) * CH, top = ch.top[n], ymin = ay + dy * (dy < 0 ? te : Math.max(t, s0));
+            if (ymin < top) return Math.max(t, s0);
+            if (ch.tall[n]) {
+              const g = baseH((i + 0.5) * CELL, (j + 0.5) * CELL);
+              if (top > g + LOW - 0.5 && ymin < g + TALL_TO) return Math.max(t, s0);
+            }
+          }
+        }
+        if (tmi < tmj) { i += si; t = tmi; tmi += tdi; } else { j += sj; t = tmj; tmj += tdj; }
+      }
+      return -1;
+    },
     get chunks() { return chunks.size; },
   };
   return S;

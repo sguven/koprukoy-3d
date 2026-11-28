@@ -134,7 +134,7 @@ float kkCloudShadow( vec3 w ) {
 }
 `;
   if (perVertex) {
-    // v1.23, phones: the cloud shadow is worked out once per vertex (every few metres on the ground; the clouds' shapes
+    // v1.24, phones: the cloud shadow is worked out once per vertex (every few metres on the ground; the clouds' shapes
     // are hundreds of metres across, so it looks the same) instead of once per pixel of every lit surface
     S.common = S._kkCommon + '\n#ifdef KK_CLOUDSHADOW\nvarying float vKkCloud;\n#endif\n#if defined( KK_CLOUDSHADOW ) && defined( USE_SHADOWMAP )\n' + cloudFn + '#endif\n';
     S.worldpos_vertex = S._kkWorld + '\n#if defined( KK_CLOUDSHADOW ) && defined( USE_SHADOWMAP )\nvKkCloud = kkCloudShadow( worldPosition.xyz );\n#endif\n';
@@ -263,7 +263,7 @@ export function buildOuterLand({ D, terrH, macroImage, R = 8800 }) {
 export function chimneySmoke(sources, { isTouch = false } = {}) {
   const hash = (x, z, k) => { const t = Math.sin(x * 12.9898 + z * 78.233 + k * 37.719) * 43758.5453; return t - Math.floor(t); };
   const lit = sources.filter(s => hash(s[0], s[2], 7) < (s[3] ? 0.5 : 0.16));
-  const P = isTouch ? 6 : 14, n = lit.length * P;   // v1.23: phones 6 puffs a chimney (was 9)
+  const P = isTouch ? 6 : 14, n = lit.length * P;   // v1.24: phones 6 puffs a chimney (was 9)
   const src = new Float32Array(n * 3), seed = new Float32Array(n * 2);
   let k = 0;
   for (const s of lit) {
@@ -292,7 +292,7 @@ export function chimneySmoke(sources, { isTouch = false } = {}) {
         vec4 mv = modelViewMatrix * vec4(p, 1.0);
         float dist = -mv.z;
         float size = (0.5 + age * 3.6) * aSeed.y;                                  // metres across
-        gl_PointSize = clamp(size * uScale / max(dist, 1.0), 0.0, uMax);   // v1.23: phones at most 120 px (overdraw)
+        gl_PointSize = clamp(size * uScale / max(dist, 1.0), 0.0, uMax);   // v1.24: phones at most 120 px (overdraw)
         vA = smoothstep(0.0, 0.08, age) * (1.0 - smoothstep(0.45, 1.0, age)) * 0.33 * aSeed.y * (1.0 - smoothstep(250.0, 450.0, dist));
         vAge = age; vRnd = r;
         gl_Position = projectionMatrix * mv;
