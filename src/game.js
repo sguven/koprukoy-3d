@@ -11,6 +11,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { createBotCrowd } from './botchar.js';
+import { joinRoom, ROOMS } from './multi.js';
 
 const BOT_NAMES = ['Keskinli', 'Kırıkkaleli', 'Çeşnigir', 'Kapulukaya', 'Hırka', 'Köprübaşı', 'Kızılırmak', 'Bozkır', 'Karakeçili', 'Ceritler', 'Yeşilyurt', 'Göçeri'];
 const botName = (i) => BOT_NAMES[i % BOT_NAMES.length] + (i >= BOT_NAMES.length ? ' ' + (Math.floor(i / BOT_NAMES.length) + 1) : '');
@@ -344,7 +345,7 @@ export function createGame(ctx) {
       const step = Math.min(b.cacc, 0.25); b.cacc = 0;
       const W = WEAPONS[b.weapon];
       charIn.x = b.x; charIn.y = b.y; charIn.z = b.z; charIn.yaw = b.yaw; charIn.vx = b.vx || 0; charIn.vz = b.vz || 0;
-      charIn.pitch = Math.atan2(P.y + EYE - 0.3 - (b.y + 1.45), Math.max(1, dist));
+      charIn.pitch = b.remote ? b.pitch : Math.atan2(P.y + EYE - 0.3 - (b.y + 1.45), Math.max(1, dist));
       charIn.aim = b.hasLos || b.state === 'search' || b.state === 'chase' || b.state === 'hold' || b.state === 'close';
       charIn.crouch = !!b.crouch && b.state === 'hold';
       charIn.reloadK = b.reloadT > 0 ? 1 - b.reloadT / (W.reload + 0.4) : -1;
@@ -399,15 +400,19 @@ export function createGame(ctx) {
     attachChar(b);
     return b;
   }
-  function killBot(b, head) {
-    b.dead = 6; b.state = 'dead'; b.hp = 0; G.kills++; if (b.char) b.char.die(); feed(`${b.name} ${head ? 'kafadan vuruldu' : 'vuruldu'} — ${WEAPONS[G.weapon].name}`); sound(head ? 'headshot' : 'hit');
+  function killBot(b, head, by) {   // by: another player in the "together against the bots" room (v1.24), else me
+    b.dead = 6; b.state = 'dead'; b.hp = 0; if (b.char) b.char.die();
+    const w = by && WEAPONS[by.w] ? by.w : G.weapon;
+    if (!by) { G.kills++; feed(`${b.name} ${head ? 'kafadan vuruldu' : 'vuruldu'} — ${WEAPONS[w].name}`); sound(head ? 'headshot' : 'hit'); }
+    else feed(`${esc(by.name)} → ${b.name} — ${WEAPONS[w].name}`);
+    if (G.mp && G.isHost) G.mp.send({ t: 'bk', idx: b.id, by: by ? by.pid : G.mp.id, hd: head ? 1 : 0, w });
   }
   function respawnBot(b) {
     const p = roadPoint(P, 90, 280); b.x = p.x; b.z = p.z; b.y = surfaceAt(p.x, p.z).y; b.hp = 100; b.state = 'patrol'; b.route = null; b.dead = 0; b.flee = 0; b.crouch = 0; b.mag = WEAPONS[b.weapon].mag; b.reloadT = 0;
     b.mesh.rotation.set(0, b.yaw, 0); b.mesh.position.set(b.x, b.y, b.z); b.cd = 1.5; b.hasLos = false; b.seen = 0;
     b.vx = b.vz = 0; if (b.char) b.char.reset();
   }
-  function alertBot(b, x, z) { if (b.dead > 0) return; b.ls.x = x; b.ls.z = z; b.lastSeen = b.ls; b.seen = Math.max(b.seen, 6); if (b.state === 'patrol') b.state = 'search'; }
+  function alertBot(b, x, z) { if (b.dead > 0 || b.remote) return; b.ls.x = x; b.ls.z = z; b.lastSeen = b.ls; b.seen = Math.max(b.seen, 6); if (b.state === 'patrol') b.state = 'search'; }
   function moveBot(b, tx, tz, speed, dt) {
     const ddx = tx - b.x, ddz = tz - b.z, L = len2(ddx, ddz) || 1;
     if (L < 0.4) return true;
@@ -629,8 +634,9 @@ export function createGame(ctx) {
     if (wall) { end.set(wall.x, wall.y, wall.z); if (!W.melee) puff(end.x, end.y, end.z); }
     else if (bestB) {
       const falloff = W.melee ? 1 : Math.max(0.5, 1 - bestT / 500), dmg = Math.round(W.dmg * falloff * (bestHead ? W.head : 1) * (0.9 + rnd() * 0.2));
-      bestB.hp -= dmg; puff(end.x, end.y, end.z, 0.45, bloodMat); sound(bestHead ? 'headshot' : 'hit');
-      if (bestB.hp <= 0) killBot(bestB, bestHead); else { if (bestB.char) bestB.char.hit(); alertBot(bestB, P.x, P.z); bestB.hasLos = true; bestB.seen = 6; bestB.aimT = bestB.reaction; }
+      puff(end.x, end.y, end.z, 0.45, bloodMat); sound(bestHead ? 'headshot' : 'hit');
+      if (bestB.remote) { mpHit(bestB, dmg, bestHead); }   // v1.24: another player (they take the damage on their side) or a bot run by the room's host
+      else if ((bestB.hp -= dmg) <= 0) killBot(bestB, bestHead); else { if (bestB.char) bestB.char.hit(); alertBot(bestB, P.x, P.z); bestB.hasLos = true; bestB.seen = 6; bestB.aimT = bestB.reaction; }
     }
     if (!W.melee) { const muzzle = _v2.copy(models[G.weapon].userData.muzzle).add(models[G.weapon].position).applyMatrix4(camera.matrixWorld); tracer(muzzle, end); }
     // bots within earshot turn towards the gunfire
@@ -642,14 +648,15 @@ export function createGame(ctx) {
     G.reloading = W.reload; setScope(false); sound('reload');
   }
   function hurtPlayer(dmg, from) {
+    if (botTarget) { if (G.mp) G.mp.send({ t: 'h', to: botTarget.pid, dmg, w: from.weapon, bn: from.name }); return; }   // v1.24: my bot shot a team mate
     if (G.dead > 0) return;
     if (G.god) dmg = Math.min(dmg, G.health - 1);   // benchmark run (src/bench.js): hit, never killed
     G.health -= dmg; G.hurt = 1;
     if (G.health > 0) sound('hurt');
-    else { G.health = 0; G.dead = 3.5; G.deaths++; setScope(false); sound('death'); feed(`${from.name} seni vurdu — ${WEAPONS[from.weapon].name}`); }
+    else { G.health = 0; G.dead = 3.5; G.deaths++; setScope(false); sound('death'); feed(`${esc(from.name)} seni vurdu — ${WEAPONS[from.weapon].name}`); mpDied(from); }
   }
   function respawnPlayer() {
-    const [sx, sz] = D.spawn.walk; P.x = sx; P.z = sz; P.y = surfaceAt(sx, sz).y; P.vy = 0; G.health = 100; resetAmmo(); G.reloading = 0; G.heat = 0;
+    let [sx, sz] = D.spawn.walk; if (G.mp) { const q = roadPoint({ x: sx, z: sz }, 0, 140); sx = q.x; sz = q.z; } P.x = sx; P.z = sz; P.y = surfaceAt(sx, sz).y; P.vy = 0; G.health = 100; resetAmmo(); G.reloading = 0; G.heat = 0;
     G.weapon = G.primary; G.lastWeapon = 'deagle'; for (const m in models) models[m].visible = m === G.weapon; G.swapT = 0.3;
   }
   function feed(msg) { G.feedSeq = (G.feedSeq || 0) + 1; G.feed.unshift({ msg, t: 5 }); if (G.feed.length > 5) G.feed.pop(); }
@@ -700,7 +707,7 @@ export function createGame(ctx) {
   function updateHud() {
     const W = WEAPONS[G.weapon], A = G.ammo[G.weapon];
     if (changed('score', G.kills * 100000 + G.deaths)) setText('ghScore', `${G.kills} : ${G.deaths}`);
-    const t = Math.max(0, Math.ceil(G.roundT)); if (changed('time', t)) setText('ghTime', `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`);
+    const t = G.mp ? -1 : Math.max(0, Math.ceil(G.roundT)); if (changed('time', t)) setText('ghTime', t < 0 ? '∞' : `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`);
     if (changed('hp', G.health)) { setStyle('ghHp', 'width', `${G.health}%`); setStyle('ghHp', 'background', G.health > 50 ? '#7cc26b' : G.health > 25 ? '#e0b24a' : '#d14b3a'); setText('ghHpTxt', String(G.health)); }
     if (changed('wpn', G.weapon)) setText('ghWpn', W.name);
     if (changed('mag', W.melee ? -1 : A.mag)) setText('ghMag', W.melee ? '—' : String(A.mag));
@@ -730,6 +737,262 @@ export function createGame(ctx) {
     if (changed('end', G.roundOver)) el('ghEnd').style.display = G.roundOver ? 'grid' : 'none';
   }
 
+  // ------------------------------------------------------------------ v1.24 "Birlikte oyna": playing together
+  // Everyone in the room is in the same village. The other players are drawn like the bots (they live in G.bots with
+  // remote: true, so hit tests, the people's animation, instancing and the minimap work for them as they are) but move
+  // where their own browser says. A bullet that hits another player is reported to them; they take the damage on their
+  // side and tell everyone when it killed them, so there is nothing to keep in sync but positions. See src/multi.js.
+  const esc = (t) => String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const cleanName = (t) => String(t || '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 16) || 'Misafir';
+  const MP_GUN = { ak47: 'ak47', m4a1: 'm4a1', mp5: 'mp5', deagle: 'deagle', awp: 'm4a1', knife: 'deagle' };   // what the figure holds
+  const remotes = new Map();   // player id → entry in G.bots
+  let mpSendT = 0, mpListT = 0, mpConnecting = false, myName = '';
+  try { myName = localStorage.getItem('kk_mp_name') || ''; } catch (_) {}
+  const hashId = (s) => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return Math.abs(h); };
+  const labels = document.createElement('div'); labels.id = 'mpLabels'; document.body.appendChild(labels);
+  function addRemote(m) {
+    const w = MP_GUN[m.w] || 'ak47';
+    const b = { id: 1000 + hashId(m.i) % 5000, remote: true, pid: m.i, name: cleanName(m.n), weapon: w, realW: WEAPONS[m.w] ? m.w : 'ak47',
+      x: m.x, y: m.y, z: m.z, yaw: m.r, pitch: m.p || 0, tx: m.x, ty: m.y, tz: m.z, tyaw: m.r, tvx: 0, tvz: 0, rxT: G.time, seenAt: G.time,
+      hp: 100, state: 'chase', dead: m.d ? 1 : 0, firing: !!m.f, fireAcc: 0, kills: m.k || 0, deaths: m.de || 0,
+      vis: true, char: null, vx: 0, vz: 0, cacc: 0, flashT: 0, reloadT: 0, hasLos: false, crouch: 0, walk: 0, mesh: botMesh(w) };
+    b.mesh.position.set(b.x, b.y, b.z); group.add(b.mesh);
+    b.label = document.createElement('span'); b.label.textContent = b.name; labels.appendChild(b.label);
+    attachChar(b); remotes.set(m.i, b); G.bots.push(b);
+    if (G.bots.length > MAX_BOTS) setAi(G.bots.filter(o => !o.remote).length);
+    feed(`${esc(b.name)} oyuna katıldı`); drawPlayers();
+    return b;
+  }
+  function removeRemote(b, quiet) {
+    remotes.delete(b.pid); G.bots = G.bots.filter(o => o !== b);
+    group.remove(b.mesh); if (b.char) b.char.dispose(); b.label.remove();
+    if (!quiet) feed(`${esc(b.name)} oyundan ayrıldı`);
+    drawPlayers();
+  }
+  function onRemoteState(m) {
+    let b = remotes.get(m.i); if (!b) { b = addRemote(m); }
+    const dtm = Math.max(0.05, G.time - b.rxT); b.rxT = G.time; b.seenAt = G.time;
+    b.tvx = (m.x - (b.lx ?? m.x)) / dtm; b.tvz = (m.z - (b.lz ?? m.z)) / dtm; b.lx = m.x; b.lz = m.z;
+    if (Math.hypot(m.x - b.x, m.z - b.z) > 15) { b.x = m.x; b.z = m.z; b.y = m.y; b.tvx = b.tvz = 0; }   // respawned: no gliding across the map
+    b.jt = Number.isFinite(m.jt) ? m.jt : Infinity;
+    b.tx = m.x; b.ty = m.y; b.tz = m.z; b.tyaw = m.r; b.pitch = m.p || 0; b.firing = !!m.f; b.kills = m.k || 0; b.deaths = m.de || 0;
+    const nm = cleanName(m.n); if (nm !== b.name) { b.name = nm; b.label.textContent = nm; }
+    if (WEAPONS[m.w]) { b.realW = m.w; const w = MP_GUN[m.w]; if (w !== b.weapon) { group.remove(b.mesh); if (b.char) { b.char.dispose(); b.char = null; } b.weapon = w; b.mesh = botMesh(w); group.add(b.mesh); attachChar(b); } }
+    if (m.d && !b.dead) { b.dead = 1; if (b.char) b.char.die(); }
+    else if (!m.d && b.dead) { b.dead = 0; b.x = m.x; b.z = m.z; b.y = m.y; b.tvx = b.tvz = 0; if (b.char) b.char.reset(); b.mesh.rotation.set(0, b.yaw, 0); }
+  }
+  function remoteStep(b, dt) {
+    const u = b.mesh.userData, x0 = b.x, z0 = b.z;
+    if (b.dead <= 0 && G.time - b.rxT < 0.6) { b.tx += b.tvx * dt; b.tz += b.tvz * dt; }   // carry on a little between messages
+    const k = Math.min(1, dt * 9); b.x += (b.tx - b.x) * k; b.z += (b.tz - b.z) * k; b.y += (b.ty - b.y) * k;
+    turnTo(b, b.tyaw, dt, 12);
+    const kv = Math.min(1, dt * 8); b.vx += ((b.x - x0) / Math.max(dt, 1e-3) - b.vx) * kv; b.vz += ((b.z - z0) / Math.max(dt, 1e-3) - b.vz) * kv;
+    b.flashT -= dt;
+    if (b.firing && b.dead <= 0 && !WEAPONS[b.realW].melee) {   // their gun goes off here at its own rate: no message per shot
+      b.fireAcc -= dt;
+      if (b.fireAcc <= 0) { b.fireAcc = 1 / WEAPONS[b.realW].rate; b.flashT = 0.05; sound('shot', len2(b.x - P.x, b.z - P.z), b.realW); if (b.char) b.char.fired(); }
+    } else b.fireAcc = 0;
+    if (b.dead > 0 && !b.char) { b.mesh.rotation.x = -Math.PI / 2; b.mesh.position.set(b.x, b.y + 0.15, b.z); }
+    else { b.mesh.position.set(b.x, b.y, b.z); b.mesh.rotation.set(0, b.yaw, 0); }
+    u.flash.visible = b.flashT > 0 && !b.char;
+  }
+  function mpHit(b, dmg, head) {
+    if (!G.mp) return;
+    if (b.shadow) G.mp.send({ t: 'bh', idx: b.id, dmg, hd: head ? 1 : 0, w: G.weapon });
+    else if (G.mode === 'pvp') G.mp.send({ t: 'h', to: b.pid, dmg, hd: head ? 1 : 0, w: G.weapon });   // team mates cannot hurt each other
+  }
+  function mpDied(from) { if (G.mp) G.mp.send({ t: 'k', by: from && from.pid ? from.pid : '', bn: from ? from.name : '', w: from ? from.weapon : '', hd: from && from.head ? 1 : 0 }); sendState(); }
+  function onMsg(m) {
+    if (!G.mp || !m || typeof m.i !== 'string') return;
+    if (m.t === 's') { if ([m.x, m.y, m.z, m.r].every(Number.isFinite)) onRemoteState(m); return; }
+    const b = remotes.get(m.i);
+    if (m.t === 'h' && m.to === G.mp.id && b && Number.isFinite(m.dmg)) {
+      if (G.mode === 'takim' && !m.bn) return;
+      const bot = m.bn ? cleanName(m.bn) : '';
+      hurtPlayer(Math.max(0, Math.min(500, m.dmg)), { name: bot || b.name, weapon: WEAPONS[m.w] ? m.w : b.realW, pid: bot ? '' : b.pid, head: !!m.hd });
+      if (G.dead <= 0) { const a = Math.atan2(b.x - P.x, b.z - P.z); G.hitFrom = a; }
+    } else if (m.t === 'k' && b) {
+      const wn = WEAPONS[m.w] ? WEAPONS[m.w].name : '';
+      if (m.by === G.mp.id) { G.kills++; sound(m.hd ? 'headshot' : 'hit'); feed(`${esc(b.name)} ${m.hd ? 'kafadan vuruldu' : 'vuruldu'} — ${wn}`); }
+      else { const k = remotes.get(m.by); feed(`${esc(k ? k.name : cleanName(m.bn))} → ${esc(b.name)}${wn ? ' — ' + wn : ''}`); }
+    } else if (m.t === 'b' && G.mode === 'takim' && !G.isHost && b && b.pid === hostId()) onBots(m);
+    else if (m.t === 'bh' && G.isHost && b && Number.isFinite(m.dmg)) {   // a team mate hit one of my bots
+      const bot = G.bots.find(o => !o.remote && o.id === m.idx); if (!bot || bot.dead > 0) return;
+      bot.hp -= Math.max(0, Math.min(500, m.dmg));
+      if (bot.hp <= 0) killBot(bot, !!m.hd, { name: b.name, pid: b.pid, w: m.w }); else { if (bot.char) bot.char.hit(); alertBot(bot, b.x, b.z); }
+    } else if (m.t === 'bk' && !G.isHost && b) {
+      const sh = shadows[m.idx], nm = sh ? sh.name : botName(m.idx), wn = WEAPONS[m.w] ? WEAPONS[m.w].name : '';
+      if (sh && !sh.dead) { sh.dead = 1; sh.firing = false; if (sh.char) sh.char.die(); }
+      if (m.by === G.mp.id) { G.kills++; sound(m.hd ? 'headshot' : 'hit'); feed(`${nm} ${m.hd ? 'kafadan vuruldu' : 'vuruldu'} — ${wn}`); }
+      else { const k = remotes.get(m.by); feed(`${esc(k ? k.name : '?')} → ${nm}${wn ? ' — ' + wn : ''}`); }
+    } else if (m.t === 'bc' && G.isHost && Number.isFinite(m.n)) { const n = Math.max(0, Math.min(100, m.n | 0)); setBots(n); document.querySelectorAll('#botCount .pbtn').forEach(o => o.classList.toggle('on', +o.dataset.bots === n)); }
+    else if (m.t === 'bye' && b) removeRemote(b);
+    else if (m.t === 'hi' && G.mp) sendState();   // a newcomer: let them see us straight away
+  }
+  function sendState() {
+    if (!G.mp) return;
+    const r2 = (v) => Math.round(v * 100) / 100;
+    G.mp.send({ t: 's', n: myName, x: r2(P.x), y: r2(P.y), z: r2(P.z), r: r2(P.yaw + Math.PI), p: r2(P.pitch), w: G.weapon, d: G.dead > 0 ? 1 : 0, f: G.firing && G.dead <= 0 ? 1 : 0, k: G.kills, de: G.deaths, jt: G.joinT });
+  }
+  const _lp = new THREE.Vector3();
+  function mpUpdate(dt) {
+    if (!G.mp) return;
+    // fewer messages the more people there are (the free Supabase plan allows about 100 a second for everyone together)
+    const n = remotes.size + 1, every = Math.max(1 / 6, n * (n - 1) / 70);
+    mpSendT -= dt; if (mpSendT <= 0) { mpSendT = every; sendState(); }
+    for (const b of [...remotes.values()]) if (G.time - b.seenAt > 8) removeRemote(b);   // closed the page without saying goodbye
+    // names over their heads
+    for (const b of remotes.values()) {
+      const d = len2(b.x - P.x, b.z - P.z);
+      _lp.set(b.x, b.y + 2.15, b.z).project(camera);
+      const show = b.vis && d < 160 && _lp.z < 1;
+      if (show !== b.lblOn) { b.lblOn = show; b.label.style.display = show ? 'block' : 'none'; }
+      if (show) b.label.style.transform = `translate(${((_lp.x + 1) / 2 * innerWidth).toFixed(0)}px,${((1 - _lp.y) / 2 * innerHeight).toFixed(0)}px) translate(-50%,-100%)`;
+      b.label.classList.toggle('dead', b.dead > 0);
+    }
+    teamTick(dt);
+    mpListT -= dt; if (mpListT <= 0) { mpListT = 0.5; drawPlayers(); }
+  }
+  // ---- "Birlikte botlara karşı": one shared set of bots. The player who has been in the room longest (the host) runs
+  // them as usual, each bot going for the nearest living player, and sends where they are a few times a second; the
+  // others draw those bots (shadows, remote: true) and tell the host when they hit one.
+  let botTarget = null;   // while a host's bot thinks about a team mate: that team mate
+  const shadows = [];     // the host's bots as drawn here, by bot id
+  G.isHost = false; G.mode = 'takim'; G.joinT = 0; G.joinG = 0;   // joinT: wall clock (compared between players)
+  function hostId() {
+    if (!G.mp) return '';
+    let best = G.mp.id, bt = G.joinT;
+    for (const r of remotes.values()) if (r.jt < bt || (r.jt === bt && r.pid < best)) { best = r.pid; bt = r.jt; }
+    return best;
+  }
+  function botStepTeam(b, dt) {
+    let best = null, bd = G.dead > 0 ? Infinity : len2(b.x - P.x, b.z - P.z);
+    for (const r of remotes.values()) { if (r.dead > 0) continue; const d = len2(r.x - b.x, r.z - b.z); if (d < bd) { bd = d; best = r; } }
+    if (!best) { botStep(b, dt); return; }
+    // the bot code aims at P: for this bot, P stands where the team mate is
+    const sx = P.x, sy = P.y, sz = P.z, sd = G.dead;
+    P.x = best.x; P.y = best.y; P.z = best.z; G.dead = 0; botTarget = best;
+    try { botStep(b, dt); } finally { P.x = sx; P.y = sy; P.z = sz; G.dead = sd; botTarget = null; }
+  }
+  function addShadow(i, w) {
+    const s = { id: i, remote: true, shadow: true, pid: '', name: botName(i), weapon: w, realW: w, x: 0, y: 0, z: 0, yaw: 0, pitch: 0, tx: 0, ty: 0, tz: 0, tyaw: 0, tvx: 0, tvz: 0, rxT: G.time,
+      hp: 100, state: 'chase', dead: 0, firing: false, fireAcc: 0, vis: true, char: null, vx: 0, vz: 0, cacc: 0, flashT: 0, reloadT: 0, hasLos: false, crouch: 0, walk: 0, mesh: botMesh(w), fresh: true };
+    group.add(s.mesh); attachChar(s); shadows[i] = s; G.bots.push(s); return s;
+  }
+  function clearShadows() {
+    for (const s of shadows) if (s) { group.remove(s.mesh); if (s.char) s.char.dispose(); }
+    G.bots = G.bots.filter(o => !o.shadow); shadows.length = 0;
+  }
+  function onBots(m) {
+    const n = Math.min(MAX_BOTS - remotes.size, m.n | 0), a = m.a; if (!Array.isArray(a)) return;
+    while (shadows.length > n) { const s = shadows.pop(); if (s) { group.remove(s.mesh); if (s.char) s.char.dispose(); G.bots = G.bots.filter(o => o !== s); } }
+    for (let i = 0; i < n; i++) {
+      const o = i * 7, x = a[o], y = a[o + 1], z = a[o + 2], r = a[o + 3], dead = a[o + 4], fi = a[o + 5], w = BOT_GUNS[a[o + 6]] || 'ak47';
+      if (![x, y, z, r].every(Number.isFinite)) continue;
+      let s = shadows[i]; if (!s) s = addShadow(i, w);
+      if (w !== s.weapon) { group.remove(s.mesh); if (s.char) { s.char.dispose(); s.char = null; } s.weapon = s.realW = w; s.mesh = botMesh(w); group.add(s.mesh); attachChar(s); }
+      const dtm = Math.max(0.05, G.time - s.rxT); s.rxT = G.time;
+      if (s.fresh || Math.hypot(x - s.x, z - s.z) > 15) { s.x = x; s.y = y; s.z = z; s.yaw = r; s.tvx = s.tvz = 0; s.fresh = false; }
+      else { s.tvx = (x - s.lx) / dtm; s.tvz = (z - s.lz) / dtm; }
+      s.lx = x; s.lz = z;
+      s.tx = x; s.ty = y; s.tz = z; s.tyaw = r; s.firing = !!fi;
+      s.pitch = Math.atan2(P.y + EYE - 0.3 - (s.y + 1.45), Math.max(1, len2(s.x - P.x, s.z - P.z)));
+      if (dead && !s.dead) { s.dead = 1; if (s.char) s.char.die(); }
+      else if (!dead && s.dead) { s.dead = 0; s.x = x; s.y = y; s.z = z; s.tvx = s.tvz = 0; if (s.char) s.char.reset(); }
+    }
+  }
+  let botSendT = 0;
+  function sendBots(dt) {
+    botSendT -= dt; if (botSendT > 0) return;
+    const n = remotes.size + 1; botSendT = Math.max(1 / 6, (n - 1) / 30);
+    const r2 = (v) => Math.round(v * 100) / 100, a = [];
+    const ai = G.bots.filter(o => !o.remote).sort((p, q) => p.id - q.id);
+    for (const b of ai) a.push(r2(b.x), r2(b.y), r2(b.z), r2(b.yaw), b.dead > 0 ? 1 : 0, b.flashT > -0.35 && b.dead <= 0 ? 1 : 0, Math.max(0, BOT_GUNS.indexOf(b.weapon)));
+    G.mp.send({ t: 'b', n: ai.length, a });
+  }
+  // who runs the bots: decided again whenever someone comes or goes
+  function teamTick(dt) {
+    if (G.mode !== 'takim') return;
+    const host = G.time - G.joinG > 1.5 && hostId() === G.mp.id;   // give the others a moment to say they are here
+    if (host !== G.isHost) {
+      G.isHost = host;
+      if (host) {   // take the bots over where they stand
+        const was = shadows.map(s => s && { x: s.x, y: s.y, z: s.z, yaw: s.yaw, dead: s.dead });
+        clearShadows(); setAi(G.botCount);
+        for (const b of G.bots) { const q = !b.remote && was[b.id]; if (q && !q.dead) { b.x = q.x; b.y = q.y; b.z = q.z; b.yaw = q.yaw; b.mesh.position.set(b.x, b.y, b.z); } }
+      } else setAi(0);
+    }
+    if (G.isHost && remotes.size) sendBots(dt);
+    else if (!G.isHost && shadows.length && G.time - Math.max(...shadows.filter(Boolean).map(s => s.rxT), 0) > 8) clearShadows();
+  }
+
+  // ---- the button, the name box and the list of players
+  const mpBtn = document.createElement('button'); mpBtn.id = 'ghMp'; mpBtn.type = 'button'; mpBtn.textContent = '👥 Birlikte oyna'; hud.appendChild(mpBtn);
+  const mpList = document.createElement('div'); mpList.id = 'ghPlayers'; hud.appendChild(mpList);
+  const mpDlg = document.createElement('div'); mpDlg.id = 'ghMpDlg'; mpDlg.innerHTML = `<form>
+      <b>Birlikte oyna</b>
+      <p>Şu an oyunda olan herkesle aynı köyde oynarsınız. Birbirinizi adınızla görürsünüz.</p>
+      <div class="modes2" id="ghMpMode">
+        <button type="button" data-m="takim" class="on"><b>Birlikte botlara karşı</b><span>Aynı takımdasınız, botlarla savaşırsınız</span></button>
+        <button type="button" data-m="pvp"><b>Herkes birbirine karşı</b><span>Oyuncular birbirini vurur, bot yok</span></button>
+      </div>
+      <label>Adınız<input id="ghMpName" maxlength="16" autocomplete="nickname" placeholder="Örn. Serhat" required></label>
+      <div class="row"><button type="button" id="ghMpNo">Vazgeç</button><button type="submit" id="ghMpGo">Katıl</button></div>
+      <small id="ghMpMsg"></small></form>`;
+  hud.appendChild(mpDlg);
+  const stopEv = (e) => e.stopPropagation();
+  for (const ev of ['pointerdown', 'mousedown', 'click', 'touchstart']) { mpBtn.addEventListener(ev, stopEv); mpDlg.addEventListener(ev, stopEv); }
+  mpBtn.addEventListener('click', () => {
+    if (G.mp) { mpLeave(); return; }
+    if (document.pointerLockElement) document.exitPointerLock();
+    G.firing = false; el('ghMpName').value = myName; el('ghMpMsg').textContent = ''; mpDlg.style.display = 'grid';
+    setTimeout(() => el('ghMpName').focus(), 50);
+  });
+  el('ghMpNo').addEventListener('click', () => { mpDlg.style.display = 'none'; });
+  el('ghMpMode').addEventListener('click', (e) => { const t = e.target.closest('[data-m]'); if (!t) return; G.mode = t.dataset.m; for (const o of el('ghMpMode').children) o.classList.toggle('on', o === t); });
+  mpDlg.querySelector('form').addEventListener('submit', (e) => { e.preventDefault(); mpJoin(el('ghMpName').value); });
+  async function mpJoin(name) {
+    if (G.mp || mpConnecting) return;
+    myName = cleanName(name); try { localStorage.setItem('kk_mp_name', myName); } catch (_) {}
+    mpConnecting = true; el('ghMpGo').disabled = true; el('ghMpMsg').textContent = 'Bağlanıyor…';
+    try {
+      const net = await joinRoom(ROOMS[G.mode], onMsg);
+      if (!G.on) { net.close(); return; }
+      G.mp = net; G.joinT = Date.now(); G.joinG = G.time; G.isHost = false; setAi(0); mpDlg.style.display = 'none'; mpSendT = 0;
+      G.roundOver = false; respawnPlayer(); net.send({ t: 'hi' }); sendState();
+      feed(G.mode === 'takim' ? 'Takıma katıldınız. Takım arkadaşlarınız haritada mavi görünür.' : 'Oyuna katıldınız. Diğer oyuncular haritada mavi görünür.'); drawPlayers();
+    } catch (err) {
+      console.warn('birlikte oyna', err); el('ghMpMsg').textContent = 'Bağlanamadı. İnternet bağlantınızı kontrol edip tekrar deneyin.';
+    } finally { mpConnecting = false; el('ghMpGo').disabled = false; }
+  }
+  function mpLeave() {
+    if (!G.mp) { mpDlg.style.display = 'none'; return; }
+    try { G.mp.send({ t: 'bye' }); } catch (_) {}
+    const net = G.mp; G.mp = null; setTimeout(() => net.close(), 300);
+    for (const b of [...remotes.values()]) removeRemote(b, true);
+    clearShadows(); G.isHost = false; setAi(G.botCount);
+    G.roundT = 300; drawPlayers();
+  }
+  addEventListener('pagehide', () => { if (G.mp) try { G.mp.send({ t: 'bye' }); } catch (_) {} });
+  let listHtml = '';
+  function drawPlayers() {
+    const on = !!G.mp;
+    const btn = on ? `👥 ${remotes.size + 1} kişi · Ayrıl` : '👥 Birlikte oyna';
+    if (mpBtn.textContent !== btn) mpBtn.textContent = btn;
+    mpBtn.classList.toggle('on', on);
+    let h = '';
+    if (on) {
+      const rows = [{ name: myName + ' (siz)', k: G.kills, d: G.deaths, me: true }, ...[...remotes.values()].map(b => ({ name: b.name, k: b.kills, d: b.deaths }))].sort((a, b) => b.k - a.k || a.d - b.d);
+      h = rows.map(r => `<div class="${r.me ? 'me' : ''}"><span>${esc(r.name)}</span><b>${r.k} : ${r.d}</b></div>`).join('');
+      if (!remotes.size) h += '<div class="wait">Başka oyuncu bekleniyor…</div>';
+      const nb = G.isHost ? G.bots.filter(o => !o.remote).length : shadows.length;
+      h = `<div class="mode">${G.mode === 'takim' ? 'Takım · ' + nb + ' bot' : 'Herkes birbirine karşı'}</div>` + h;
+    }
+    if (h !== listHtml) { listHtml = h; mpList.innerHTML = h; mpList.style.display = h ? 'block' : 'none'; }
+  }
+  // a link with #birlikte opens the name box as soon as the Game starts
+  const wantMp = /birlikte/.test(location.hash);
+
   // ------------------------------------------------------------------ lifecycle
   function start() {
     G.on = true; group.visible = true; hud.style.display = 'block';
@@ -738,13 +1001,14 @@ export function createGame(ctx) {
     if (!G.bots.length) for (let i = 0; i < G.botCount; i++) G.bots.push(spawnBot(i));
     crowd.load().then(() => { for (const b of G.bots) attachChar(b); }).catch(e => console.warn('bot characters', e));
     newRound();
+    if (wantMp && !G.mp) { el('ghMpName').value = myName; mpDlg.style.display = 'grid'; }
   }
   function newRound() {
     G.kills = 0; G.deaths = 0; G.roundT = 300; G.roundOver = false; G.dead = 0; G.feed = []; respawnPlayer();
-    for (const b of G.bots) respawnBot(b);
+    for (const b of G.bots) if (!b.remote) respawnBot(b);
   }
   function stop() {
-    look.assist = 1; G.on = false; group.visible = false; hud.style.display = 'none'; for (const b of touchBtns) b.classList.remove('show'); setScope(false); vm.visible = false; for (const l of tracers) l.visible = false; for (const p of puffs) p.visible = false; G.firing = false; fireId = null; touchIn.jump = false; if (cross) { cross.classList.remove('off'); cross.style.removeProperty('--gap'); } hudCache.clear(); for (const k in hudNum) delete hudNum[k];
+    mpLeave(); look.assist = 1; G.on = false; group.visible = false; hud.style.display = 'none'; for (const b of touchBtns) b.classList.remove('show'); setScope(false); vm.visible = false; for (const l of tracers) l.visible = false; for (const p of puffs) p.visible = false; G.firing = false; fireId = null; touchIn.jump = false; if (cross) { cross.classList.remove('off'); cross.style.removeProperty('--gap'); } hudCache.clear(); for (const k in hudNum) delete hudNum[k];
   }
   /** Loading: show (then hide again) one of everything the game draws, so a frame rendered in between prepares it all. */
   function warm(on) {
@@ -753,14 +1017,26 @@ export function createGame(ctx) {
     for (const l of tracers) l.visible = on; for (const p of puffs) p.visible = on;
     for (const k in IM) { IM[k].count = on ? 1 : 0; IM[k].visible = on; }
   }
-  function setBots(n) { G.botCount = n; while (G.bots.length > n) { const b = G.bots.pop(); group.remove(b.mesh); if (b.char) b.char.dispose(); } while (G.bots.length < n) G.bots.push(spawnBot(G.bots.length)); }
+  function setBots(n) {
+    G.botCount = n;
+    if (G.mp && G.mode === 'takim' && !G.isHost) { G.mp.send({ t: 'bc', n }); return; }   // the room's host runs the bots: ask them
+    if (G.mp && G.mode === 'pvp') return;   // players against players: no bots
+    setAi(n);
+  }
+  function setAi(n) {
+    const ai = G.bots.filter(b => !b.remote), rem = G.bots.filter(b => b.remote);
+    n = Math.min(n, MAX_BOTS - rem.length);
+    while (ai.length > n) { const b = ai.pop(); group.remove(b.mesh); if (b.char) b.char.dispose(); }
+    while (ai.length < n) ai.push(spawnBot(ai.length));
+    G.bots = ai.concat(rem);
+  }
   function setPrimary(k) { if (!WEAPONS[k] || WEAPONS[k].slot !== 1) return; G.primary = k; if (G.on) { G.ammo[k] = { mag: WEAPONS[k].mag, reserve: WEAPONS[k].reserve }; setWeapon(k); } }
   function setDifficulty(d) { G.difficulty = d; }
   function cycleWeapon(dir) { const order = [G.primary, 'deagle', 'knife'], i = order.indexOf(G.weapon); setWeapon(order[(i + dir + 3) % 3]); }
   function update(dt, now) {
     if (!G.on) return;
     G.time += dt;
-    if (!G.roundOver) { G.roundT -= dt; if (G.roundT <= 0) { G.roundOver = true; el('ghEndTxt').textContent = `${G.kills} vuruş · ${G.deaths} ölüm`; setScope(false); } }
+    if (!G.roundOver && !G.mp) { G.roundT -= dt; if (G.roundT <= 0) { G.roundOver = true; el('ghEndTxt').textContent = `${G.kills} vuruş · ${G.deaths} ölüm`; setScope(false); } }
     if (G.dead > 0) { G.dead -= dt; if (G.dead <= 0) respawnPlayer(); }
     G.hurt = Math.max(0, G.hurt - dt * 1.6); G.fireCd = Math.max(0, G.fireCd - dt); G.swapT = Math.max(0, G.swapT - dt); G.heat = Math.max(0, G.heat - dt * 0.02);
     const W = WEAPONS[G.weapon], A = G.ammo[G.weapon];
@@ -770,7 +1046,8 @@ export function createGame(ctx) {
     for (let i = 0; i < G.feed.length; i++) G.feed[i].t -= dt;
     while (G.feed.length && G.feed[G.feed.length - 1].t <= 0) G.feed.pop();   // newest first: the oldest lines expire at the end
     markVisibleBots(); losLeft = LOS_PER_FRAME;
-    for (let i = 0; i < G.bots.length; i++) botStep(G.bots[i], dt);
+    for (let i = 0; i < G.bots.length; i++) { const b = G.bots[i]; if (b.remote) remoteStep(b, dt); else if (G.isHost && remotes.size) botStepTeam(b, dt); else botStep(b, dt); }
+    mpUpdate(dt);
     if (isTouch) aimAssist();
     animateChars(dt);
     // view model: bob while walking, kick on firing, lowered while reloading / swapping
@@ -806,7 +1083,7 @@ export function createGame(ctx) {
   }
   /** bots on the minimap: red dots, only within 60 m (no wallhack radar) */
   function drawMinimap(mctx, toPx) {
-    for (let i = 0; i < G.bots.length; i++) { const b = G.bots[i]; if (b.dead > 0 || len2(b.x - P.x, b.z - P.z) > 60) continue; const pt = toPx(b.x, b.z), u = pt[0], v = pt[1]; mctx.fillStyle = '#d13b2a'; mctx.beginPath(); mctx.arc(u, v, 3, 0, 6.283); mctx.fill(); }
+    for (let i = 0; i < G.bots.length; i++) { const b = G.bots[i]; if (b.dead > 0 || ((!b.remote || b.shadow) && len2(b.x - P.x, b.z - P.z) > 60)) continue; const pt = toPx(b.x, b.z), u = pt[0], v = pt[1]; mctx.fillStyle = b.remote && !b.shadow ? '#2f7fe0' : '#d13b2a'; mctx.beginPath(); mctx.arc(u, v, 3, 0, 6.283); mctx.fill(); }
   }
   // ------------------------------------------------------------------ input
   addEventListener('mousedown', e => { if (!G.on || !document.pointerLockElement) return; if (e.button === 0) { G.firing = true; G.fired = false; } if (e.button === 2 && WEAPONS[G.weapon].scope) setScope(!G.scoped); });
@@ -814,7 +1091,7 @@ export function createGame(ctx) {
   addEventListener('contextmenu', e => { if (G.on && document.pointerLockElement) e.preventDefault(); });
   addEventListener('wheel', e => { if (G.on && document.pointerLockElement) cycleWeapon(e.deltaY > 0 ? 1 : -1); }, { passive: true });
   addEventListener('keydown', e => {
-    if (!G.on) return;
+    if (!G.on || (e.target && e.target.tagName === 'INPUT')) return;
     if (e.code === 'KeyR') reload();
     if (e.code === 'Digit1') setWeapon(G.primary); if (e.code === 'Digit2') setWeapon('deagle'); if (e.code === 'Digit3') setWeapon('knife');
     if (e.code === 'KeyQ') setWeapon(G.lastWeapon);
