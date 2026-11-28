@@ -95,7 +95,7 @@ function cloudDome(lite) {
 
 // ---------------------------------------------------------------- global shader chunks (patched once, before anything compiles)
 let chunksDone = false;
-function patchChunks(sunDir, fogSun, fogAway) {
+function patchChunks(sunDir, fogSun, fogAway, perVertex = false) {
   const S = THREE.ShaderChunk;
   const v3 = v => `vec3(${v.x.toFixed(4)}, ${v.y.toFixed(4)}, ${(v.z !== undefined ? v.z : v.b).toFixed(4)})`;
   const c3 = c => `vec3(${c.r.toFixed(4)}, ${c.g.toFixed(4)}, ${c.b.toFixed(4)})`;
@@ -123,14 +123,7 @@ function patchChunks(sunDir, fogSun, fogAway) {
   gl_FragColor.rgb = mix( gl_FragColor.rgb, kkFogC, fogFactor );
 #endif`;
   // cloud shadows: materials that opt in (define KK_CLOUDSHADOW, uniform kkCloudT) get their sunlight dimmed under a cloud
-  S.common = S._kkCommon + '\n#ifdef KK_CLOUDSHADOW\nvarying vec3 vKkCloudW;\n#endif\n';
-  S.worldpos_vertex = S._kkWorld + '\n#if defined( KK_CLOUDSHADOW ) && defined( USE_SHADOWMAP )\nvKkCloudW = worldPosition.xyz;\n#endif\n';
-  S.lights_fragment_begin = S._kkLights.replace('getDirectionalLightInfo( directionalLight, directLight );', `getDirectionalLightInfo( directionalLight, directLight );
-		#if defined( KK_CLOUDSHADOW ) && defined( USE_SHADOWMAP )
-		if ( UNROLLED_LOOP_INDEX == 0 ) directLight.color *= kkCloudShadow( vKkCloudW );
-		#endif`);
-  S.lights_pars_begin = S._kkLightsPars + `
-#if defined( KK_CLOUDSHADOW ) && defined( USE_SHADOWMAP )
+  const cloudFn = `
 uniform float kkCloudT;
 ${NOISE}
 float kkCloudShadow( vec3 w ) {
@@ -139,8 +132,26 @@ float kkCloudShadow( vec3 w ) {
   float a = smoothstep( ${CLOUD.cover.toFixed(3)} - 0.03, ${(CLOUD.cover + CLOUD.soft).toFixed(3)} + 0.02, kkCloudBase( p, kkCloudT ) );
   return 1.0 - 0.62 * a;
 }
-#endif
 `;
+  if (perVertex) {
+    // v1.26, phones: the cloud shadow is worked out once per vertex (every few metres on the ground; the clouds' shapes
+    // are hundreds of metres across, so it looks the same) instead of once per pixel of every lit surface
+    S.common = S._kkCommon + '\n#ifdef KK_CLOUDSHADOW\nvarying float vKkCloud;\n#endif\n#if defined( KK_CLOUDSHADOW ) && defined( USE_SHADOWMAP )\n' + cloudFn + '#endif\n';
+    S.worldpos_vertex = S._kkWorld + '\n#if defined( KK_CLOUDSHADOW ) && defined( USE_SHADOWMAP )\nvKkCloud = kkCloudShadow( worldPosition.xyz );\n#endif\n';
+    S.lights_fragment_begin = S._kkLights.replace('getDirectionalLightInfo( directionalLight, directLight );', `getDirectionalLightInfo( directionalLight, directLight );
+		#if defined( KK_CLOUDSHADOW ) && defined( USE_SHADOWMAP )
+		if ( UNROLLED_LOOP_INDEX == 0 ) directLight.color *= vKkCloud;
+		#endif`);
+    S.lights_pars_begin = S._kkLightsPars;
+  } else {
+    S.common = S._kkCommon + '\n#ifdef KK_CLOUDSHADOW\nvarying vec3 vKkCloudW;\n#endif\n';
+    S.worldpos_vertex = S._kkWorld + '\n#if defined( KK_CLOUDSHADOW ) && defined( USE_SHADOWMAP )\nvKkCloudW = worldPosition.xyz;\n#endif\n';
+    S.lights_fragment_begin = S._kkLights.replace('getDirectionalLightInfo( directionalLight, directLight );', `getDirectionalLightInfo( directionalLight, directLight );
+		#if defined( KK_CLOUDSHADOW ) && defined( USE_SHADOWMAP )
+		if ( UNROLLED_LOOP_INDEX == 0 ) directLight.color *= kkCloudShadow( vKkCloudW );
+		#endif`);
+    S.lights_pars_begin = S._kkLightsPars + '\n#if defined( KK_CLOUDSHADOW ) && defined( USE_SHADOWMAP )\n' + cloudFn + '#endif\n';
+  }
   // grade: AgX, then a touch of contrast and saturation (AgX on its own is flat and greyish)
   S.tonemapping_pars_fragment = S._kkTone.replace('vec3 CustomToneMapping( vec3 color ) { return color; }', /* glsl */`
 vec3 CustomToneMapping( vec3 color ) {
@@ -153,7 +164,7 @@ vec3 CustomToneMapping( vec3 color ) {
   return clamp( c, 0.0, 1.0 );
 }`);
   if (!/AgXToneMapping\( color \);/.test(S.tonemapping_pars_fragment)) console.warn('[atmo] grade not applied');
-  if (!/kkCloudShadow\( vKkCloudW \)/.test(S.lights_fragment_begin)) console.warn('[atmo] cloud shadows not applied');
+  if (!/kkCloudShadow\( vKkCloudW \)|\*= vKkCloud;/.test(S.lights_fragment_begin)) console.warn('[atmo] cloud shadows not applied');
 }
 
 // ---------------------------------------------------------------- land beyond the survey square
@@ -252,7 +263,7 @@ export function buildOuterLand({ D, terrH, macroImage, R = 8800 }) {
 export function chimneySmoke(sources, { isTouch = false } = {}) {
   const hash = (x, z, k) => { const t = Math.sin(x * 12.9898 + z * 78.233 + k * 37.719) * 43758.5453; return t - Math.floor(t); };
   const lit = sources.filter(s => hash(s[0], s[2], 7) < (s[3] ? 0.5 : 0.16));
-  const P = isTouch ? 9 : 14, n = lit.length * P;
+  const P = isTouch ? 6 : 14, n = lit.length * P;   // v1.26: phones 6 puffs a chimney (was 9)
   const src = new Float32Array(n * 3), seed = new Float32Array(n * 2);
   let k = 0;
   for (const s of lit) {
@@ -264,9 +275,9 @@ export function chimneySmoke(sources, { isTouch = false } = {}) {
   g.computeBoundingSphere(); g.boundingSphere.radius += 40;
   const mat = new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, fog: false,
-    uniforms: { uT: { value: 0 }, uScale: { value: 600 }, uWind: { value: new THREE.Vector2(0.936, 0.35) }, uCol: { value: new THREE.Color(0.78, 0.8, 0.84) } },
+    uniforms: { uT: { value: 0 }, uScale: { value: 600 }, uMax: { value: isTouch ? 120 : 220 }, uWind: { value: new THREE.Vector2(0.936, 0.35) }, uCol: { value: new THREE.Color(0.78, 0.8, 0.84) } },
     vertexShader: /* glsl */`
-      uniform float uT, uScale; uniform vec2 uWind;
+      uniform float uT, uScale, uMax; uniform vec2 uWind;
       attribute vec2 aSeed;
       varying float vA; varying float vAge; varying float vRnd;
       void main() {
@@ -281,7 +292,7 @@ export function chimneySmoke(sources, { isTouch = false } = {}) {
         vec4 mv = modelViewMatrix * vec4(p, 1.0);
         float dist = -mv.z;
         float size = (0.5 + age * 3.6) * aSeed.y;                                  // metres across
-        gl_PointSize = clamp(size * uScale / max(dist, 1.0), 0.0, 220.0);
+        gl_PointSize = clamp(size * uScale / max(dist, 1.0), 0.0, uMax);   // v1.26: phones at most 120 px (overdraw)
         vA = smoothstep(0.0, 0.08, age) * (1.0 - smoothstep(0.45, 1.0, age)) * 0.33 * aSeed.y * (1.0 - smoothstep(250.0, 450.0, dist));
         vAge = age; vRnd = r;
         gl_Position = projectionMatrix * mv;
@@ -371,7 +382,7 @@ export function createAtmosphere({ scene, renderer, isTouch, sky }) {
     setSun(sunDir, sunColor, fogColor) {
       const u = dome.material.uniforms; u.uSun.value.copy(sunDir); u.uSunCol.value.copy(sunColor);
       fogColor.copy(u.uHorizon.value);   // the haze is the colour of the sky at the horizon
-      patchChunks(sunDir, u.uToSun.value, u.uAway.value);
+      patchChunks(sunDir, u.uToSun.value, u.uAway.value, isTouch);   // v1.26: phones: cloud shadows per vertex
     },
     /** opt every lit material in the tree into the cloud shadows (call once, before compiling) */
     patch(root) {
