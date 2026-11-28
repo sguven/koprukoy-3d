@@ -230,7 +230,7 @@ body:not(.is-touch)[data-mode="game"] .hint { right: auto; left: 50%; transform:
 <div id="perf" aria-live="off">– FPS</div>
 
 <div class="topbar">
-  <div class="brand"><h1>Köprüköy</h1><div class="sub">Keskin · Kırıkkale, Türkiye — 3D v1.21</div></div>
+  <div class="brand"><h1>Köprüköy</h1><div class="sub">Keskin · Kırıkkale, Türkiye — 3D v1.23</div></div>
   <div class="modes" id="modes" role="tablist" aria-label="Navigation mode">
     <button data-mode="orbit" class="on">Orbit</button>
     <button data-mode="walk" title="Walk through the village">Walk</button>
@@ -1278,15 +1278,27 @@ renderer.setAnimationLoop(now => {
   // v1.20: a phone driving the Toros: the map covers 190 m and is redrawn every 40 m (every 24 m it was a full redraw
   // ~1.7 times a second at 150 km/h, each one a visible hitch on a phone)
   const phoneCar = driving && isTouch;
-  const ext = mode === 'orbit' ? Math.min(900, Math.max(150, camera.position.distanceTo(focus) * 1.2)) : phoneCar ? 190 : mover ? 150 : 140;
-  const step = mode === 'orbit' ? ext * 0.04 : phoneCar ? 40 : mover ? 24 : 6;
+  // v1.23, Fly: the map was 140 m around the camera and redrawn every 6 m, i.e. 7 to 20 full shadow redraws a second at
+  // flying speed (40 / 120 m/s): the stutter on a phone. Now it grows with the height over the ground (in 40 m steps),
+  // sits ahead of the camera, where the view goes, and is redrawn after a third of its size (phones; desktop a sixth)
+  let flyExt = 0;
+  if (mode === 'fly') {
+    const agl = Math.max(0, camera.position.y - terrH(camera.position.x, camera.position.z));
+    const want = Math.min(isTouch ? 420 : 380, 140 + Math.round(agl * 1.2 / 40) * 40);
+    flyExt = Math.abs(want - shadowExt) >= 80 || shadowExt < 140 ? want : shadowExt;   // hysteresis: no redraw for every small climb or dip
+    const ahead = flyExt * 0.45, ax = P.x - Math.sin(P.yaw) * ahead, az = P.z - Math.cos(P.yaw) * ahead;
+    focus = carAhead.set(ax, terrH(ax, az), az);
+  }
+  const ext = mode === 'orbit' ? Math.min(900, Math.max(150, camera.position.distanceTo(focus) * 1.2)) : flyExt ? flyExt : phoneCar ? 190 : mover ? 150 : 140;
+  const step = mode === 'orbit' ? ext * 0.04 : flyExt ? flyExt * (isTouch ? 0.3 : 0.16) : phoneCar ? 40 : mover ? 24 : 6;
   // small village details and far grass patches: shown / hidden by distance (re-checked every 4 m of camera movement);
   // the shadow map only needs a refresh when something inside it appeared or went
-  const cullChanged = culler.update(camera.position, false, inGame && !GAME_PRESETS[gamePreset].shadowOnCull ? 0 : ext); if (cullChanged) sun.shadow.needsUpdate = true;
+  // (v1.23: not when flying on a phone either: small details popping in or out redrew the whole map every few metres)
+  const cullChanged = culler.update(camera.position, false, (inGame && !GAME_PRESETS[gamePreset].shadowOnCull) || (flyExt && isTouch) ? 0 : ext); if (cullChanged) sun.shadow.needsUpdate = true;
   if (sun.shadow.needsUpdate || shadowFocus.distanceToSquared(focus) > step * step || Math.abs(ext - shadowExt) > shadowExt * 0.08) {
     const sc = sun.shadow.camera; if (sc.right !== ext) { sc.left = -ext; sc.right = ext; sc.top = ext; sc.bottom = -ext; sc.near = 1; sc.far = 4000; sc.updateProjectionMatrix(); }
     shadowCentre.copy(focus);
-    if (mover) {   // snap the centre to the texel grid of the light (its right / up axes)
+    if (mover || flyExt) {   // snap the centre to the texel grid of the light (its right / up axes)
       const texel = 2 * ext / sun.shadow.mapSize.x, a = focus.dot(lightRight), b = focus.dot(lightUp);
       shadowCentre.addScaledVector(lightRight, Math.round(a / texel) * texel - a).addScaledVector(lightUp, Math.round(b / texel) * texel - b);
     }
