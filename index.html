@@ -54,6 +54,7 @@ canvas { display: block; touch-action: none; }
 .lbl.yon { background: rgba(255, 255, 255, 0.9); color: var(--ink); }
 
 .topbar { position: fixed; z-index: 40; top: calc(12px + var(--st)); left: calc(12px + var(--sl)); right: calc(12px + var(--sr)); display: flex; gap: 10px; align-items: flex-start; pointer-events: none; }
+.siteBtn { pointer-events: auto; font-weight: 700; }
 .brand { pointer-events: auto; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; }
 .brand h1 { font: 700 24px/1 var(--display); margin: 0; letter-spacing: 0.01em; }
 .brand .sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
@@ -161,6 +162,33 @@ body[data-mode="car"] .joyzone .jlabel { width: 184px; bottom: calc(126px + var(
 #gameHud .gh-dead > div, #gameHud .gh-end > div { text-align: center; display: grid; gap: 8px; } #gameHud .gh-dead b, #gameHud .gh-end b { font: 900 46px var(--display); letter-spacing: 0.08em; } #gameHud .gh-dead span, #gameHud .gh-end span { font: 600 18px var(--display); } #gameHud small { opacity: 0.8; }
 @media (max-width: 720px) { #gameHud .gh-dead b, #gameHud .gh-end b { font-size: 30px; letter-spacing: 0.04em; padding: 0 12px; } }
 @media (max-width: 720px) and (pointer: fine) { #gameHud .gh-top { top: 60px; font-size: 18px; } #gameHud .gh-health { bottom: 150px; } #gameHud .gh-ammo { bottom: 150px; right: 16px; font-size: 28px; } }
+/* v1.24 Birlikte oyna: button, name box, list of players, names over the other players */
+#gameHud #ghMp { position: absolute; left: 20px; top: 86px; pointer-events: auto; font: 700 15px var(--display); color: #fff; background: rgba(47,127,224,0.85); border: 1px solid rgba(255,255,255,0.5); border-radius: 10px; padding: 9px 14px; cursor: pointer; text-shadow: none; }
+#gameHud #ghMp.on { background: rgba(30,27,23,0.6); }
+#gameHud #ghPlayers { position: absolute; left: 20px; top: 132px; display: none; min-width: 170px; max-width: 46vw; background: rgba(30,27,23,0.55); border-radius: 10px; padding: 6px 10px; font: 600 13px var(--display); }
+#gameHud #ghPlayers div { display: flex; justify-content: space-between; gap: 14px; padding: 2px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#gameHud #ghPlayers div.me { color: #9fd0ff; } #gameHud #ghPlayers div.wait, #gameHud #ghPlayers div.mode { opacity: 0.75; font-size: 12px; }
+#gameHud #ghMpDlg { position: absolute; inset: 0; display: none; place-items: center; background: rgba(20,16,12,0.55); pointer-events: auto; text-shadow: none; z-index: 5; }
+#gameHud #ghMpDlg form { width: min(380px, calc(100vw - 32px)); background: var(--paper, #f4ecdc); color: #2a241d; border-radius: 14px; padding: 18px; display: grid; gap: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.4); max-height: calc(100vh - 24px); overflow: auto; }
+#gameHud #ghMpDlg b { font: 800 20px var(--display); } #gameHud #ghMpDlg p { margin: 0; font: 500 15px/1.4 var(--body, sans-serif); }
+#gameHud #ghMpDlg label { display: grid; gap: 6px; font: 700 14px var(--display); }
+#gameHud #ghMpDlg input { font: 600 18px var(--body, sans-serif); padding: 10px 12px; border: 1px solid #b9ab92; border-radius: 9px; background: #fff; color: #2a241d; }
+#gameHud #ghMpDlg .modes2 { display: grid; gap: 8px; }
+#gameHud #ghMpDlg .modes2 button { text-align: left; display: grid; gap: 2px; padding: 10px 12px; border-radius: 10px; border: 2px solid #cfc2a8; background: #fff; color: #2a241d; cursor: pointer; }
+#gameHud #ghMpDlg .modes2 button b { font: 800 15px var(--display); } #gameHud #ghMpDlg .modes2 button span { font: 500 13px var(--body, sans-serif); opacity: 0.8; }
+#gameHud #ghMpDlg .modes2 button.on { border-color: #2f7fe0; background: #eaf3ff; }
+#gameHud #ghMpDlg .row { display: flex; gap: 10px; justify-content: flex-end; }
+#gameHud #ghMpDlg .row button { font: 700 16px var(--display); padding: 11px 18px; border-radius: 10px; border: 1px solid #b9ab92; background: #fff; color: #2a241d; cursor: pointer; }
+#gameHud #ghMpDlg #ghMpGo { background: #2f7fe0; border-color: #2f7fe0; color: #fff; }
+#gameHud #ghMpDlg small { font: 600 13px var(--body, sans-serif); color: #a2482f; opacity: 1; }
+body:has(#ghMpDlg[style*="grid"]) #cross { visibility: hidden; }
+#mpLabels { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+#mpLabels span { position: absolute; left: 0; top: 0; display: none; font: 700 13px var(--display); color: #fff; background: rgba(47,127,224,0.85); padding: 2px 8px; border-radius: 8px; white-space: nowrap; will-change: transform; }
+#mpLabels span.dead { background: rgba(80,80,80,0.75); }
+body:not([data-mode="game"]) #mpLabels { display: none; }
+body.is-touch #gameHud #ghMp { left: calc(14px + var(--sl)); top: calc(96px + var(--st)); font-size: 13px; padding: 8px 11px; }
+body.is-touch #gameHud #ghPlayers { left: calc(14px + var(--sl)); top: calc(136px + var(--st)); font-size: 12px; min-width: 140px; }
+@media (orientation: portrait) { body.is-touch #gameHud #ghMp { top: calc(136px + var(--st)); } body.is-touch #gameHud #ghPlayers { top: calc(176px + var(--st)); } }
 /* oyun HUD'u dokunmatik ekranda: köşelere küçük, butonların altında kalmayacak şekilde */
 body.is-touch .modes button:disabled { display: none; }
 body.is-touch .hint { display: none; }
@@ -230,7 +258,8 @@ body:not(.is-touch)[data-mode="game"] .hint { right: auto; left: 50%; transform:
 <div id="perf" aria-live="off">– FPS</div>
 
 <div class="topbar">
-  <div class="brand"><h1>Köprüköy</h1><div class="sub">Keskin · Kırıkkale, Türkiye — 3D v1.24</div></div>
+  <button class="gear siteBtn" id="siteBtn" hidden aria-label="Çeşnigir-Der sitesine dön">‹ Site</button>
+  <div class="brand"><h1>Köprüköy</h1><div class="sub">Keskin · Kırıkkale, Türkiye — 3D v1.25</div></div>
   <div class="modes" id="modes" role="tablist" aria-label="Navigation mode">
     <button data-mode="orbit" class="on">Orbit</button>
     <button data-mode="walk" title="Walk through the village">Walk</button>
@@ -385,7 +414,7 @@ const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'hi
 let mode = 'orbit';
 // v1.20: on a phone the moving modes (Walk, Fly, Toros) start at 1.35× (was 1.6×): ~30 % fewer pixels, steadier frames
 // while the view turns; Orbit keeps 1.6× for crisp map views
-// v1.24: a touch screen also has a pixel budget (~1.2 M drawn pixels): a tablet (an iPad is ~4× a phone's screen area)
+// v1.25: a touch screen also has a pixel budget (~1.2 M drawn pixels): a tablet (an iPad is ~4× a phone's screen area)
 // is drawn at the density that fits it instead of the phone's 1.35×; phones are under the budget and keep theirs
 const TOUCH_PX = 1.2e6;
 const basePixelRatio = () => {
@@ -1095,6 +1124,14 @@ camera.position.set(...V.detay.p); controls.target.set(...V.detay.t);   // the p
 document.querySelectorAll('#views .pbtn').forEach(b => b.classList.toggle('on', b.dataset.view === 'detay'));
 const fsBtn = document.getElementById('fsBtn'), docEl = document.documentElement;
 if (isTouch && (document.fullscreenEnabled || document.webkitFullscreenEnabled)) fsBtn.hidden = false;
+// v1.24: opened from cesnigirder.org/3d/ (?site=1): a "‹ Site" button takes the visitor back to the site; when that page
+// already made the phone full screen (&tam=1) the model's own full-screen button is not needed
+const inSite = window.parent !== window && /[?&]site=1\b/.test(location.search);
+if (inSite) {
+  const sb = document.getElementById('siteBtn'); sb.hidden = false;
+  sb.addEventListener('click', () => window.parent.postMessage({ kk: 'siteyeDon' }, '*'));
+  if (/[?&]tam=1\b/.test(location.search)) fsBtn.hidden = true;
+}
 fsBtn.addEventListener('click', async () => {
   try {
     if (document.fullscreenElement || document.webkitFullscreenElement) { (document.exitFullscreen || document.webkitExitFullscreen).call(document); return; }
@@ -1143,7 +1180,7 @@ function fit(force) {
   if (!measureVP() && force !== true) return;
   camera.aspect = VP.w / VP.h; if (mode === 'orbit' || mode === 'car') camera.fov = stdFov();
   camera.updateProjectionMatrix(); renderer.setSize(VP.w, VP.h);
-  if (isTouch) try { perf.refresh(); } catch (_) {}   // v1.24: the touch pixel budget depends on the size (perf is set up below)
+  if (isTouch) try { perf.refresh(); } catch (_) {}   // v1.25: the touch pixel budget depends on the size (perf is set up below)
 }
 // phones report the new size late after a turn or when the browser bars slide away: listen widely, and look again shortly after
 const fitSoon = () => { fit(); mmD = 0; setTimeout(fit, 120); setTimeout(fit, 500); setTimeout(() => { mmD = 0; }, 520); };
@@ -1152,7 +1189,7 @@ if (window.visualViewport) visualViewport.addEventListener('resize', fitSoon);
 fitSoon();
 // v1.0: FPS meter + automatic resolution (src/perf.js); both can be switched off under Settings › More settings
 const perf = createPerfMeter(renderer, document.getElementById('perf'), basePixelRatio, () => [VP.w, VP.h]);
-// v1.24: if the browser takes the WebGL context away (iOS does under memory pressure, e.g. on a tablet at full screen),
+// v1.25: if the browser takes the WebGL context away (iOS does under memory pressure, e.g. on a tablet at full screen),
 // the picture used to freeze for good. three.js rebuilds everything when the context comes back; until then a note is
 // shown, and if it does not come back within 5 s the page reloads
 {
@@ -1305,7 +1342,7 @@ renderer.setAnimationLoop(now => {
   // v1.20: a phone driving the Toros: the map covers 190 m and is redrawn every 40 m (every 24 m it was a full redraw
   // ~1.7 times a second at 150 km/h, each one a visible hitch on a phone)
   const phoneCar = driving && isTouch;
-  // v1.24, Fly: the map was 140 m around the camera and redrawn every 6 m, i.e. 7 to 20 full shadow redraws a second at
+  // v1.25, Fly: the map was 140 m around the camera and redrawn every 6 m, i.e. 7 to 20 full shadow redraws a second at
   // flying speed (40 / 120 m/s): the stutter on a phone. Now it grows with the height over the ground (in 40 m steps),
   // sits ahead of the camera, where the view goes, and is redrawn after a third of its size (phones; desktop a sixth)
   let flyExt = 0;
@@ -1320,7 +1357,7 @@ renderer.setAnimationLoop(now => {
   const step = mode === 'orbit' ? ext * 0.04 : flyExt ? flyExt * (isTouch ? 0.3 : 0.16) : phoneCar ? 40 : mover ? 24 : 6;
   // small village details and far grass patches: shown / hidden by distance (re-checked every 4 m of camera movement);
   // the shadow map only needs a refresh when something inside it appeared or went
-  // (v1.24: not when flying on a phone either: small details popping in or out redrew the whole map every few metres)
+  // (v1.25: not when flying on a phone either: small details popping in or out redrew the whole map every few metres)
   const cullChanged = culler.update(camera.position, false, (inGame && !GAME_PRESETS[gamePreset].shadowOnCull) || (flyExt && isTouch) ? 0 : ext); if (cullChanged) sun.shadow.needsUpdate = true;
   if (sun.shadow.needsUpdate || shadowFocus.distanceToSquared(focus) > step * step || Math.abs(ext - shadowExt) > shadowExt * 0.08) {
     const sc = sun.shadow.camera; if (sc.right !== ext) { sc.left = -ext; sc.right = ext; sc.top = ext; sc.bottom = -ext; sc.near = 1; sc.far = 4000; sc.updateProjectionMatrix(); }
