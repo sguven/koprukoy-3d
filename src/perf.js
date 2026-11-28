@@ -167,6 +167,8 @@ export function createPerfMeter(renderer, el, base, size = () => [innerWidth, in
     get auto() { return auto; },
     /** Back to full resolution (after a mode change or a resize). */
     reset() { scale = 1; slow = fast = 0; probe = null; hold = 0; lastPR = 0; apply(); },
+    /** v1.24: apply the base pixel ratio again (it changed with the window size), keeping the automatic scale. */
+    refresh() { apply(); },
     /** Call when the frame about to be drawn redraws the shadow map. */
     shadowRedrawn() { shadows++; },
     frame(now, dt) {

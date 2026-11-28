@@ -382,7 +382,7 @@ export function createAtmosphere({ scene, renderer, isTouch, sky }) {
     setSun(sunDir, sunColor, fogColor) {
       const u = dome.material.uniforms; u.uSun.value.copy(sunDir); u.uSunCol.value.copy(sunColor);
       fogColor.copy(u.uHorizon.value);   // the haze is the colour of the sky at the horizon
-      patchChunks(sunDir, u.uToSun.value, u.uAway.value, isTouch);   // v1.23: phones: cloud shadows per vertex
+      patchChunks(sunDir, u.uToSun.value, u.uAway.value, isTouch);   // v1.24: phones: cloud shadows per vertex
     },
     /** opt every lit material in the tree into the cloud shadows (call once, before compiling) */
     patch(root) {
